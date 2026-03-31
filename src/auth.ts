@@ -29,6 +29,9 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
 }
 
 export const config: NextAuthConfig = {
+  // Required for deployments behind a reverse proxy (EasyPanel/Nginx)
+  trustHost: true,
+  secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -76,7 +79,6 @@ export const config: NextAuthConfig = {
       const refreshed = await refreshAccessToken(token);
 
       // Atualiza tokens persistidos após refresh.
-      // Wrapped in try-catch: middleware runs on Edge Runtime where fs is unavailable.
       if (!refreshed.error) {
         try {
           const { saveTokens } = await import("@/lib/token-store");
