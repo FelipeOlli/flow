@@ -54,13 +54,18 @@ export const config: NextAuthConfig = {
         token.refreshToken = account.refresh_token as string;
         token.expiresAt = (account.expires_at as number) * 1000;
 
-        // Persiste tokens para o cron de migração noturna
-        const { saveTokens } = await import("@/lib/token-store");
-        saveTokens({
-          accessToken: token.accessToken,
-          refreshToken: token.refreshToken,
-          expiresAt: token.expiresAt,
-        });
+        // Persiste tokens para o cron de migração noturna.
+        // Wrapped in try-catch: middleware runs on Edge Runtime where fs is unavailable.
+        try {
+          const { saveTokens } = await import("@/lib/token-store");
+          saveTokens({
+            accessToken: token.accessToken,
+            refreshToken: token.refreshToken,
+            expiresAt: token.expiresAt,
+          });
+        } catch {
+          // Edge runtime — token-store persistence skipped
+        }
       }
 
       // Token still valid (with 5min buffer)
@@ -70,14 +75,19 @@ export const config: NextAuthConfig = {
 
       const refreshed = await refreshAccessToken(token);
 
-      // Atualiza tokens persistidos após refresh
+      // Atualiza tokens persistidos após refresh.
+      // Wrapped in try-catch: middleware runs on Edge Runtime where fs is unavailable.
       if (!refreshed.error) {
-        const { saveTokens } = await import("@/lib/token-store");
-        saveTokens({
-          accessToken: refreshed.accessToken as string,
-          refreshToken: refreshed.refreshToken as string,
-          expiresAt: refreshed.expiresAt as number,
-        });
+        try {
+          const { saveTokens } = await import("@/lib/token-store");
+          saveTokens({
+            accessToken: refreshed.accessToken as string,
+            refreshToken: refreshed.refreshToken as string,
+            expiresAt: refreshed.expiresAt as number,
+          });
+        } catch {
+          // Edge runtime — token-store persistence skipped
+        }
       }
 
       return refreshed;
