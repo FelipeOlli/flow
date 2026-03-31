@@ -1,6 +1,16 @@
-import { signIn } from "@/auth";
+"use client";
+
+import { signIn } from "next-auth/react";
+import { useState } from "react";
 
 export default function SignInPage() {
+  const [loading, setLoading] = useState(false);
+
+  const handleSignIn = async () => {
+    setLoading(true);
+    await signIn("google", { callbackUrl: "/today" });
+  };
+
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm space-y-8">
@@ -23,20 +33,32 @@ export default function SignInPage() {
             </p>
           </div>
 
-          <form
-            action={async () => {
-              "use server";
-              await signIn("google", { redirectTo: "/today" });
-            }}
+          <button
+            onClick={handleSignIn}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 bg-white text-gray-900 font-medium py-3.5 px-6 rounded-2xl hover:bg-gray-100 active:bg-gray-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <button
-              type="submit"
-              className="w-full flex items-center justify-center gap-3 bg-white text-gray-900 font-medium py-3.5 px-6 rounded-2xl hover:bg-gray-100 active:bg-gray-200 transition-colors"
-            >
+            {loading ? (
+              <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+            ) : (
               <GoogleIcon />
-              Continuar com Google
-            </button>
-          </form>
+            )}
+            {loading ? "Redirecionando..." : "Continuar com Google"}
+          </button>
         </div>
 
         <p className="text-center text-xs text-gray-600">
