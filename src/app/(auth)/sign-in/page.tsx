@@ -25,7 +25,7 @@ export default function SignInPage() {
             priority
             className="drop-shadow-[0_0_24px_rgba(79,142,247,0.3)]"
           />
-          <p className="-mt-4 text-gray-400 text-base">
+          <p className="mt-2 text-gray-400 text-base">
             Suas tarefas. Seu ritmo.
           </p>
         </div>
