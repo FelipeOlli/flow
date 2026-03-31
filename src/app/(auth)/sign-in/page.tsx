@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
+import Image from "next/image";
 
 export default function SignInPage() {
   const [loading, setLoading] = useState(false);
@@ -15,11 +16,16 @@ export default function SignInPage() {
     <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm space-y-8">
         {/* Logo */}
-        <div className="text-center">
-          <h1 className="text-5xl font-bold tracking-tight text-white">
-            FLOW
-          </h1>
-          <p className="mt-3 text-gray-400 text-base">
+        <div className="text-center flex flex-col items-center">
+          <Image
+            src="/logo.png"
+            alt="FLOW"
+            width={220}
+            height={220}
+            priority
+            className="drop-shadow-[0_0_24px_rgba(79,142,247,0.3)]"
+          />
+          <p className="-mt-4 text-gray-400 text-base">
             Suas tarefas. Seu ritmo.
           </p>
         </div>

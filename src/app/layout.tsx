@@ -5,9 +5,17 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "FLOW",
-  description: "Controle suas tarefas diárias com o Google Calendar",
+  title: "FLOW — Suas tarefas. Seu ritmo.",
+  description: "Controle suas tarefas diárias integrado ao Google Calendar.",
   manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/icon.png", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-icon.png", type: "image/png" },
+    ],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
