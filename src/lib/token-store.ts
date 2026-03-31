@@ -1,7 +1,14 @@
 import fs from "fs";
 import path from "path";
 
-const TOKEN_FILE = path.join(process.cwd(), ".token-store.json");
+// In production (Docker), use /app/data so a volume mount persists tokens across deploys.
+// In development, use process.cwd().
+const DATA_DIR =
+  process.env.NODE_ENV === "production"
+    ? "/app/data"
+    : process.cwd();
+
+const TOKEN_FILE = path.join(DATA_DIR, ".token-store.json");
 
 interface StoredTokens {
   accessToken: string;
@@ -11,6 +18,7 @@ interface StoredTokens {
 
 export function saveTokens(tokens: StoredTokens): void {
   try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokens), "utf-8");
   } catch (err) {
     console.error("[TOKEN STORE] Failed to save tokens:", err);

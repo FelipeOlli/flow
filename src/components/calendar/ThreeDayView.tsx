@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { format, startOfWeek, addDays, isToday, isSameDay } from "date-fns";
+import { format, addDays, isToday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
 import { TaskBlock } from "@/components/tasks/TaskBlock";
@@ -61,7 +61,7 @@ function yToTime(y: number, baseDate: Date): Date {
   return time;
 }
 
-interface WeekViewProps {
+interface ThreeDayViewProps {
   tasks: FlowTask[];
   currentDate: Date;
   pendingIds: Set<string>;
@@ -72,12 +72,11 @@ interface WeekViewProps {
   onDayClick: (date: Date) => void;
 }
 
-export function WeekView({ tasks, currentDate, pendingIds, onComplete, onEdit, onDelete, onTimeClick, onDayClick }: WeekViewProps) {
+export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdit, onDelete, onTimeClick, onDayClick }: ThreeDayViewProps) {
   const [nowY, setNowY] = useState(currentTimeY());
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const days = Array.from({ length: 3 }, (_, i) => addDays(currentDate, i));
 
   useEffect(() => {
     const t = setInterval(() => setNowY(currentTimeY()), 30000);
@@ -99,10 +98,10 @@ export function WeekView({ tasks, currentDate, pendingIds, onComplete, onEdit, o
 
   return (
     <div className="flex flex-col flex-1">
-      {/* Day headers - sticky */}
+      {/* Day headers */}
       <div className="flex border-b border-gray-800/60 bg-gray-950">
         <div className="w-10 flex-shrink-0" />
-        {weekDays.map((day) => (
+        {days.map((day) => (
           <button
             key={day.toISOString()}
             onClick={() => onDayClick(day)}
@@ -134,7 +133,7 @@ export function WeekView({ tasks, currentDate, pendingIds, onComplete, onEdit, o
           </div>
 
           {/* Day columns */}
-          {weekDays.map((day) => {
+          {days.map((day) => {
             const layout = getLayoutForDay(day);
             const isCurrentDay = isToday(day);
             return (

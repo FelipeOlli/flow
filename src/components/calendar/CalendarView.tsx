@@ -1,16 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isToday } from "date-fns";
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isToday, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { signOut } from "next-auth/react";
 import { FlowTask, CreateTaskInput, UpdateTaskInput } from "@/types/task";
 import { DayView } from "./DayView";
+import { ThreeDayView } from "./ThreeDayView";
 import { WeekView } from "./WeekView";
 import { MonthView } from "./MonthView";
 import { TaskForm } from "@/components/tasks/TaskForm";
 
-type View = "day" | "week" | "month";
+type View = "day" | "3days" | "week" | "month";
 
 interface CalendarViewProps {
   initialDate?: string;
@@ -38,6 +39,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     if (view === "day") {
       startDate = startOfDay(currentDate);
       endDate = endOfDay(currentDate);
+    } else if (view === "3days") {
+      startDate = startOfDay(currentDate);
+      endDate = endOfDay(addDays(currentDate, 2));
     } else if (view === "week") {
       startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
       endDate = endOfWeek(currentDate, { weekStartsOn: 1 });
@@ -65,6 +69,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     setCurrentDate((prev) => {
       const d = new Date(prev);
       if (view === "day") d.setDate(d.getDate() + delta);
+      else if (view === "3days") d.setDate(d.getDate() + 3 * delta);
       else if (view === "week") d.setDate(d.getDate() + 7 * delta);
       else d.setMonth(d.getMonth() + delta);
       return d;
@@ -118,6 +123,30 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     await fetchTasks();
   }
 
+  async function handleMove(task: FlowTask, newStart: Date, newEnd: Date) {
+    // Optimistic update
+    setTasks((prev) => prev.map((t) =>
+      t.id === task.id
+        ? { ...t, startTime: newStart.toISOString(), endTime: newEnd.toISOString() }
+        : t
+    ));
+    setPendingIds((p) => new Set(p).add(task.id));
+    try {
+      await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startTime: newStart.toISOString(),
+          endTime: newEnd.toISOString(),
+          calendarId: task.calendarId ?? "primary",
+        }),
+      });
+    } finally {
+      setPendingIds((p) => { const n = new Set(p); n.delete(task.id); return n; });
+      await fetchTasks();
+    }
+  }
+
   async function handleManualMigration() {
     setMigrating(true);
     setMigrateResult(null);
@@ -154,8 +183,19 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     setShowForm(true);
   }
 
+  const VIEW_LABELS: Record<View, string> = {
+    day: "Dia",
+    "3days": "3 dias",
+    week: "Semana",
+    month: "Mês",
+  };
+
   const dateLabel = (() => {
     if (view === "day") return isToday(currentDate) ? "Hoje" : format(currentDate, "EEE, d MMM", { locale: ptBR });
+    if (view === "3days") {
+      const end = addDays(currentDate, 2);
+      return `${format(currentDate, "d MMM")} — ${format(end, "d MMM", { locale: ptBR })}`;
+    }
     if (view === "week") {
       const ws = startOfWeek(currentDate, { weekStartsOn: 1 });
       const we = endOfWeek(currentDate, { weekStartsOn: 1 });
@@ -212,11 +252,11 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
         {/* View switcher */}
         <div className="flex gap-1 px-3 pb-2.5">
-          {(["day", "week", "month"] as View[]).map((v) => (
+          {(["day", "3days", "week", "month"] as View[]).map((v) => (
             <button key={v} onClick={() => setView(v)}
               className={`flex-1 py-1.5 rounded-xl text-xs font-medium transition-colors
                 ${view === v ? "bg-gray-800 text-white" : "text-gray-600 hover:text-gray-500"}`}>
-              {v === "day" ? "Dia" : v === "week" ? "Semana" : "Mês"}
+              {VIEW_LABELS[v]}
             </button>
           ))}
         </div>
@@ -233,7 +273,12 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {!loading && view === "day" && (
         <DayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={(t) => { setEditingTask(t); setFormDefaults({}); setShowForm(true); }}
-          onDelete={handleDelete} onTimeClick={openCreateForm} />
+          onDelete={handleDelete} onTimeClick={openCreateForm} onMove={handleMove} />
+      )}
+      {!loading && view === "3days" && (
+        <ThreeDayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
+          onComplete={handleComplete} onEdit={(t) => { setEditingTask(t); setFormDefaults({}); setShowForm(true); }}
+          onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate} />
       )}
       {!loading && view === "week" && (
         <WeekView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
@@ -263,7 +308,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {showForm && (
         <TaskForm task={editingTask} currentDate={currentDate.toISOString()} defaults={formDefaults}
           onClose={() => { setShowForm(false); setEditingTask(null); setFormDefaults({}); }}
-          onSave={handleSave} />
+          onSave={handleSave}
+          onComplete={handleComplete} />
       )}
     </div>
   );

@@ -32,6 +32,38 @@ function yToTime(y: number, baseDate: Date): Date {
   return time;
 }
 
+function snapY(y: number): number {
+  return Math.round(y / (HOUR_PX / 2)) * (HOUR_PX / 2);
+}
+
+function computeLayout(tasks: FlowTask[]) {
+  if (!tasks.length) return [];
+  const sorted = [...tasks].sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+  );
+  const colEnds: number[] = [];
+  const cols: number[] = [];
+  for (const task of sorted) {
+    const s = new Date(task.startTime).getTime();
+    const e = new Date(task.endTime).getTime();
+    let col = colEnds.findIndex((end) => end <= s);
+    if (col === -1) col = colEnds.length;
+    colEnds[col] = e;
+    cols.push(col);
+  }
+  return sorted.map((task, i) => {
+    const s = new Date(task.startTime).getTime();
+    const e = new Date(task.endTime).getTime();
+    let maxCol = cols[i];
+    for (let j = 0; j < sorted.length; j++) {
+      const sj = new Date(sorted[j].startTime).getTime();
+      const ej = new Date(sorted[j].endTime).getTime();
+      if (sj < e && ej > s) maxCol = Math.max(maxCol, cols[j]);
+    }
+    return { task, col: cols[i], totalCols: maxCol + 1 };
+  });
+}
+
 interface DayViewProps {
   tasks: FlowTask[];
   currentDate: Date;
@@ -40,12 +72,28 @@ interface DayViewProps {
   onEdit: (task: FlowTask) => void;
   onDelete: (task: FlowTask) => void;
   onTimeClick: (time: Date) => void;
+  onMove?: (task: FlowTask, newStart: Date, newEnd: Date) => void;
 }
 
-export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, onDelete, onTimeClick }: DayViewProps) {
+export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, onDelete, onTimeClick, onMove }: DayViewProps) {
   const [nowY, setNowY] = useState(currentTimeY());
   const scrollRef = useRef<HTMLDivElement>(null);
   const isCurrentDay = isToday(currentDate);
+
+  // Drag state
+  const dragRef = useRef<{
+    task: FlowTask;
+    startClientY: number;
+    originalTop: number;
+    moved: boolean;
+  } | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragTop, setDragTop] = useState(0);
+  const justDraggedRef = useRef(false);
+  const onMoveRef = useRef(onMove);
+  const currentDateRef = useRef(currentDate);
+  useEffect(() => { onMoveRef.current = onMove; }, [onMove]);
+  useEffect(() => { currentDateRef.current = currentDate; }, [currentDate]);
 
   useEffect(() => {
     if (!isCurrentDay) return;
@@ -59,12 +107,68 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Global pointer events for drag
+  useEffect(() => {
+    function onPointerMove(e: PointerEvent) {
+      const dr = dragRef.current;
+      if (!dr) return;
+      const delta = e.clientY - dr.startClientY;
+      if (Math.abs(delta) > 5) dr.moved = true;
+      if (dr.moved) {
+        const raw = Math.max(0, dr.originalTop + delta);
+        setDragId(dr.task.id);
+        setDragTop(snapY(raw));
+      }
+    }
+    function onPointerUp(e: PointerEvent) {
+      const dr = dragRef.current;
+      if (!dr) return;
+      dragRef.current = null;
+      if (dr.moved) {
+        justDraggedRef.current = true;
+        setTimeout(() => { justDraggedRef.current = false; }, 100);
+        const delta = e.clientY - dr.startClientY;
+        const raw = Math.max(0, dr.originalTop + delta);
+        const newStart = yToTime(snapY(raw), currentDateRef.current);
+        const duration = new Date(dr.task.endTime).getTime() - new Date(dr.task.startTime).getTime();
+        const newEnd = new Date(newStart.getTime() + duration);
+        onMoveRef.current?.(dr.task, newStart, newEnd);
+      }
+      setDragId(null);
+    }
+    function onPointerCancel() {
+      dragRef.current = null;
+      setDragId(null);
+    }
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
+    };
+  }, []);
+
   const timedTasks = tasks.filter((t) => !t.isAllDay);
   const allDayTasks = tasks.filter((t) => t.isAllDay);
   const completed = timedTasks.filter((t) => t.isComplete).length;
   const total = timedTasks.length;
+  const layout = computeLayout(timedTasks);
+
+  function handleTaskPointerDown(e: React.PointerEvent<HTMLDivElement>, task: FlowTask) {
+    if ((e.target as HTMLElement).closest("button")) return;
+    e.stopPropagation();
+    dragRef.current = {
+      task,
+      startClientY: e.clientY,
+      originalTop: timeToY(task.startTime),
+      moved: false,
+    };
+  }
 
   function handleTimelineClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (justDraggedRef.current) return;
     if ((e.target as HTMLElement).closest("[data-task-block]")) return;
     const y = e.nativeEvent.offsetY;
     onTimeClick(yToTime(y, currentDate));
@@ -122,18 +226,26 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
             </div>
           )}
 
-          {timedTasks.map((task) => (
-            <TaskBlock
-              key={task.id}
-              task={task}
-              top={timeToY(task.startTime)}
-              height={durationToPx(task.startTime, task.endTime)}
-              isPending={pendingIds.has(task.id)}
-              onComplete={() => onComplete(task)}
-              onEdit={() => onEdit(task)}
-              onDelete={() => onDelete(task)}
-            />
-          ))}
+          {layout.map(({ task, col, totalCols }) => {
+            const isBeingDragged = dragId === task.id;
+            const top = isBeingDragged ? dragTop : timeToY(task.startTime);
+            return (
+              <TaskBlock
+                key={task.id}
+                task={task}
+                top={top}
+                height={durationToPx(task.startTime, task.endTime)}
+                isPending={pendingIds.has(task.id)}
+                colIndex={col}
+                totalCols={totalCols}
+                isDragging={isBeingDragged}
+                onTaskPointerDown={(e) => handleTaskPointerDown(e, task)}
+                onComplete={() => onComplete(task)}
+                onEdit={() => { if (!justDraggedRef.current) onEdit(task); }}
+                onDelete={() => onDelete(task)}
+              />
+            );
+          })}
         </div>
         <div className="h-24" />
       </div>

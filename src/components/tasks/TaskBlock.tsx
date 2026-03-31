@@ -13,12 +13,23 @@ interface TaskBlockProps {
   onDelete: () => void;
   isPending?: boolean;
   compact?: boolean;
+  isDragging?: boolean;
+  colIndex?: number;
+  totalCols?: number;
+  onTaskPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
 }
 
-export function TaskBlock({ task, top, height, onComplete, onEdit, onDelete, isPending, compact }: TaskBlockProps) {
+export function TaskBlock({
+  task, top, height, onComplete, onEdit, onDelete,
+  isPending, compact, isDragging, colIndex = 0, totalCols = 1,
+  onTaskPointerDown,
+}: TaskBlockProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const isShort = height < 36;
   const color = task.isComplete ? "#0f9d58" : (task.calendarBgColor ?? "#4285f4");
+
+  const colWidth = 1 / totalCols;
+  const colLeft = colIndex / totalCols;
 
   function formatTime(iso: string) {
     try { return format(new Date(iso), "HH:mm"); } catch { return ""; }
@@ -33,19 +44,26 @@ export function TaskBlock({ task, top, height, onComplete, onEdit, onDelete, isP
   return (
     <div
       data-task-block="true"
-      className={`absolute left-0.5 right-0.5 rounded-xl border overflow-hidden cursor-pointer transition-opacity
-        ${isPending ? "opacity-50" : "opacity-100"}
+      className={`absolute rounded-xl border overflow-hidden cursor-pointer transition-shadow
         ${isShort ? "flex items-center px-1.5" : "px-2 py-1.5"}
+        ${isDragging ? "shadow-2xl shadow-black/50 z-30" : ""}
       `}
       style={{
         top: `${top}px`,
         height: `${height}px`,
         backgroundColor: color,
         borderColor: "rgba(0,0,0,0.35)",
+        left: totalCols > 1 ? `calc(${colLeft * 100}% + 2px)` : "2px",
+        right: totalCols === 1 ? "2px" : undefined,
+        width: totalCols > 1 ? `calc(${colWidth * 100}% - 3px)` : undefined,
+        opacity: isDragging ? 0.85 : isPending ? 0.5 : 1,
+        touchAction: "none",
+        zIndex: isDragging ? 30 : undefined,
+        transition: isDragging ? "box-shadow 0.1s, opacity 0.1s" : "opacity 0.2s",
       }}
+      onPointerDown={onTaskPointerDown}
       onClick={(e) => { e.stopPropagation(); onEdit(); }}
     >
-
       {compact ? (
         <p className="text-[10px] font-semibold text-white truncate pl-1 leading-tight drop-shadow-sm">
           {task.title}
