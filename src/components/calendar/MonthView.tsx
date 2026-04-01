@@ -68,12 +68,14 @@ export function MonthView({ tasks, currentDate, onDayClick, onEventClick }: Mont
                       const rect = e.currentTarget.getBoundingClientRect();
                       onEventClick(task, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
                     }}
-                    className="truncate rounded-md px-1.5 py-[1px] leading-4 text-[10px] text-white border"
+                    className={`truncate rounded-md px-1.5 py-[1px] leading-4 text-[10px] border
+                      ${task.isComplete ? "text-white/90" : "text-white"}
+                      drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]`}
                     style={{
                       backgroundColor: task.isComplete
                         ? "#188038"
                         : (task.calendarBgColor ?? "#4285f4"),
-                      borderColor: "rgba(32,33,36,0.45)",
+                      borderColor: "rgba(12,14,16,0.62)",
                     }}
                   >
                     {task.isAllDay ? "" : `${format(new Date(task.startTime), "HH:mm")} `}

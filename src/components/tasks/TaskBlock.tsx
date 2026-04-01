@@ -25,7 +25,9 @@ export function TaskBlock({
   onTaskPointerDown,
 }: TaskBlockProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const isShort = height < 34;
+  const dense = height < 30 || (compact && totalCols >= 3);
+  const compactMode = !dense && (compact || height < 44);
+  const fullMode = !dense && !compactMode;
   const color = task.isComplete ? "#188038" : (task.calendarBgColor ?? "#4285f4");
 
   const colWidth = 1 / totalCols;
@@ -45,7 +47,7 @@ export function TaskBlock({
     <div
       data-task-block="true"
       className={`absolute rounded-md border overflow-hidden cursor-pointer transition-shadow
-        ${isShort ? "flex items-center px-1.5" : "px-2 py-1.5"}
+        ${dense ? "flex items-center px-1.5 py-0.5" : compactMode ? "px-1.5 py-1" : "px-2 py-1.5"}
         ${isDragging ? "shadow-2xl shadow-black/50 z-30" : ""}
       `}
       style={{
@@ -64,47 +66,50 @@ export function TaskBlock({
       onPointerDown={onTaskPointerDown}
       onClick={(e) => { e.stopPropagation(); onEdit(e); }}
     >
-      {compact ? (
-        <p className="text-[10px] font-semibold text-white truncate pl-1 leading-tight drop-shadow-sm">
+      {dense ? (
+        <p className={`w-full truncate leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]
+          ${task.isComplete ? "line-through opacity-80" : ""}
+          ${compact ? "text-[10px] font-semibold" : "text-[10px] font-medium"}`}>
           {task.title}
         </p>
       ) : (
         <div className="flex items-start gap-1.5">
           {/* Checkbox */}
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onComplete(); }}
-            disabled={isPending}
-            className={`flex-shrink-0 rounded-full border flex items-center justify-center mt-0.5 transition-all active:scale-90
-              ${isShort ? "w-3 h-3" : "w-3.5 h-3.5"}
-              ${task.isComplete ? "border-white/80 bg-white/20" : "border-white/60 hover:border-white"}`}
-          >
-            {task.isComplete && (
-              <svg viewBox="0 0 24 24" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth={3.2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-            )}
-          </button>
+          {!compactMode && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onComplete(); }}
+              disabled={isPending}
+              className={`flex-shrink-0 rounded-full border flex items-center justify-center mt-0.5 transition-all active:scale-90 w-3.5 h-3.5
+                ${task.isComplete ? "border-white/80 bg-white/20" : "border-white/60 hover:border-white"}`}
+            >
+              {task.isComplete && (
+                <svg viewBox="0 0 24 24" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth={3.2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
+          )}
           {/* Content */}
           <div className="flex-1 min-w-0">
             <p className={`font-medium leading-tight truncate text-white
-              ${isShort ? "text-[10px]" : "text-[11px]"}
+              ${compactMode ? "text-[10px]" : "text-[11px]"}
               ${task.isComplete ? "line-through opacity-70" : ""}`}>
               {task.title}
             </p>
-            {!isShort && (
-              <p className="text-[10px] mt-0.5 text-white/80">
+            {!compactMode && (
+              <p className="text-[10px] mt-0.5 text-white/90">
                 {formatTime(task.startTime)} — {formatTime(task.endTime)}
               </p>
             )}
-            {!isShort && task.calendarName && (
+            {fullMode && task.calendarName && (
               <p className="text-[10px] mt-0.5 text-white/60 truncate">
                 {task.calendarName}
               </p>
             )}
           </div>
           {/* Delete */}
-          {!isShort && (
+          {fullMode && (
             <button
               type="button"
               onClick={handleDeleteClick}

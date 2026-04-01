@@ -93,7 +93,7 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
                   key={task.id}
                   type="button"
                   onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
-                  className="w-full truncate rounded px-1.5 py-0.5 text-[10px] text-left text-white bg-[#5f6368]/40 border border-[#5f6368]/60 hover:bg-[#5f6368]/55 transition-colors"
+                  className="w-full truncate rounded px-1.5 py-0.5 text-[10px] font-medium text-left text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)] bg-[#5f6368]/40 border border-[#5f6368]/70 hover:bg-[#5f6368]/55 transition-colors"
                 >
                   {task.title}
                 </button>

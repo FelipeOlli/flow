@@ -145,7 +145,7 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
                 ${t.isComplete ? "bg-emerald-500 border-emerald-500" : "border-[#5f6368]"}`}>
               {t.isComplete && <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
             </button>
-            <span className={`text-xs truncate ${t.isComplete ? "line-through text-[#9aa0a6]" : "text-[#e8eaed]"}`}>{t.title}</span>
+            <span className={`text-xs font-medium truncate ${t.isComplete ? "line-through text-[#9aa0a6]" : "text-[#e8eaed] drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]"}`}>{t.title}</span>
             <span className="ml-auto text-xs text-[#9aa0a6] flex-shrink-0">dia inteiro</span>
           </div>
         ))}
