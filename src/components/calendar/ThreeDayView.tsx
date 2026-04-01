@@ -5,6 +5,7 @@ import { format, addDays, isToday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
 import { TaskBlock } from "@/components/tasks/TaskBlock";
+import { EventAnchorPoint } from "./EventPopover";
 import {
   CALENDAR_DIMENSIONS,
   HOURS,
@@ -21,7 +22,7 @@ interface ThreeDayViewProps {
   currentDate: Date;
   pendingIds: Set<string>;
   onComplete: (task: FlowTask) => void;
-  onEdit: (task: FlowTask) => void;
+  onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onDelete: (task: FlowTask) => void;
   onTimeClick: (time: Date) => void;
   onDayClick: (date: Date) => void;
@@ -49,6 +50,11 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
       (t) => !t.isAllDay && t.startTime && isSameDay(new Date(t.startTime), day)
     );
     return computeLayout(dayTasks);
+  }
+
+  function getAnchorFromElement(el: HTMLElement): EventAnchorPoint {
+    const rect = el.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
   }
 
   return (
@@ -86,7 +92,7 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
                 <button
                   key={task.id}
                   type="button"
-                  onClick={() => onEdit(task)}
+                  onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
                   className="w-full truncate rounded px-1.5 py-0.5 text-[10px] text-left text-white bg-[#5f6368]/40 border border-[#5f6368]/60 hover:bg-[#5f6368]/55 transition-colors"
                 >
                   {task.title}
@@ -151,7 +157,7 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
                     totalCols={totalCols}
                     compact
                     onComplete={() => onComplete(task)}
-                    onEdit={() => onEdit(task)}
+                    onEdit={(e) => onEdit(task, { x: e.clientX, y: e.clientY })}
                     onDelete={() => onDelete(task)}
                   />
                 ))}

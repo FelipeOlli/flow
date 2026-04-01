@@ -10,6 +10,7 @@ import { DayView } from "./DayView";
 import { ThreeDayView } from "./ThreeDayView";
 import { WeekView } from "./WeekView";
 import { MonthView } from "./MonthView";
+import { EventPopover, EventAnchorPoint } from "./EventPopover";
 import { TaskForm } from "@/components/tasks/TaskForm";
 
 type View = "day" | "3days" | "week" | "month";
@@ -32,6 +33,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [formDefaults, setFormDefaults] = useState<{ startTime?: string; endTime?: string }>({});
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState<string | null>(null);
+  const [selectedTask, setSelectedTask] = useState<FlowTask | null>(null);
+  const [eventAnchor, setEventAnchor] = useState<EventAnchorPoint | null>(null);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -81,6 +84,25 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   function goToDate(date: Date) {
     setCurrentDate(date);
     setView("day");
+    setSelectedTask(null);
+    setEventAnchor(null);
+  }
+
+  function openEventCard(task: FlowTask, anchor: EventAnchorPoint) {
+    setSelectedTask(task);
+    setEventAnchor(anchor);
+  }
+
+  function closeEventCard() {
+    setSelectedTask(null);
+    setEventAnchor(null);
+  }
+
+  function openEditForm(task: FlowTask) {
+    setEditingTask(task);
+    setFormDefaults({});
+    setShowForm(true);
+    closeEventCard();
   }
 
   async function handleComplete(task: FlowTask) {
@@ -126,6 +148,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   }
 
   async function handleDelete(task: FlowTask) {
+    closeEventCard();
     setTasks((prev) => prev.filter((t) => t.id !== task.id));
     const calId = encodeURIComponent(task.calendarId ?? "primary");
     await fetch(`/api/tasks/${task.id}?calendarId=${calId}`, { method: "DELETE" });
@@ -179,6 +202,13 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       setTimeout(() => setMigrateResult(null), 4000);
     }
   }
+
+  useEffect(() => {
+    if (!selectedTask) return;
+    const updated = tasks.find((t) => t.id === selectedTask.id);
+    if (updated) setSelectedTask(updated);
+    else closeEventCard();
+  }, [selectedTask, tasks]);
 
   function openCreateForm(time?: Date) {
     setEditingTask(null);
@@ -283,22 +313,22 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {/* Views */}
       {!loading && view === "day" && (
         <DayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
-          onComplete={handleComplete} onEdit={(t) => { setEditingTask(t); setFormDefaults({}); setShowForm(true); }}
+          onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onMove={handleMove} />
       )}
       {!loading && view === "3days" && (
         <ThreeDayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
-          onComplete={handleComplete} onEdit={(t) => { setEditingTask(t); setFormDefaults({}); setShowForm(true); }}
+          onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate} />
       )}
       {!loading && view === "week" && (
         <WeekView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
-          onComplete={handleComplete} onEdit={(t) => { setEditingTask(t); setFormDefaults({}); setShowForm(true); }}
+          onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate} />
       )}
       {!loading && view === "month" && (
         <MonthView tasks={tasks} currentDate={currentDate} onDayClick={goToDate}
-          onEventClick={(t) => { setEditingTask(t); setFormDefaults({}); setShowForm(true); }} />
+          onEventClick={openEventCard} />
       )}
 
       {/* FAB */}
@@ -321,6 +351,21 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           onClose={() => { setShowForm(false); setEditingTask(null); setFormDefaults({}); }}
           onSave={handleSave}
           onComplete={handleComplete} />
+      )}
+
+      {selectedTask && (
+        <EventPopover
+          task={selectedTask}
+          anchor={eventAnchor}
+          pending={pendingIds.has(selectedTask.id)}
+          onClose={closeEventCard}
+          onEdit={openEditForm}
+          onDelete={handleDelete}
+          onToggleComplete={async (task) => {
+            await handleComplete(task);
+            closeEventCard();
+          }}
+        />
       )}
     </div>
   );

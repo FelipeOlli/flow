@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { isToday } from "date-fns";
 import { FlowTask } from "@/types/task";
 import { TaskBlock } from "@/components/tasks/TaskBlock";
+import { EventAnchorPoint } from "./EventPopover";
 import {
   CALENDAR_DIMENSIONS,
   HOURS,
@@ -21,7 +22,7 @@ interface DayViewProps {
   currentDate: Date;
   pendingIds: Set<string>;
   onComplete: (task: FlowTask) => void;
-  onEdit: (task: FlowTask) => void;
+  onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onDelete: (task: FlowTask) => void;
   onTimeClick: (time: Date) => void;
   onMove?: (task: FlowTask, newStart: Date, newEnd: Date) => void;
@@ -126,12 +127,17 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
     onTimeClick(yToTime(y, currentDate));
   }
 
+  function getAnchorFromElement(el: HTMLElement): EventAnchorPoint {
+    const rect = el.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  }
+
   return (
     <div className="flex flex-col flex-1">
       {/* All-day + progress */}
       <div className="px-4 pt-2 pb-2 space-y-2">
         {allDayTasks.map((t) => (
-          <div key={t.id} onClick={() => onEdit(t)}
+          <div key={t.id} onClick={(e) => onEdit(t, getAnchorFromElement(e.currentTarget))}
             className="flex items-center gap-2 px-3 py-2 rounded-md bg-[#2a2b2e] border border-[#3c4043] cursor-pointer">
             <button onClick={(e) => { e.stopPropagation(); onComplete(t); }}
               type="button"
@@ -198,7 +204,7 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
                 isDragging={isBeingDragged}
                 onTaskPointerDown={(e) => handleTaskPointerDown(e, task)}
                 onComplete={() => onComplete(task)}
-                onEdit={() => { if (!justDraggedRef.current) onEdit(task); }}
+                onEdit={(e) => { if (!justDraggedRef.current) onEdit(task, { x: e.clientX, y: e.clientY }); }}
                 onDelete={() => onDelete(task)}
               />
             );

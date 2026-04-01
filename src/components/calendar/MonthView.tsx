@@ -3,6 +3,7 @@
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
+import { EventAnchorPoint } from "./EventPopover";
 
 const DAY_NAMES = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
@@ -10,7 +11,7 @@ interface MonthViewProps {
   tasks: FlowTask[];
   currentDate: Date;
   onDayClick: (date: Date) => void;
-  onEventClick: (task: FlowTask) => void;
+  onEventClick: (task: FlowTask, anchor: EventAnchorPoint) => void;
 }
 
 export function MonthView({ tasks, currentDate, onDayClick, onEventClick }: MonthViewProps) {
@@ -62,7 +63,11 @@ export function MonthView({ tasks, currentDate, onDayClick, onEventClick }: Mont
                 {dayTasks.slice(0, 3).map((task) => (
                   <div
                     key={task.id}
-                    onClick={(e) => { e.stopPropagation(); onEventClick(task); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      onEventClick(task, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+                    }}
                     className="truncate rounded-md px-1.5 py-[1px] leading-4 text-[10px] text-white border"
                     style={{
                       backgroundColor: task.isComplete

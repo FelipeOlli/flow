@@ -9,7 +9,7 @@ interface TaskBlockProps {
   top: number;
   height: number;
   onComplete: () => void;
-  onEdit: () => void;
+  onEdit: (e: React.MouseEvent<HTMLDivElement>) => void;
   onDelete: () => void;
   isPending?: boolean;
   compact?: boolean;
@@ -62,7 +62,7 @@ export function TaskBlock({
         transition: isDragging ? "box-shadow 0.1s, opacity 0.1s" : "opacity 0.2s",
       }}
       onPointerDown={onTaskPointerDown}
-      onClick={(e) => { e.stopPropagation(); onEdit(); }}
+      onClick={(e) => { e.stopPropagation(); onEdit(e); }}
     >
       {compact ? (
         <p className="text-[10px] font-semibold text-white truncate pl-1 leading-tight drop-shadow-sm">
