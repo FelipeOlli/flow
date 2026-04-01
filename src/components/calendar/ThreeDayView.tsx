@@ -5,61 +5,16 @@ import { format, addDays, isToday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
 import { TaskBlock } from "@/components/tasks/TaskBlock";
-
-const DAY_START = 6;
-const DAY_END = 23;
-const HOUR_PX = 56;
-const HOURS = Array.from({ length: DAY_END - DAY_START + 1 }, (_, i) => i + DAY_START);
-
-function timeToY(iso: string) {
-  const d = new Date(iso);
-  return ((d.getHours() - DAY_START) + d.getMinutes() / 60) * HOUR_PX;
-}
-
-function durationToPx(start: string, end: string) {
-  const mins = (new Date(end).getTime() - new Date(start).getTime()) / 60000;
-  return Math.max((mins / 60) * HOUR_PX, 18);
-}
-
-function currentTimeY() {
-  const now = new Date();
-  return ((now.getHours() - DAY_START) + now.getMinutes() / 60) * HOUR_PX;
-}
-
-function computeLayout(tasks: FlowTask[]) {
-  if (!tasks.length) return [];
-  const sorted = [...tasks].sort(
-    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-  );
-  const colEnds: number[] = [];
-  const cols: number[] = [];
-  for (const task of sorted) {
-    const s = new Date(task.startTime).getTime();
-    const e = new Date(task.endTime).getTime();
-    let col = colEnds.findIndex((end) => end <= s);
-    if (col === -1) col = colEnds.length;
-    colEnds[col] = e;
-    cols.push(col);
-  }
-  return sorted.map((task, i) => {
-    const s = new Date(task.startTime).getTime();
-    const e = new Date(task.endTime).getTime();
-    let maxCol = cols[i];
-    for (let j = 0; j < sorted.length; j++) {
-      const sj = new Date(sorted[j].startTime).getTime();
-      const ej = new Date(sorted[j].endTime).getTime();
-      if (sj < e && ej > s) maxCol = Math.max(maxCol, cols[j]);
-    }
-    return { task, col: cols[i], totalCols: maxCol + 1 };
-  });
-}
-
-function yToTime(y: number, baseDate: Date): Date {
-  const totalMins = Math.round((y / HOUR_PX) * 60 / 30) * 30;
-  const time = new Date(baseDate);
-  time.setHours(DAY_START + Math.floor(totalMins / 60), totalMins % 60, 0, 0);
-  return time;
-}
+import {
+  CALENDAR_DIMENSIONS,
+  HOURS,
+  computeLayout,
+  currentTimeY,
+  durationToPx,
+  formatHourLabel,
+  timeToY,
+  yToTime,
+} from "./calendarLayout";
 
 interface ThreeDayViewProps {
   tasks: FlowTask[];
@@ -99,34 +54,58 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
   return (
     <div className="flex flex-col flex-1">
       {/* Day headers */}
-      <div className="flex border-b border-gray-800/60 bg-gray-950">
-        <div className="w-10 flex-shrink-0" />
+      <div className="flex border-b border-[#3c4043] bg-[#202124]">
+        <div className="w-11 flex-shrink-0" />
         {days.map((day) => (
           <button
             key={day.toISOString()}
             onClick={() => onDayClick(day)}
-            className="flex-1 py-2 text-center active:bg-gray-800 transition-colors"
+            className="flex-1 py-2.5 text-center hover:bg-[#2a2b2e] transition-colors"
           >
-            <p className="text-[10px] text-gray-600 uppercase tracking-wide">
+            <p className="text-[10px] text-[#9aa0a6] uppercase tracking-wide">
               {format(day, "EEE", { locale: ptBR })}
             </p>
-            <div className={`mx-auto mt-0.5 w-6 h-6 flex items-center justify-center rounded-full text-xs font-semibold
-              ${isToday(day) ? "bg-emerald-500 text-white" : "text-gray-300"}`}>
+            <div className={`mx-auto mt-1 w-7 h-7 flex items-center justify-center rounded-full text-xs font-semibold
+              ${isToday(day) ? "bg-[#8ab4f8] text-[#202124]" : "text-[#e8eaed]"}`}>
               {format(day, "d")}
             </div>
           </button>
         ))}
       </div>
 
+      {/* All-day row */}
+      <div className="flex border-b border-[#3c4043] bg-[#202124] min-h-9">
+        <div className="w-11 flex-shrink-0 px-1.5 py-2 text-[10px] uppercase tracking-wide text-[#9aa0a6]">dia</div>
+        {days.map((day) => {
+          const allDayTasks = tasks
+            .filter((t) => t.isAllDay && t.startTime && isSameDay(new Date(t.startTime), day))
+            .slice(0, 1);
+          return (
+            <div key={`all-day-${day.toISOString()}`} className="flex-1 px-1 py-1 border-l border-[#3c4043] min-h-9">
+              {allDayTasks.map((task) => (
+                <button
+                  key={task.id}
+                  type="button"
+                  onClick={() => onEdit(task)}
+                  className="w-full truncate rounded px-1.5 py-0.5 text-[10px] text-left text-white bg-[#5f6368]/40 border border-[#5f6368]/60 hover:bg-[#5f6368]/55 transition-colors"
+                >
+                  {task.title}
+                </button>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+
       {/* Scrollable timeline */}
       <div ref={scrollRef} className="overflow-y-auto flex-1">
-        <div className="flex" style={{ height: `${(DAY_END - DAY_START + 1) * HOUR_PX}px` }}>
+        <div className="flex" style={{ height: `${(CALENDAR_DIMENSIONS.DAY_END - CALENDAR_DIMENSIONS.DAY_START + 1) * CALENDAR_DIMENSIONS.HOUR_PX}px` }}>
           {/* Time labels */}
-          <div className="w-10 flex-shrink-0 relative">
+          <div className="w-11 flex-shrink-0 relative">
             {HOURS.map((h) => (
-              <div key={h} className="absolute right-1.5" style={{ top: `${(h - DAY_START) * HOUR_PX - 7}px` }}>
-                <span className="text-[10px] text-gray-700 tabular-nums select-none">
-                  {String(h).padStart(2, "0")}
+              <div key={h} className="absolute right-1.5" style={{ top: `${(h - CALENDAR_DIMENSIONS.DAY_START) * CALENDAR_DIMENSIONS.HOUR_PX - 7}px` }}>
+                <span className="text-[10px] text-[#9aa0a6] tabular-nums select-none">
+                  {formatHourLabel(h)}
                 </span>
               </div>
             ))}
@@ -139,7 +118,7 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
             return (
               <div
                 key={day.toISOString()}
-                className="flex-1 relative border-l border-gray-800/40 cursor-pointer"
+                className="flex-1 relative border-l border-[#3c4043] cursor-pointer"
                 onClick={(e) => {
                   if ((e.target as HTMLElement).closest("[data-task-block]")) return;
                   onTimeClick(yToTime(e.nativeEvent.offsetY, day));
@@ -147,16 +126,16 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
               >
                 {/* Hour lines */}
                 {HOURS.map((h) => (
-                  <div key={h} className="absolute left-0 right-0 border-t border-gray-800/30 pointer-events-none"
-                    style={{ top: `${(h - DAY_START) * HOUR_PX}px` }} />
+                  <div key={h} className="absolute left-0 right-0 border-t border-[#3c4043] pointer-events-none"
+                    style={{ top: `${(h - CALENDAR_DIMENSIONS.DAY_START) * CALENDAR_DIMENSIONS.HOUR_PX}px` }} />
                 ))}
 
                 {/* Current time */}
                 {isCurrentDay && nowY >= 0 && (
                   <div className="absolute left-0 right-0 flex items-center z-10 pointer-events-none"
                     style={{ top: `${nowY}px` }}>
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 -ml-0.5 flex-shrink-0" />
-                    <div className="flex-1 h-px bg-red-500/60" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#f28b82] -ml-0.5 flex-shrink-0" />
+                    <div className="flex-1 h-px bg-[#f28b82]" />
                   </div>
                 )}
 
@@ -180,7 +159,7 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
             );
           })}
         </div>
-        <div className="h-24" />
+        <div style={{ height: `${CALENDAR_DIMENSIONS.BOTTOM_SPACER_PX}px` }} />
       </div>
     </div>
   );

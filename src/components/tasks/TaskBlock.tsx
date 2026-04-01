@@ -25,8 +25,8 @@ export function TaskBlock({
   onTaskPointerDown,
 }: TaskBlockProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const isShort = height < 36;
-  const color = task.isComplete ? "#0f9d58" : (task.calendarBgColor ?? "#4285f4");
+  const isShort = height < 34;
+  const color = task.isComplete ? "#188038" : (task.calendarBgColor ?? "#4285f4");
 
   const colWidth = 1 / totalCols;
   const colLeft = colIndex / totalCols;
@@ -44,7 +44,7 @@ export function TaskBlock({
   return (
     <div
       data-task-block="true"
-      className={`absolute rounded-xl border overflow-hidden cursor-pointer transition-shadow
+      className={`absolute rounded-md border overflow-hidden cursor-pointer transition-shadow
         ${isShort ? "flex items-center px-1.5" : "px-2 py-1.5"}
         ${isDragging ? "shadow-2xl shadow-black/50 z-30" : ""}
       `}
@@ -52,11 +52,11 @@ export function TaskBlock({
         top: `${top}px`,
         height: `${height}px`,
         backgroundColor: color,
-        borderColor: "rgba(0,0,0,0.35)",
+        borderColor: "rgba(32,33,36,0.45)",
         left: totalCols > 1 ? `calc(${colLeft * 100}% + 2px)` : "2px",
         right: totalCols === 1 ? "2px" : undefined,
         width: totalCols > 1 ? `calc(${colWidth * 100}% - 3px)` : undefined,
-        opacity: isDragging ? 0.85 : isPending ? 0.5 : 1,
+        opacity: isDragging ? 0.88 : isPending ? 0.55 : 1,
         touchAction: "none",
         zIndex: isDragging ? 30 : undefined,
         transition: isDragging ? "box-shadow 0.1s, opacity 0.1s" : "opacity 0.2s",
@@ -75,30 +75,30 @@ export function TaskBlock({
             type="button"
             onClick={(e) => { e.stopPropagation(); onComplete(); }}
             disabled={isPending}
-            className={`flex-shrink-0 rounded-full border-2 flex items-center justify-center mt-0.5 transition-all active:scale-90
+            className={`flex-shrink-0 rounded-full border flex items-center justify-center mt-0.5 transition-all active:scale-90
               ${isShort ? "w-3 h-3" : "w-3.5 h-3.5"}
-              ${task.isComplete ? "border-white bg-white/30" : "border-white/60 hover:border-white"}`}
+              ${task.isComplete ? "border-white/80 bg-white/20" : "border-white/60 hover:border-white"}`}
           >
             {task.isComplete && (
-              <svg viewBox="0 0 24 24" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth={4}>
+              <svg viewBox="0 0 24 24" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth={3.2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             )}
           </button>
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <p className={`font-semibold leading-tight truncate text-white drop-shadow-sm
-              ${isShort ? "text-[11px]" : "text-xs"}
+            <p className={`font-medium leading-tight truncate text-white
+              ${isShort ? "text-[10px]" : "text-[11px]"}
               ${task.isComplete ? "line-through opacity-70" : ""}`}>
               {task.title}
             </p>
             {!isShort && (
-              <p className="text-[10px] mt-0.5 text-white/75">
+              <p className="text-[10px] mt-0.5 text-white/80">
                 {formatTime(task.startTime)} — {formatTime(task.endTime)}
               </p>
             )}
             {!isShort && task.calendarName && (
-              <p className="text-[10px] mt-0.5 text-white/50 truncate">
+              <p className="text-[10px] mt-0.5 text-white/60 truncate">
                 {task.calendarName}
               </p>
             )}

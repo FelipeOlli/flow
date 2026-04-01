@@ -29,10 +29,10 @@ export function MonthView({ tasks, currentDate, onDayClick, onEventClick }: Mont
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       {/* Day name headers */}
-      <div className="grid grid-cols-7 border-b border-gray-800/60">
+      <div className="grid grid-cols-7 border-b border-[#3c4043] bg-[#202124]">
         {DAY_NAMES.map((name) => (
           <div key={name} className="py-2 text-center">
-            <span className="text-[11px] font-medium text-gray-600">{name}</span>
+            <span className="text-[11px] font-medium text-[#9aa0a6]">{name}</span>
           </div>
         ))}
       </div>
@@ -48,12 +48,12 @@ export function MonthView({ tasks, currentDate, onDayClick, onEventClick }: Mont
             <div
               key={day.toISOString()}
               onClick={() => onDayClick(day)}
-              className={`min-h-[72px] p-1 border-b border-r border-gray-800/30 cursor-pointer active:bg-gray-800/30 transition-colors
-                ${!inMonth ? "opacity-30" : ""}`}
+              className={`min-h-[84px] p-1.5 border-b border-r border-[#3c4043] cursor-pointer hover:bg-[#2a2b2e] transition-colors
+                ${!inMonth ? "opacity-35" : ""}`}
             >
               {/* Day number */}
               <div className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-semibold mb-1
-                ${today ? "bg-emerald-500 text-white" : "text-gray-400"}`}>
+                ${today ? "bg-[#8ab4f8] text-[#202124]" : "text-[#9aa0a6]"}`}>
                 {format(day, "d")}
               </div>
 
@@ -63,11 +63,12 @@ export function MonthView({ tasks, currentDate, onDayClick, onEventClick }: Mont
                   <div
                     key={task.id}
                     onClick={(e) => { e.stopPropagation(); onEventClick(task); }}
-                    className="truncate rounded px-1 leading-4 text-[10px] text-white"
+                    className="truncate rounded-md px-1.5 py-[1px] leading-4 text-[10px] text-white border"
                     style={{
                       backgroundColor: task.isComplete
-                        ? "#0f9d58"
+                        ? "#188038"
                         : (task.calendarBgColor ?? "#4285f4"),
+                      borderColor: "rgba(32,33,36,0.45)",
                     }}
                   >
                     {task.isAllDay ? "" : `${format(new Date(task.startTime), "HH:mm")} `}
@@ -75,7 +76,7 @@ export function MonthView({ tasks, currentDate, onDayClick, onEventClick }: Mont
                   </div>
                 ))}
                 {dayTasks.length > 3 && (
-                  <p className="text-[10px] text-gray-600 px-1">+{dayTasks.length - 3}</p>
+                  <p className="text-[10px] text-[#9aa0a6] px-1">+{dayTasks.length - 3}</p>
                 )}
               </div>
             </div>

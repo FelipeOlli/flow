@@ -4,65 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { isToday } from "date-fns";
 import { FlowTask } from "@/types/task";
 import { TaskBlock } from "@/components/tasks/TaskBlock";
-
-const DAY_START = 6;
-const DAY_END = 23;
-const HOUR_PX = 64;
-const HOURS = Array.from({ length: DAY_END - DAY_START + 1 }, (_, i) => i + DAY_START);
-
-function timeToY(iso: string) {
-  const d = new Date(iso);
-  return ((d.getHours() - DAY_START) + d.getMinutes() / 60) * HOUR_PX;
-}
-
-function durationToPx(start: string, end: string) {
-  const mins = (new Date(end).getTime() - new Date(start).getTime()) / 60000;
-  return Math.max((mins / 60) * HOUR_PX, 22);
-}
-
-function currentTimeY() {
-  const now = new Date();
-  return ((now.getHours() - DAY_START) + now.getMinutes() / 60) * HOUR_PX;
-}
-
-function yToTime(y: number, baseDate: Date): Date {
-  const totalMins = Math.round((y / HOUR_PX) * 60 / 30) * 30;
-  const time = new Date(baseDate);
-  time.setHours(DAY_START + Math.floor(totalMins / 60), totalMins % 60, 0, 0);
-  return time;
-}
-
-function snapY(y: number): number {
-  return Math.round(y / (HOUR_PX / 2)) * (HOUR_PX / 2);
-}
-
-function computeLayout(tasks: FlowTask[]) {
-  if (!tasks.length) return [];
-  const sorted = [...tasks].sort(
-    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-  );
-  const colEnds: number[] = [];
-  const cols: number[] = [];
-  for (const task of sorted) {
-    const s = new Date(task.startTime).getTime();
-    const e = new Date(task.endTime).getTime();
-    let col = colEnds.findIndex((end) => end <= s);
-    if (col === -1) col = colEnds.length;
-    colEnds[col] = e;
-    cols.push(col);
-  }
-  return sorted.map((task, i) => {
-    const s = new Date(task.startTime).getTime();
-    const e = new Date(task.endTime).getTime();
-    let maxCol = cols[i];
-    for (let j = 0; j < sorted.length; j++) {
-      const sj = new Date(sorted[j].startTime).getTime();
-      const ej = new Date(sorted[j].endTime).getTime();
-      if (sj < e && ej > s) maxCol = Math.max(maxCol, cols[j]);
-    }
-    return { task, col: cols[i], totalCols: maxCol + 1 };
-  });
-}
+import {
+  CALENDAR_DIMENSIONS,
+  HOURS,
+  computeLayout,
+  currentTimeY,
+  durationToPx,
+  formatHourLabel,
+  snapY,
+  timeToY,
+  yToTime,
+} from "./calendarLayout";
 
 interface DayViewProps {
   tasks: FlowTask[];
@@ -180,24 +132,24 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
       <div className="px-4 pt-2 pb-2 space-y-2">
         {allDayTasks.map((t) => (
           <div key={t.id} onClick={() => onEdit(t)}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-800/50 border border-gray-700/40 cursor-pointer">
+            className="flex items-center gap-2 px-3 py-2 rounded-md bg-[#2a2b2e] border border-[#3c4043] cursor-pointer">
             <button onClick={(e) => { e.stopPropagation(); onComplete(t); }}
               type="button"
               className={`w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors
-                ${t.isComplete ? "bg-emerald-500 border-emerald-500" : "border-gray-500"}`}>
+                ${t.isComplete ? "bg-emerald-500 border-emerald-500" : "border-[#5f6368]"}`}>
               {t.isComplete && <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
             </button>
-            <span className={`text-xs truncate ${t.isComplete ? "line-through text-gray-500" : "text-gray-300"}`}>{t.title}</span>
-            <span className="ml-auto text-xs text-gray-700 flex-shrink-0">dia inteiro</span>
+            <span className={`text-xs truncate ${t.isComplete ? "line-through text-[#9aa0a6]" : "text-[#e8eaed]"}`}>{t.title}</span>
+            <span className="ml-auto text-xs text-[#9aa0a6] flex-shrink-0">dia inteiro</span>
           </div>
         ))}
         {total > 0 && (
           <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-gray-800 overflow-hidden rounded-full">
+            <div className="flex-1 h-px bg-[#3c4043] overflow-hidden rounded-full">
               <div className="h-full bg-emerald-500 rounded-full transition-all duration-700"
                 style={{ width: `${Math.round((completed / total) * 100)}%` }} />
             </div>
-            <span className="text-xs text-gray-700 tabular-nums">{completed}/{total}</span>
+            <span className="text-xs text-[#9aa0a6] tabular-nums">{completed}/{total}</span>
           </div>
         )}
       </div>
@@ -206,24 +158,28 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
       <div ref={scrollRef} className="overflow-y-auto flex-1">
         <div
           className="relative cursor-pointer"
-          style={{ height: `${(DAY_END - DAY_START + 1) * HOUR_PX}px`, marginLeft: "44px", marginRight: "12px" }}
+          style={{
+            height: `${(CALENDAR_DIMENSIONS.DAY_END - CALENDAR_DIMENSIONS.DAY_START + 1) * CALENDAR_DIMENSIONS.HOUR_PX}px`,
+            marginLeft: `${CALENDAR_DIMENSIONS.TIME_GUTTER_WIDTH}px`,
+            marginRight: `${CALENDAR_DIMENSIONS.GRID_SIDE_PADDING}px`,
+          }}
           onClick={handleTimelineClick}
         >
           {HOURS.map((h) => (
             <div key={h} className="absolute left-0 right-0 pointer-events-none"
-              style={{ top: `${(h - DAY_START) * HOUR_PX}px` }}>
-              <span className="absolute -left-10 -top-2.5 text-[11px] text-gray-700 w-8 text-right tabular-nums select-none">
-                {String(h).padStart(2, "0")}
+              style={{ top: `${(h - CALENDAR_DIMENSIONS.DAY_START) * CALENDAR_DIMENSIONS.HOUR_PX}px` }}>
+              <span className="absolute -left-10 -top-2.5 text-[11px] text-[#9aa0a6] w-8 text-right tabular-nums select-none">
+                {formatHourLabel(h)}
               </span>
-              <div className="w-full h-px bg-gray-800/60" />
+              <div className="w-full h-px bg-[#3c4043]" />
             </div>
           ))}
 
-          {isCurrentDay && nowY >= 0 && nowY <= (DAY_END - DAY_START) * HOUR_PX && (
+          {isCurrentDay && nowY >= 0 && nowY <= (CALENDAR_DIMENSIONS.DAY_END - CALENDAR_DIMENSIONS.DAY_START) * CALENDAR_DIMENSIONS.HOUR_PX && (
             <div className="absolute left-0 right-0 flex items-center z-20 pointer-events-none"
               style={{ top: `${nowY}px` }}>
-              <div className="w-2 h-2 rounded-full bg-red-500 -ml-1 flex-shrink-0" />
-              <div className="flex-1 h-px bg-red-500/70" />
+              <div className="w-2 h-2 rounded-full bg-[#f28b82] -ml-1 flex-shrink-0" />
+              <div className="flex-1 h-px bg-[#f28b82]" />
             </div>
           )}
 
@@ -248,7 +204,7 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
             );
           })}
         </div>
-        <div className="h-24" />
+        <div style={{ height: `${CALENDAR_DIMENSIONS.BOTTOM_SPACER_PX}px` }} />
       </div>
     </div>
   );

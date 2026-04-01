@@ -214,23 +214,23 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   })();
 
   return (
-    <div className="h-svh bg-gray-950 flex flex-col">
+    <div className="h-svh bg-[#202124] flex flex-col">
       {/* Header */}
-      <div className="flex-shrink-0 bg-gray-950/95 backdrop-blur-sm border-b border-gray-900">
+      <div className="flex-shrink-0 bg-[#202124] border-b border-[#3c4043]">
         <div className="flex items-center gap-2 px-3 py-3">
           <button onClick={() => navigate("prev")}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-800 active:bg-gray-700 transition-colors">
+            className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:bg-[#2a2b2e] transition-colors">
             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
 
           <button onClick={() => setCurrentDate(new Date())} className="flex-1 text-center">
-            <p className="text-base font-semibold text-white capitalize">{dateLabel}</p>
+            <p className="text-base font-medium text-[#e8eaed] capitalize">{dateLabel}</p>
           </button>
 
           <button onClick={() => navigate("next")}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-800 active:bg-gray-700 transition-colors">
+            className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:bg-[#2a2b2e] transition-colors">
             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
@@ -240,12 +240,12 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           <button
             onClick={handleManualMigration}
             disabled={migrating}
-            title="Migrar tarefas pendentes para amanhã"
+            title="Migrar tarefas pendentes para hoje"
             aria-label="Migrar tarefas pendentes para hoje"
-            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-600 hover:text-gray-300 hover:bg-gray-800/70 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+            className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
           >
             {migrating
-              ? <div className="w-3.5 h-3.5 border-2 border-gray-500/30 border-t-gray-300 rounded-full animate-spin" />
+              ? <div className="w-3.5 h-3.5 border-2 border-[#5f6368]/40 border-t-[#e8eaed] rounded-full animate-spin" />
               : <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.9}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M7 4.75v2.5M17 4.75v2.5M4.75 9.5h14.5M6.5 7h11a1.75 1.75 0 011.75 1.75v9.75A1.75 1.75 0 0117.5 20.25h-11a1.75 1.75 0 01-1.75-1.75V8.75A1.75 1.75 0 016.5 7z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 14h5M12.5 11l2 3-2 3" />
@@ -254,7 +254,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           </button>
 
           <button onClick={() => signOut({ callbackUrl: "/sign-in" })}
-            className="w-8 h-8 flex items-center justify-center text-gray-700 hover:text-gray-500 transition-colors">
+            className="w-8 h-8 flex items-center justify-center text-[#9aa0a6] hover:text-[#e8eaed] transition-colors">
             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
@@ -265,8 +265,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
         <div className="flex gap-1 px-3 pb-2.5">
           {(["day", "3days", "week", "month"] as View[]).map((v) => (
             <button key={v} onClick={() => setView(v)}
-              className={`flex-1 py-1.5 rounded-xl text-xs font-medium transition-colors
-                ${view === v ? "bg-gray-800 text-white" : "text-gray-600 hover:text-gray-500"}`}>
+              className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors
+                ${view === v ? "bg-[#3c4043] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"}`}>
               {VIEW_LABELS[v]}
             </button>
           ))}
@@ -276,7 +276,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {/* Loading */}
       {loading && (
         <div className="flex justify-center items-center py-8">
-          <div className="w-5 h-5 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+          <div className="w-5 h-5 border-2 border-[#8ab4f8]/30 border-t-[#8ab4f8] rounded-full animate-spin" />
         </div>
       )}
 
@@ -303,7 +303,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
       {/* FAB */}
       <button onClick={() => openCreateForm()}
-        className="fixed bottom-6 right-4 w-14 h-14 bg-emerald-500 rounded-full shadow-lg shadow-emerald-500/20 flex items-center justify-center active:scale-95 transition-transform z-30">
+        className="fixed bottom-6 right-4 w-14 h-14 bg-[#8ab4f8] rounded-full shadow-lg shadow-black/30 flex items-center justify-center active:scale-95 transition-transform z-30">
         <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
         </svg>
@@ -311,7 +311,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
       {/* Toast migração */}
       {migrateResult && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-gray-800 border border-gray-700 text-white text-sm px-4 py-2.5 rounded-2xl shadow-lg whitespace-nowrap">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#2a2b2e] border border-[#3c4043] text-[#e8eaed] text-sm px-4 py-2.5 rounded-md shadow-lg whitespace-nowrap">
           {migrateResult}
         </div>
       )}
