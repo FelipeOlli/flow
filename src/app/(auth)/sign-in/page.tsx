@@ -20,8 +20,8 @@ export default function SignInPage() {
           <Image
             src="/logo.png"
             alt="FLOW"
-            width={220}
-            height={220}
+            width={300}
+            height={300}
             priority
             className="drop-shadow-[0_0_24px_rgba(79,142,247,0.3)]"
           />
