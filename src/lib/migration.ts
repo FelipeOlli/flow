@@ -5,6 +5,24 @@ import { TimeSlot } from "@/types/task";
 const WORK_WINDOW_START_HOUR = 7;
 const WORK_WINDOW_END_HOUR = 22;
 
+export interface MigrationDiagnostics {
+  sourceDate: string;
+  targetDate: string;
+  timeZone: string;
+  sourceEvents: number;
+  targetEvents: number;
+  pendingEvents: number;
+  completedEvents: number;
+  allDayEvents: number;
+}
+
+export interface MigrationResult {
+  migrated: number;
+  skipped: number;
+  details: string[];
+  diagnostics: MigrationDiagnostics;
+}
+
 function findFreeSlot(
   occupied: TimeSlot[],
   targetDay: Date,
@@ -42,7 +60,7 @@ export async function runMigration(
   timeZone: string,
   fromDate?: Date,
   toDate?: Date
-): Promise<{ migrated: number; skipped: number; details: string[] }> {
+): Promise<MigrationResult> {
   // Cron: ontem → hoje. Manual: hoje → amanhã
   const sourceDay = fromDate ?? (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d; })();
   const targetDay = toDate ?? addDays(new Date(), 0);
@@ -59,11 +77,26 @@ export async function runMigration(
 
   // Filtra pendentes (não verde, com horário)
   const uncompleted = sourceEvents.filter((e) => !e.isComplete && !e.isAllDay);
+  const completedCount = sourceEvents.filter((e) => e.isComplete).length;
+  const allDayCount = sourceEvents.filter((e) => e.isAllDay).length;
+  const diagnostics: MigrationDiagnostics = {
+    sourceDate: sourceDay.toISOString(),
+    targetDate: targetDay.toISOString(),
+    timeZone,
+    sourceEvents: sourceEvents.length,
+    targetEvents: targetEvents.length,
+    pendingEvents: uncompleted.length,
+    completedEvents: completedCount,
+    allDayEvents: allDayCount,
+  };
 
   console.log(`[FLOW MIGRATION] ${uncompleted.length} eventos pendentes para migrar:`,
     uncompleted.map((e) => `"${e.title}" [${e.calendarId}]`));
+  console.log("[FLOW MIGRATION] Diagnóstico:", diagnostics);
 
-  if (uncompleted.length === 0) return { migrated: 0, skipped: 0, details: [] };
+  if (uncompleted.length === 0) {
+    return { migrated: 0, skipped: 0, details: [], diagnostics };
+  }
 
   // Slots ocupados no dia destino
   const occupied: TimeSlot[] = targetEvents
@@ -108,5 +141,5 @@ export async function runMigration(
     }
   }
 
-  return { migrated, skipped, details };
+  return { migrated, skipped, details, diagnostics };
 }

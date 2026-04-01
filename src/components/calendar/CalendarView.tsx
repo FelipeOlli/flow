@@ -163,7 +163,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       const res = await fetch("/api/cron/migrate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fromDate: currentDate.toISOString() }),
+        body: JSON.stringify({ fromDate: format(currentDate, "yyyy-MM-dd") }),
       });
       const data = await res.json();
       if (data.migrated === 0) {
@@ -241,12 +241,14 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
             onClick={handleManualMigration}
             disabled={migrating}
             title="Migrar tarefas pendentes para amanhã"
-            className="w-8 h-8 flex items-center justify-center text-gray-700 hover:text-amber-400 transition-colors disabled:opacity-40"
+            aria-label="Migrar tarefas pendentes para hoje"
+            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-600 hover:text-gray-300 hover:bg-gray-800/70 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
           >
             {migrating
-              ? <div className="w-3.5 h-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
-              : <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              ? <div className="w-3.5 h-3.5 border-2 border-gray-500/30 border-t-gray-300 rounded-full animate-spin" />
+              : <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.9}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 4.75v2.5M17 4.75v2.5M4.75 9.5h14.5M6.5 7h11a1.75 1.75 0 011.75 1.75v9.75A1.75 1.75 0 0117.5 20.25h-11a1.75 1.75 0 01-1.75-1.75V8.75A1.75 1.75 0 016.5 7z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 14h5M12.5 11l2 3-2 3" />
                 </svg>
             }
           </button>
