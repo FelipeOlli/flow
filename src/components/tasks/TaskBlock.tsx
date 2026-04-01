@@ -72,6 +72,7 @@ export function TaskBlock({
         <div className="flex items-start gap-1.5">
           {/* Checkbox */}
           <button
+            type="button"
             onClick={(e) => { e.stopPropagation(); onComplete(); }}
             disabled={isPending}
             className={`flex-shrink-0 rounded-full border-2 flex items-center justify-center mt-0.5 transition-all active:scale-90
@@ -105,6 +106,7 @@ export function TaskBlock({
           {/* Delete */}
           {!isShort && (
             <button
+              type="button"
               onClick={handleDeleteClick}
               className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center transition-all
                 ${confirmDelete ? "bg-white/30 text-white" : "text-white/40 hover:text-white/80"}`}

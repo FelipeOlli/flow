@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isToday, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { FlowTask, CreateTaskInput, UpdateTaskInput } from "@/types/task";
 import { DayView } from "./DayView";
 import { ThreeDayView } from "./ThreeDayView";
@@ -18,6 +19,7 @@ interface CalendarViewProps {
 }
 
 export function CalendarView({ initialDate }: CalendarViewProps) {
+  const router = useRouter();
   const [view, setView] = useState<View>("day");
   const [currentDate, setCurrentDate] = useState(() =>
     initialDate ? new Date(initialDate) : new Date()
@@ -54,13 +56,13 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       const res = await fetch(
         `/api/tasks?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&tz=${encodeURIComponent(tz)}`
       );
-      if (res.status === 401) { window.location.href = "/sign-in"; return; }
+      if (res.status === 401) { router.replace("/sign-in"); return; }
       if (res.ok) setTasks(await res.json());
     } finally {
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, format(currentDate, "yyyy-MM-dd")]);
+  }, [router, view, format(currentDate, "yyyy-MM-dd")]);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
@@ -86,14 +88,21 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isComplete: newComplete } : t));
     setPendingIds((p) => new Set(p).add(task.id));
     try {
-      await fetch(`/api/tasks/${task.id}`, {
+      const res = await fetch(`/api/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isComplete: newComplete, calendarId: task.calendarId ?? "primary" }),
       });
+      if (res.status === 401) {
+        router.replace("/sign-in");
+        return;
+      }
+      if (!res.ok) throw new Error("Failed to toggle completion");
+    } catch {
+      // Revert optimistic state when the server rejects the update.
+      setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isComplete: task.isComplete } : t));
     } finally {
       setPendingIds((p) => { const n = new Set(p); n.delete(task.id); return n; });
-      await fetchTasks();
     }
   }
 

@@ -182,6 +182,7 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
           <div key={t.id} onClick={() => onEdit(t)}
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-800/50 border border-gray-700/40 cursor-pointer">
             <button onClick={(e) => { e.stopPropagation(); onComplete(t); }}
+              type="button"
               className={`w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors
                 ${t.isComplete ? "bg-emerald-500 border-emerald-500" : "border-gray-500"}`}>
               {t.isComplete && <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
