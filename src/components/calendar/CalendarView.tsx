@@ -98,13 +98,6 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     setEventAnchor(null);
   }
 
-  function openEditForm(task: FlowTask) {
-    setEditingTask(task);
-    setFormDefaults({});
-    setShowForm(true);
-    closeEventCard();
-  }
-
   async function handleComplete(task: FlowTask) {
     const newComplete = !task.isComplete;
     setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isComplete: newComplete } : t));
@@ -177,6 +170,16 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       setPendingIds((p) => { const n = new Set(p); n.delete(task.id); return n; });
       await fetchTasks();
     }
+  }
+
+  async function handleInlineEdit(task: FlowTask, updates: UpdateTaskInput) {
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...updates, calendarId: task.calendarId ?? "primary" }),
+    });
+    if (!res.ok) throw new Error("Failed to update event");
+    await fetchTasks();
   }
 
   async function handleManualMigration() {
@@ -359,7 +362,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           anchor={eventAnchor}
           pending={pendingIds.has(selectedTask.id)}
           onClose={closeEventCard}
-          onEdit={openEditForm}
+          onSaveEdit={handleInlineEdit}
           onDelete={handleDelete}
           onToggleComplete={async (task) => {
             await handleComplete(task);

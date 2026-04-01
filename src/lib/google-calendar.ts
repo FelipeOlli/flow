@@ -1,5 +1,5 @@
 import { google, calendar_v3 } from "googleapis";
-import { FlowTask, CreateTaskInput, UpdateTaskInput } from "@/types/task";
+import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption } from "@/types/task";
 
 const COMPLETE_COLOR_ID = "2";
 
@@ -98,8 +98,9 @@ export async function createEvent(
   timeZone: string
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
+  const calendarId = input.calendarId ?? "primary";
   const { data } = await calendar.events.insert({
-    calendarId: "primary",
+    calendarId,
     requestBody: {
       summary: input.title,
       description: input.description,
@@ -107,7 +108,22 @@ export async function createEvent(
       end: { dateTime: input.endTime, timeZone },
     },
   });
-  return mapEvent(data, "primary");
+  return mapEvent(data, calendarId);
+}
+
+export async function listWritableCalendars(accessToken: string): Promise<CalendarOption[]> {
+  const calendar = getClient(accessToken);
+  const { data } = await calendar.calendarList.list({
+    minAccessRole: "writer",
+  });
+
+  return (data.items ?? [])
+    .filter((cal) => !!cal.id)
+    .map((cal) => ({
+      id: cal.id!,
+      name: cal.summary ?? "Sem nome",
+      bgColor: CALENDAR_COLOR_OVERRIDES[cal.summary ?? ""] ?? cal.backgroundColor ?? undefined,
+    }));
 }
 
 export async function updateEvent(

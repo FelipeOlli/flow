@@ -22,6 +22,7 @@ export interface CreateTaskInput {
   startTime: string;
   endTime: string;
   description?: string;
+  calendarId?: string;
 }
 
 export interface UpdateTaskInput {
@@ -31,4 +32,10 @@ export interface UpdateTaskInput {
   description?: string;
   isComplete?: boolean;
   calendarId?: string;
+}
+
+export interface CalendarOption {
+  id: string;
+  name: string;
+  bgColor?: string;
 }

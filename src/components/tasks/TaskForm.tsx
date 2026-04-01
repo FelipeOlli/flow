@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
-import { FlowTask, CreateTaskInput, UpdateTaskInput } from "@/types/task";
+import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption } from "@/types/task";
 
 interface TaskFormProps {
   task?: FlowTask | null;
@@ -57,12 +57,36 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
   const [startTime, setStartTime] = useState(defaultStart);
   const [endTime, setEndTime] = useState(defaultEnd);
   const [description, setDescription] = useState(task?.description ?? "");
+  const [calendars, setCalendars] = useState<CalendarOption[]>([]);
+  const [calendarId, setCalendarId] = useState("primary");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     setTimeout(() => titleRef.current?.focus(), 100);
   }, []);
+
+  useEffect(() => {
+    if (isEditing) return;
+    let active = true;
+    async function loadCalendars() {
+      try {
+        const res = await fetch("/api/calendars");
+        if (!res.ok) return;
+        const data: CalendarOption[] = await res.json();
+        if (!active) return;
+        setCalendars(data);
+        if (data.length > 0) {
+          const primary = data.find((c) => c.id === "primary");
+          setCalendarId(primary?.id ?? data[0].id);
+        }
+      } catch {
+        // Keep default calendar when list fails.
+      }
+    }
+    loadCalendars();
+    return () => { active = false; };
+  }, [isEditing]);
 
   const currentDurationMins = Math.round(
     (new Date(endTime).getTime() - new Date(startTime).getTime()) / 60000
@@ -94,12 +118,14 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
     setLoading(true);
     setError("");
     try {
-      await onSave({
+      const payload: CreateTaskInput | UpdateTaskInput = {
         title: title.trim(),
         startTime: new Date(startTime).toISOString(),
         endTime: new Date(endTime).toISOString(),
         description: description.trim() || undefined,
-      });
+      };
+      if (!isEditing) payload.calendarId = calendarId;
+      await onSave(payload);
       onClose();
     } catch {
       setError("Erro ao salvar. Tente novamente.");
@@ -174,6 +200,23 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
           </div>
           <textarea placeholder="Descrição (opcional)" value={description} onChange={(e) => setDescription(e.target.value)}
             rows={2} className="w-full bg-gray-800 text-white placeholder-gray-500 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 border border-gray-700 resize-none" />
+          {!isEditing && (
+            <div>
+              <label className="text-xs text-gray-500 mb-1.5 block">Calendário</label>
+              <select
+                value={calendarId}
+                onChange={(e) => setCalendarId(e.target.value)}
+                className="w-full bg-gray-800 text-white rounded-2xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 border border-gray-700"
+              >
+                {calendars.length === 0 && <option value="primary">Principal</option>}
+                {calendars.map((cal) => (
+                  <option key={cal.id} value={cal.id}>
+                    {cal.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose}
