@@ -153,10 +153,12 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
             <button
               type="button"
               onClick={onClose}
-              className="w-9 h-9 rounded-full border border-[#8ab4f8] text-[#8ab4f8] hover:bg-[#8ab4f8]/10 transition-colors"
+              className="w-9 h-9 min-w-9 min-h-9 rounded-full border border-[#8ab4f8] text-[#8ab4f8] hover:bg-[#8ab4f8]/10 transition-colors flex items-center justify-center"
               aria-label="Fechar"
             >
-              X
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18 6L6 18M6 6l12 12" />
+              </svg>
             </button>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -189,16 +191,16 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="min-w-0">
                 <label className="text-xs text-[#9aa0a6] mb-1.5 block">Início</label>
                 <input type="datetime-local" value={startTime} onChange={(e) => handleStartChange(e.target.value)}
-                  className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043]" />
+                  className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043]" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className="text-xs text-[#9aa0a6] mb-1.5 block">Fim</label>
                 <input type="datetime-local" value={endTime} min={startTime} onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043]" />
+                  className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043]" />
               </div>
             </div>
             <textarea placeholder="Descrição (opcional)" value={description} onChange={(e) => setDescription(e.target.value)}

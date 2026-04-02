@@ -145,14 +145,16 @@ export function EventPopover({
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full border border-[#8ab4f8] text-[#8ab4f8] hover:bg-[#8ab4f8]/10 transition-colors"
+            className="w-9 h-9 min-w-9 min-h-9 rounded-full border border-[#8ab4f8] text-[#8ab4f8] hover:bg-[#8ab4f8]/10 transition-colors flex items-center justify-center"
             aria-label="Fechar"
           >
-            X
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18 6L6 18M6 6l12 12" />
+            </svg>
           </button>
         </div>
 
-        <div className="px-4 pb-4 space-y-3">
+        <div className="px-4 pb-4 space-y-3 max-h-[min(72vh,560px)] overflow-y-auto">
           {!editing ? (
             <>
               <div className="text-sm text-[#e8eaed]">
@@ -161,7 +163,7 @@ export function EventPopover({
               </div>
 
               {task.description && (
-                <p className="text-sm text-[#bdc1c6] line-clamp-2">{task.description}</p>
+                <p className="text-sm text-[#bdc1c6] whitespace-pre-wrap break-words">{task.description}</p>
               )}
 
               {task.calendarName && (
