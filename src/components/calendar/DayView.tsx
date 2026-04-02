@@ -9,6 +9,7 @@ import { getEventSurfaceColor } from "@/lib/colors";
 import { EventAnchorPoint } from "./EventPopover";
 import {
   CALENDAR_DIMENSIONS,
+  CURRENT_TIME_LINE_Z_INDEX,
   HOURS,
   computeLayout,
   currentTimeY,
@@ -300,8 +301,8 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
           ))}
 
           {isCurrentDay && nowY >= 0 && nowY <= (CALENDAR_DIMENSIONS.DAY_END - CALENDAR_DIMENSIONS.DAY_START) * CALENDAR_DIMENSIONS.HOUR_PX && (
-            <div className="absolute left-0 right-0 flex items-center z-20 pointer-events-none"
-              style={{ top: `${nowY}px` }}>
+            <div className="absolute left-0 right-0 flex items-center pointer-events-none"
+              style={{ top: `${nowY}px`, zIndex: CURRENT_TIME_LINE_Z_INDEX }}>
               <div className="w-2.5 h-2.5 rounded-full bg-[#ea4335] -ml-1.5 flex-shrink-0" />
               <div className="flex-1 h-[2px] bg-[#ea4335]" />
             </div>

@@ -12,6 +12,9 @@ export const CALENDAR_DIMENSIONS = {
   BOTTOM_SPACER_PX: 96,
 } as const;
 
+/** Above TaskBlock stacking (100 + minutes-in-day; see TaskBlock.tsx). */
+export const CURRENT_TIME_LINE_Z_INDEX = 2000;
+
 export const HOURS = Array.from(
   { length: CALENDAR_DIMENSIONS.DAY_END - CALENDAR_DIMENSIONS.DAY_START + 1 },
   (_, i) => i + CALENDAR_DIMENSIONS.DAY_START

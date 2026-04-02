@@ -9,6 +9,7 @@ import { getEventSurfaceColor } from "@/lib/colors";
 import { EventAnchorPoint } from "./EventPopover";
 import {
   CALENDAR_DIMENSIONS,
+  CURRENT_TIME_LINE_Z_INDEX,
   HOURS,
   computeLayout,
   currentTimeY,
@@ -179,8 +180,8 @@ export function WeekView({ tasks, currentDate, pendingIds, onComplete, onEdit, o
 
                 {/* Current time */}
                 {isCurrentDay && nowY >= 0 && (
-                  <div className="absolute left-0 right-0 flex items-center z-10 pointer-events-none"
-                    style={{ top: `${nowY}px` }}>
+                  <div className="absolute left-0 right-0 flex items-center pointer-events-none"
+                    style={{ top: `${nowY}px`, zIndex: CURRENT_TIME_LINE_Z_INDEX }}>
                     <div className="w-2 h-2 rounded-full bg-[#ea4335] -ml-1 flex-shrink-0" />
                     <div className="flex-1 h-[2px] bg-[#ea4335]" />
                   </div>
