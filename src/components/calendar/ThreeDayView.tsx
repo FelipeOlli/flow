@@ -96,7 +96,7 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
                   onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
                   className="w-full truncate rounded px-1.5 py-0.5 text-[10px] font-medium text-left text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)] border transition-colors"
                   style={{
-                    backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete),
+                    backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus),
                     borderColor: "rgba(12,14,16,0.56)",
                   }}
                 >

@@ -10,6 +10,17 @@ export interface FlowTask {
   calendarId?: string;
   calendarName?: string;
   calendarBgColor?: string;
+  attendees?: TaskAttendee[];
+  selfResponseStatus?: AttendanceStatus;
+  meetingUrl?: string;
+}
+
+export type AttendanceStatus = "needsAction" | "declined" | "tentative" | "accepted";
+
+export interface TaskAttendee {
+  name?: string;
+  email?: string;
+  responseStatus?: AttendanceStatus;
 }
 
 export interface TimeSlot {
@@ -33,6 +44,7 @@ export interface UpdateTaskInput {
   isComplete?: boolean;
   calendarId?: string;
   targetCalendarId?: string;
+  attendanceStatus?: Exclude<AttendanceStatus, "needsAction">;
 }
 
 export interface CalendarOption {

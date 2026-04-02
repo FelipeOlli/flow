@@ -1,5 +1,6 @@
 const DEFAULT_EVENT_COLOR = "#4285f4";
 const COMPLETE_EVENT_COLOR = "#188038";
+const DECLINED_EVENT_COLOR = "#5f6368";
 const EVENT_SURFACE_ALPHA = 0.9;
 
 function clamp01(value: number): number {
@@ -42,7 +43,14 @@ function toRgba(color: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${clamp01(alpha)})`;
 }
 
-export function getEventSurfaceColor(calendarColor?: string, isComplete?: boolean): string {
+export function getEventSurfaceColor(
+  calendarColor?: string,
+  isComplete?: boolean,
+  selfResponseStatus?: "needsAction" | "declined" | "tentative" | "accepted"
+): string {
+  if (selfResponseStatus === "declined") {
+    return toRgba(lightenHexColor(DECLINED_EVENT_COLOR, 0.15), EVENT_SURFACE_ALPHA);
+  }
   const base = isComplete
     ? lightenHexColor(COMPLETE_EVENT_COLOR, 0.18)
     : lightenHexColor(calendarColor ?? DEFAULT_EVENT_COLOR, 0.22);

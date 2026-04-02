@@ -159,7 +159,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                 onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
                 className="rounded-lg border px-3 py-2 cursor-pointer"
                 style={{
-                  backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete),
+                  backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus),
                   borderColor: "rgba(12,14,16,0.56)",
                 }}
               >
@@ -195,7 +195,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
               onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
               className="rounded-lg border px-3 py-2 cursor-pointer"
               style={{
-                backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete),
+                backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus),
                 borderColor: "rgba(12,14,16,0.56)",
               }}
             >
@@ -239,7 +239,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
           <div key={t.id} onClick={(e) => onEdit(t, getAnchorFromElement(e.currentTarget))}
             className="flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer"
             style={{
-              backgroundColor: getEventSurfaceColor(t.calendarBgColor, t.isComplete),
+              backgroundColor: getEventSurfaceColor(t.calendarBgColor, t.isComplete, t.selfResponseStatus),
               borderColor: "rgba(12,14,16,0.56)",
             }}>
             <button onClick={(e) => { e.stopPropagation(); onComplete(t); }}

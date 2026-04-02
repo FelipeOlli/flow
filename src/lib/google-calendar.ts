@@ -1,5 +1,5 @@
 import { google, calendar_v3 } from "googleapis";
-import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption } from "@/types/task";
+import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, AttendanceStatus } from "@/types/task";
 import { getDateKeyInTimeZone, getUtcRangeForDateKey } from "./timezone";
 
 const COMPLETE_COLOR_ID = "2";
@@ -21,6 +21,19 @@ function mapEvent(
   calendarName = "",
   calendarBgColor = "#4285f4"
 ): FlowTask {
+  const selfAttendee = (event.attendees ?? []).find((att) => att.self);
+  const conferenceUri =
+    event.conferenceData?.entryPoints?.find((entry) => entry.entryPointType === "video")?.uri ??
+    event.conferenceData?.entryPoints?.[0]?.uri;
+  const meetingUrl = event.hangoutLink ?? conferenceUri ?? undefined;
+  const attendees = (event.attendees ?? [])
+    .filter((att) => !!att.email || !!att.displayName)
+    .map((att) => ({
+      name: att.displayName ?? undefined,
+      email: att.email ?? undefined,
+      responseStatus: att.responseStatus as AttendanceStatus | undefined,
+    }));
+
   return {
     id: event.id!,
     title: event.summary ?? "Sem título",
@@ -33,6 +46,9 @@ function mapEvent(
     calendarId,
     calendarName,
     calendarBgColor,
+    attendees: attendees.length > 0 ? attendees : undefined,
+    selfResponseStatus: selfAttendee?.responseStatus as AttendanceStatus | undefined,
+    meetingUrl,
   };
 }
 
@@ -203,6 +219,58 @@ export async function deleteEvent(
 ): Promise<void> {
   const calendar = getClient(accessToken);
   await calendar.events.delete({ calendarId, eventId });
+}
+
+export async function getEventById(
+  accessToken: string,
+  eventId: string,
+  calendarId = "primary"
+): Promise<FlowTask> {
+  const calendar = getClient(accessToken);
+  const { data } = await calendar.events.get({ calendarId, eventId });
+  return mapEvent(data, calendarId);
+}
+
+export async function updateEventRsvp(
+  accessToken: string,
+  eventId: string,
+  calendarId: string,
+  attendanceStatus: Exclude<AttendanceStatus, "needsAction">,
+  userEmail?: string
+): Promise<FlowTask> {
+  const calendar = getClient(accessToken);
+  const { data: current } = await calendar.events.get({ calendarId, eventId });
+
+  const attendees = [...(current.attendees ?? [])];
+  let attendeeIndex = attendees.findIndex((att) => att.self);
+  if (attendeeIndex < 0 && userEmail) {
+    attendeeIndex = attendees.findIndex((att) => att.email?.toLowerCase() === userEmail.toLowerCase());
+  }
+
+  if (attendeeIndex >= 0) {
+    attendees[attendeeIndex] = {
+      ...attendees[attendeeIndex],
+      responseStatus: attendanceStatus,
+    };
+  } else if (userEmail) {
+    attendees.push({
+      email: userEmail,
+      responseStatus: attendanceStatus,
+    });
+  } else {
+    throw new Error("Could not determine attendee to update RSVP");
+  }
+
+  const { data } = await calendar.events.patch({
+    calendarId,
+    eventId,
+    requestBody: {
+      attendees,
+      attendeesOmitted: false,
+    },
+  });
+
+  return mapEvent(data, calendarId);
 }
 
 // Used only by migration (primary calendar only)

@@ -1,5 +1,13 @@
 import { auth } from "@/auth";
-import { updateEvent, markEventComplete, markEventIncomplete, deleteEvent, moveEventToCalendar } from "@/lib/google-calendar";
+import {
+  updateEvent,
+  markEventComplete,
+  markEventIncomplete,
+  deleteEvent,
+  moveEventToCalendar,
+  updateEventRsvp,
+  getEventById,
+} from "@/lib/google-calendar";
 import { NextRequest, NextResponse } from "next/server";
 import { UpdateTaskInput } from "@/types/task";
 
@@ -15,6 +23,7 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
     const body: UpdateTaskInput = await req.json();
     const calendarId = body.calendarId ?? "primary";
     const targetCalendarId = body.targetCalendarId ?? calendarId;
+    const attendanceStatus = body.attendanceStatus;
     const tz = process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
 
     let task;
@@ -36,11 +45,33 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
           calendarId,
           targetCalendarId
         );
-        task = hasUpdateFields
+        const edited = hasUpdateFields
           ? await updateEvent(session.accessToken, moved.id, body, tz, targetCalendarId)
           : moved;
+        task = attendanceStatus
+          ? await updateEventRsvp(
+              session.accessToken,
+              edited.id,
+              targetCalendarId,
+              attendanceStatus,
+              session.user?.email ?? undefined
+            )
+          : edited;
       } else {
-        task = await updateEvent(session.accessToken, eventId, body, tz, calendarId);
+        const edited = hasUpdateFields
+          ? await updateEvent(session.accessToken, eventId, body, tz, calendarId)
+          : null;
+        if (attendanceStatus) {
+          task = await updateEventRsvp(
+            session.accessToken,
+            edited?.id ?? eventId,
+            calendarId,
+            attendanceStatus,
+            session.user?.email ?? undefined
+          );
+        } else {
+          task = edited ?? (await getEventById(session.accessToken, eventId, calendarId));
+        }
       }
     }
     return NextResponse.json(task);

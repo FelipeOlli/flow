@@ -73,7 +73,7 @@ export function MonthView({ tasks, currentDate, onDayClick, onEventClick }: Mont
                       ${task.isComplete ? "text-white/90" : "text-white"}
                       drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]`}
                     style={{
-                      backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete),
+                      backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus),
                       borderColor: "rgba(12,14,16,0.62)",
                     }}
                   >

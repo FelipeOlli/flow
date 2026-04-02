@@ -32,7 +32,7 @@ export function TaskBlock({
   const dense = height < 30 || (compact && totalCols >= 3);
   const compactMode = !dense && (compact || height < 44);
   const fullMode = !dense && !compactMode;
-  const color = getEventSurfaceColor(task.calendarBgColor, task.isComplete);
+  const color = getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus);
 
   const roofMode = sameStartTotal > 1;
   const sameStartGapPx = 0;

@@ -98,6 +98,31 @@ export function EventPopover({
     ? "Dia inteiro"
     : `${format(new Date(task.startTime), "HH:mm")} - ${format(new Date(task.endTime), "HH:mm")}`;
 
+  const attendeeStatusLabel: Record<string, string> = {
+    accepted: "Aceito",
+    tentative: "Talvez",
+    declined: "Recusado",
+    needsAction: "Sem resposta",
+  };
+  const currentResponse = task.selfResponseStatus ?? "needsAction";
+
+  async function handleAttendanceStatus(status: "accepted" | "tentative" | "declined") {
+    setSaving(true);
+    setError("");
+    setFeedback("");
+    try {
+      await onSaveEdit(task, {
+        calendarId: task.calendarId ?? "primary",
+        attendanceStatus: status,
+      });
+      setFeedback("Presença atualizada.");
+    } catch {
+      setError("Erro ao atualizar presença");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleSaveInlineEdit() {
     if (!title.trim()) {
       setError("Digite um título");
@@ -169,6 +194,81 @@ export function EventPopover({
               {task.calendarName && (
                 <p className="text-sm text-[#9aa0a6]">{task.calendarName}</p>
               )}
+
+              {task.meetingUrl && (
+                <a
+                  href={task.meetingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[#8ab4f8]/60 text-sm text-[#8ab4f8] hover:bg-[#8ab4f8]/10 transition-colors"
+                >
+                  Entrar com Google Meet
+                </a>
+              )}
+
+              {task.attendees && task.attendees.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-wide text-[#9aa0a6]">Convidados</p>
+                  <div className="space-y-1.5">
+                    {task.attendees.map((attendee, index) => (
+                      <div
+                        key={`${attendee.email ?? attendee.name ?? "attendee"}-${index}`}
+                        className="text-sm text-[#e8eaed] break-words"
+                      >
+                        <span>{attendee.name?.trim() || attendee.email || "Convidado"}</span>
+                        {attendee.responseStatus && (
+                          <span className="text-[#9aa0a6]"> - {attendeeStatusLabel[attendee.responseStatus] ?? "Sem resposta"}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-wide text-[#9aa0a6]">Sua presença</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={pending || saving}
+                    onClick={() => handleAttendanceStatus("accepted")}
+                    className={`px-3 py-1.5 rounded-lg border text-xs transition-colors disabled:opacity-50 ${
+                      currentResponse === "accepted"
+                        ? "border-emerald-400/70 bg-emerald-400/15 text-emerald-300"
+                        : "border-[#5f6368] text-[#e8eaed] hover:bg-[#2a2b2e]"
+                    }`}
+                  >
+                    Sim
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending || saving}
+                    onClick={() => handleAttendanceStatus("tentative")}
+                    className={`px-3 py-1.5 rounded-lg border text-xs transition-colors disabled:opacity-50 ${
+                      currentResponse === "tentative"
+                        ? "border-amber-400/70 bg-amber-400/15 text-amber-300"
+                        : "border-[#5f6368] text-[#e8eaed] hover:bg-[#2a2b2e]"
+                    }`}
+                  >
+                    Talvez
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending || saving}
+                    onClick={() => handleAttendanceStatus("declined")}
+                    className={`px-3 py-1.5 rounded-lg border text-xs transition-colors disabled:opacity-50 ${
+                      currentResponse === "declined"
+                        ? "border-[#9aa0a6]/70 bg-[#9aa0a6]/20 text-[#e8eaed]"
+                        : "border-[#5f6368] text-[#e8eaed] hover:bg-[#2a2b2e]"
+                    }`}
+                  >
+                    Nao
+                  </button>
+                </div>
+                <p className="text-xs text-[#9aa0a6]">
+                  Status atual: {attendeeStatusLabel[currentResponse] ?? "Sem resposta"}
+                </p>
+              </div>
 
               <div className="flex flex-wrap gap-2 pt-1">
                 <button
