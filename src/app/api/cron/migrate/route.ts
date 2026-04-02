@@ -3,6 +3,7 @@ import { runMigration } from "@/lib/migration";
 import { NextRequest, NextResponse } from "next/server";
 import { getValidAccessToken } from "@/lib/token-store";
 import { getReferenceDateForDateKey, isDateKey, shiftDateKey } from "@/lib/timezone";
+import { setMigrationError, setMigrationRunning, setMigrationSuccess } from "@/lib/migration-status";
 
 function parseLocalDateInput(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
@@ -17,6 +18,9 @@ export async function POST(req: NextRequest) {
   const isCronCall =
     cronSecret && authHeader === `Bearer ${cronSecret}`;
 
+  const source = isCronCall ? "auto" : "manual";
+  setMigrationRunning(source);
+
   try {
     const timeZone = process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
     let accessToken: string | null = null;
@@ -24,6 +28,7 @@ export async function POST(req: NextRequest) {
     if (isCronCall) {
       accessToken = await getValidAccessToken();
       if (!accessToken) {
+        setMigrationError(source, "No stored token available for cron migration");
         return NextResponse.json(
           { error: "No stored token available for cron migration" },
           { status: 400 }
@@ -33,11 +38,13 @@ export async function POST(req: NextRequest) {
       // Check user session as fallback (manual trigger from UI)
       const session = await auth();
       if (!session?.accessToken) {
+        setMigrationError(source, "Unauthorized");
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
       accessToken = session.accessToken;
     }
     if (!accessToken) {
+      setMigrationError(source, "No access token for migration");
       return NextResponse.json({ error: "No access token for migration" }, { status: 400 });
     }
 
@@ -61,10 +68,12 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await runMigration(accessToken, timeZone, fromDate, toDate);
+    setMigrationSuccess(source, result);
     console.log("[FLOW] Migration complete:", result);
 
     return NextResponse.json({ success: true, ...result });
   } catch (err) {
+    setMigrationError(source, err);
     console.error("[FLOW] Migration error:", err);
     return NextResponse.json({ error: "Migration failed" }, { status: 500 });
   }
