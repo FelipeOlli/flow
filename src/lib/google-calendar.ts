@@ -1,5 +1,6 @@
 import { google, calendar_v3 } from "googleapis";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption } from "@/types/task";
+import { getDateKeyInTimeZone, getUtcRangeForDateKey } from "./timezone";
 
 const COMPLETE_COLOR_ID = "2";
 
@@ -39,7 +40,8 @@ async function fetchAllCalendarsEvents(
   accessToken: string,
   timeMin: Date,
   timeMax: Date,
-  timeZone: string
+  timeZone: string,
+  options?: { q?: string; maxResults?: number }
 ): Promise<FlowTask[]> {
   const calendar = getClient(accessToken);
 
@@ -57,7 +59,8 @@ async function fetchAllCalendarsEvents(
         singleEvents: true,
         orderBy: "startTime",
         timeZone,
-        maxResults: 250,
+        q: options?.q,
+        maxResults: options?.maxResults ?? 250,
       });
       const calName = cal.summary ?? "";
       const calColor = CALENDAR_COLOR_OVERRIDES[calName] ?? cal.backgroundColor ?? "#4285f4";
@@ -76,20 +79,27 @@ export async function getEventsForDay(
   date: Date,
   timeZone: string
 ): Promise<FlowTask[]> {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(date);
-  end.setHours(23, 59, 59, 999);
-  return fetchAllCalendarsEvents(accessToken, start, end, timeZone);
+  const dayKey = getDateKeyInTimeZone(date, timeZone);
+  return getEventsForDateKey(accessToken, dayKey, timeZone);
+}
+
+export async function getEventsForDateKey(
+  accessToken: string,
+  dateKey: string,
+  timeZone: string
+): Promise<FlowTask[]> {
+  const { startUtc, endUtc } = getUtcRangeForDateKey(dateKey, timeZone);
+  return fetchAllCalendarsEvents(accessToken, startUtc, endUtc, timeZone);
 }
 
 export async function getEventsInRange(
   accessToken: string,
   startDate: Date,
   endDate: Date,
-  timeZone: string
+  timeZone: string,
+  options?: { q?: string; maxResults?: number }
 ): Promise<FlowTask[]> {
-  return fetchAllCalendarsEvents(accessToken, startDate, endDate, timeZone);
+  return fetchAllCalendarsEvents(accessToken, startDate, endDate, timeZone, options);
 }
 
 export async function createEvent(

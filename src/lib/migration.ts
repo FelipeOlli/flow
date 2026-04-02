@@ -1,11 +1,20 @@
-import { differenceInMinutes, addDays } from "date-fns";
-import { getEventsForDay, moveEvent } from "./google-calendar";
+import { differenceInMinutes } from "date-fns";
+import { getEventsForDateKey, moveEvent } from "./google-calendar";
 import { TimeSlot } from "@/types/task";
+import {
+  getDateKeyInTimeZone,
+  getReferenceDateForDateKey,
+  getTimePartsInTimeZone,
+  shiftDateKey,
+  zonedDateTimeToUtc,
+} from "./timezone";
 
 const WORK_WINDOW_START_HOUR = 7;
 const WORK_WINDOW_END_HOUR = 22;
 
 export interface MigrationDiagnostics {
+  sourceDateKey: string;
+  targetDateKey: string;
   sourceDate: string;
   targetDate: string;
   timeZone: string;
@@ -61,16 +70,24 @@ export async function runMigration(
   fromDate?: Date,
   toDate?: Date
 ): Promise<MigrationResult> {
-  // Cron: ontem → hoje. Manual: hoje → amanhã
-  const sourceDay = fromDate ?? (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d; })();
-  const targetDay = toDate ?? addDays(new Date(), 0);
+  const todayDateKey = getDateKeyInTimeZone(new Date(), timeZone);
+  const sourceDateKey = fromDate
+    ? getDateKeyInTimeZone(fromDate, timeZone)
+    : shiftDateKey(todayDateKey, -1);
+  const targetDateKey = toDate
+    ? getDateKeyInTimeZone(toDate, timeZone)
+    : fromDate
+      ? shiftDateKey(sourceDateKey, 1)
+      : todayDateKey;
+  const sourceDay = getReferenceDateForDateKey(sourceDateKey, timeZone);
+  const targetDay = getReferenceDateForDateKey(targetDateKey, timeZone);
 
-  console.log(`[FLOW MIGRATION] Buscando eventos de ${sourceDay.toDateString()} → ${targetDay.toDateString()}`);
+  console.log(`[FLOW MIGRATION] Buscando eventos de ${sourceDateKey} → ${targetDateKey} (${timeZone})`);
 
   // Busca de TODAS as agendas
   const [sourceEvents, targetEvents] = await Promise.all([
-    getEventsForDay(accessToken, sourceDay, timeZone),
-    getEventsForDay(accessToken, targetDay, timeZone),
+    getEventsForDateKey(accessToken, sourceDateKey, timeZone),
+    getEventsForDateKey(accessToken, targetDateKey, timeZone),
   ]);
 
   console.log(`[FLOW MIGRATION] Encontrados ${sourceEvents.length} eventos na origem`);
@@ -80,6 +97,8 @@ export async function runMigration(
   const completedCount = sourceEvents.filter((e) => e.isComplete).length;
   const allDayCount = sourceEvents.filter((e) => e.isAllDay).length;
   const diagnostics: MigrationDiagnostics = {
+    sourceDateKey,
+    targetDateKey,
     sourceDate: sourceDay.toISOString(),
     targetDate: targetDay.toISOString(),
     timeZone,
@@ -115,10 +134,10 @@ export async function runMigration(
       const originalStart = new Date(event.startTime);
       const originalEnd = new Date(event.endTime);
       const duration = differenceInMinutes(originalEnd, originalStart);
+      const { hour, minute } = getTimePartsInTimeZone(originalStart, timeZone);
 
-      // Mantém o horário original, apenas muda a data
-      const newStart = new Date(targetDay);
-      newStart.setHours(originalStart.getHours(), originalStart.getMinutes(), 0, 0);
+      // Mantém o horário original no timezone de negócio.
+      const newStart = zonedDateTimeToUtc(targetDateKey, timeZone, hour, minute, 0, 0);
       const newEnd = new Date(newStart.getTime() + duration * 60_000);
 
       await moveEvent(

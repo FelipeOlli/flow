@@ -12,10 +12,24 @@ export async function GET(req: NextRequest) {
   const startDateParam = req.nextUrl.searchParams.get("startDate");
   const endDateParam = req.nextUrl.searchParams.get("endDate");
   const dateParam = req.nextUrl.searchParams.get("date");
+  const query = req.nextUrl.searchParams.get("q")?.trim();
+  const limitParam = Number(req.nextUrl.searchParams.get("limit") ?? "80");
+  const limit = Number.isFinite(limitParam) ? Math.min(Math.max(Math.floor(limitParam), 1), 250) : 80;
 
   try {
     let tasks;
-    if (startDateParam && endDateParam) {
+    if (query) {
+      const now = new Date();
+      const startDate = new Date(now);
+      startDate.setFullYear(startDate.getFullYear() - 5);
+      const endDate = new Date(now);
+      endDate.setFullYear(endDate.getFullYear() + 5);
+      tasks = await getEventsInRange(session.accessToken, startDate, endDate, tz, {
+        q: query,
+        maxResults: limit,
+      });
+      tasks = tasks.slice(0, limit);
+    } else if (startDateParam && endDateParam) {
       tasks = await getEventsInRange(session.accessToken, new Date(startDateParam), new Date(endDateParam), tz);
     } else {
       const date = dateParam ? new Date(dateParam) : new Date();

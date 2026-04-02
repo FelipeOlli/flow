@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { FlowTask } from "@/types/task";
+import { getEventSurfaceColor } from "@/lib/colors";
 
 interface TaskBlockProps {
   task: FlowTask;
@@ -16,22 +17,28 @@ interface TaskBlockProps {
   isDragging?: boolean;
   colIndex?: number;
   totalCols?: number;
+  sameStartIndex?: number;
+  sameStartTotal?: number;
   onTaskPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
 }
 
 export function TaskBlock({
   task, top, height, onComplete, onEdit, onDelete,
   isPending, compact, isDragging, colIndex = 0, totalCols = 1,
+  sameStartIndex = 0, sameStartTotal = 1,
   onTaskPointerDown,
 }: TaskBlockProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const dense = height < 30 || (compact && totalCols >= 3);
   const compactMode = !dense && (compact || height < 44);
   const fullMode = !dense && !compactMode;
-  const color = task.isComplete ? "#188038" : (task.calendarBgColor ?? "#4285f4");
+  const color = getEventSurfaceColor(task.calendarBgColor, task.isComplete);
 
-  const colWidth = 1 / totalCols;
-  const colLeft = colIndex / totalCols;
+  const roofMode = sameStartTotal > 1;
+  const sameStartGapPx = 0;
+  const sameStartTotalGapPx = Math.max(0, (sameStartTotal - 1) * sameStartGapPx);
+  const startDate = new Date(task.startTime);
+  const startOrder = startDate.getHours() * 60 + startDate.getMinutes();
 
   function formatTime(iso: string) {
     try { return format(new Date(iso), "HH:mm"); } catch { return ""; }
@@ -55,12 +62,16 @@ export function TaskBlock({
         height: `${height}px`,
         backgroundColor: color,
         borderColor: "rgba(32,33,36,0.45)",
-        left: totalCols > 1 ? `calc(${colLeft * 100}% + 2px)` : "2px",
-        right: totalCols === 1 ? "2px" : undefined,
-        width: totalCols > 1 ? `calc(${colWidth * 100}% - 3px)` : undefined,
+        left: roofMode
+          ? `calc(((100% - ${sameStartTotalGapPx}px) / ${sameStartTotal} + ${sameStartGapPx}px) * ${sameStartIndex} + 2px)`
+          : (totalCols > 1 ? `calc(${(colIndex / totalCols) * 100}% + 2px)` : "2px"),
+        right: roofMode || totalCols > 1 ? undefined : "2px",
+        width: roofMode
+          ? `calc((100% - ${sameStartTotalGapPx}px) / ${sameStartTotal} - 2px)`
+          : (totalCols > 1 ? `calc(${(1 / totalCols) * 100}% - 3px)` : undefined),
         opacity: isDragging ? 0.88 : isPending ? 0.55 : 1,
         touchAction: "none",
-        zIndex: isDragging ? 30 : undefined,
+        zIndex: isDragging ? 300 : (100 + startOrder + sameStartIndex),
         transition: isDragging ? "box-shadow 0.1s, opacity 0.1s" : "opacity 0.2s",
       }}
       onPointerDown={onTaskPointerDown}

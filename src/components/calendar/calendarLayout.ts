@@ -62,6 +62,15 @@ export function computeLayout(tasks: FlowTask[]) {
     colEnds[col] = e;
     cols.push(col);
   }
+  const sameStartBuckets = new Map<number, number[]>();
+  sorted.forEach((task, index) => {
+    const start = new Date(task.startTime);
+    const startMinuteKey = Math.floor(start.getTime() / 60000);
+    const bucket = sameStartBuckets.get(startMinuteKey);
+    if (bucket) bucket.push(index);
+    else sameStartBuckets.set(startMinuteKey, [index]);
+  });
+
   return sorted.map((task, i) => {
     const s = new Date(task.startTime).getTime();
     const e = new Date(task.endTime).getTime();
@@ -71,6 +80,16 @@ export function computeLayout(tasks: FlowTask[]) {
       const ej = new Date(sorted[j].endTime).getTime();
       if (sj < e && ej > s) maxCol = Math.max(maxCol, cols[j]);
     }
-    return { task, col: cols[i], totalCols: maxCol + 1 };
+    const startMinuteKey = Math.floor(s / 60000);
+    const sameStartIndexes = sameStartBuckets.get(startMinuteKey) ?? [i];
+    const sameStartTotal = sameStartIndexes.length;
+    const sameStartIndex = sameStartIndexes.indexOf(i);
+    return {
+      task,
+      col: cols[i],
+      totalCols: maxCol + 1,
+      sameStartIndex,
+      sameStartTotal,
+    };
   });
 }

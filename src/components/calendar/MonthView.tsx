@@ -4,6 +4,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInte
 import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
 import { EventAnchorPoint } from "./EventPopover";
+import { getEventSurfaceColor } from "@/lib/colors";
 
 const DAY_NAMES = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
@@ -72,9 +73,7 @@ export function MonthView({ tasks, currentDate, onDayClick, onEventClick }: Mont
                       ${task.isComplete ? "text-white/90" : "text-white"}
                       drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]`}
                     style={{
-                      backgroundColor: task.isComplete
-                        ? "#188038"
-                        : (task.calendarBgColor ?? "#4285f4"),
+                      backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete),
                       borderColor: "rgba(12,14,16,0.62)",
                     }}
                   >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarOption, FlowTask, UpdateTaskInput } from "@/types/task";
@@ -84,27 +84,12 @@ export function EventPopover({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  const positionStyle = useMemo(() => {
-    if (typeof window === "undefined" || !anchor) {
-      return {
-        top: "50%",
-        left: "50%",
-        transform: "translate(-50%, -50%)",
-      } as const;
-    }
-
-    const cardWidth = Math.min(380, window.innerWidth - 24);
-    const cardHeight = 250;
-    const pad = 12;
-    const preferLeft = anchor.x + 20 + cardWidth > window.innerWidth;
-    const rawLeft = preferLeft ? anchor.x - cardWidth - 20 : anchor.x + 20;
-    const rawTop = anchor.y - cardHeight / 2;
-
-    const left = Math.max(pad, Math.min(rawLeft, window.innerWidth - cardWidth - pad));
-    const top = Math.max(pad, Math.min(rawTop, window.innerHeight - cardHeight - pad));
-
-    return { top: `${top}px`, left: `${left}px`, width: `${cardWidth}px` } as const;
-  }, [anchor]);
+  const positionStyle = {
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    width: "min(380px, calc(100vw - 24px))",
+  } as const;
 
   const dateLabel = task.startTime
     ? format(new Date(task.startTime), "EEEE, d 'de' MMMM", { locale: ptBR })
@@ -149,7 +134,7 @@ export function EventPopover({
   }
 
   return (
-    <div className="fixed inset-0 z-[70]" onClick={onClose}>
+    <div className="fixed inset-0 z-[4000]" onClick={onClose}>
       <div
         className="fixed rounded-2xl border border-[#3c4043] bg-[#202124] shadow-2xl shadow-black/40 text-[#e8eaed]"
         style={positionStyle}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isToday, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { signOut } from "next-auth/react";
@@ -14,6 +14,11 @@ import { EventPopover, EventAnchorPoint } from "./EventPopover";
 import { TaskForm } from "@/components/tasks/TaskForm";
 
 type View = "day" | "3days" | "week" | "month";
+const LAYERS = {
+  fab: "z-[1200]",
+  fabBehindOverlay: "z-10",
+  toast: "z-[1300]",
+} as const;
 
 interface CalendarViewProps {
   initialDate?: string;
@@ -22,6 +27,8 @@ interface CalendarViewProps {
 export function CalendarView({ initialDate }: CalendarViewProps) {
   const router = useRouter();
   const [view, setView] = useState<View>("day");
+  const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list">("grid");
+  const [isSmallMobile, setIsSmallMobile] = useState(false);
   const [currentDate, setCurrentDate] = useState(() =>
     initialDate ? new Date(initialDate) : new Date()
   );
@@ -35,6 +42,11 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [migrateResult, setMigrateResult] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<FlowTask | null>(null);
   const [eventAnchor, setEventAnchor] = useState<EventAnchorPoint | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<FlowTask[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement | null>(null);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -68,6 +80,18 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   }, [router, view, format(currentDate, "yyyy-MM-dd")]);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 768px)");
+    const apply = (matches: boolean) => {
+      setIsSmallMobile(matches);
+      setDayDisplayMode(matches ? "list" : "grid");
+    };
+    apply(mediaQuery.matches);
+    const listener = (event: MediaQueryListEvent) => apply(event.matches);
+    mediaQuery.addEventListener("change", listener);
+    return () => mediaQuery.removeEventListener("change", listener);
+  }, []);
 
   function navigate(dir: "prev" | "next") {
     const delta = dir === "prev" ? -1 : 1;
@@ -195,7 +219,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       if (data.migrated === 0) {
         setMigrateResult("Nenhuma tarefa pendente para migrar.");
       } else {
-        setMigrateResult(`${data.migrated} tarefa(s) migrada(s) para amanhã.`);
+        setMigrateResult(`${data.migrated} tarefa(s) migrada(s) para o dia seguinte.`);
       }
       await fetchTasks();
     } catch {
@@ -206,12 +230,76 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     }
   }
 
+  function openSearchResult(task: FlowTask) {
+    const start = new Date(task.startTime);
+    setCurrentDate(start);
+    setView("day");
+    setSelectedTask(task);
+    setEventAnchor({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+    setSearchOpen(false);
+  }
+
   useEffect(() => {
     if (!selectedTask) return;
     const updated = tasks.find((t) => t.id === selectedTask.id);
     if (updated) setSelectedTask(updated);
-    else closeEventCard();
   }, [selectedTask, tasks]);
+
+  useEffect(() => {
+    const term = searchQuery.trim();
+    if (!term) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const res = await fetch(
+          `/api/tasks?q=${encodeURIComponent(term)}&limit=80&tz=${encodeURIComponent(tz)}`
+        );
+        if (res.status === 401) {
+          router.replace("/sign-in");
+          return;
+        }
+        if (!res.ok) throw new Error("Failed to search events");
+        const data: FlowTask[] = await res.json();
+        const ordered = [...data].sort(
+          (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+        );
+        setSearchResults(ordered);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [router, searchQuery]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setSearchOpen(false);
+    }
+
+    function handleOutsideClick(event: MouseEvent) {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (!searchContainerRef.current?.contains(target)) setSearchOpen(false);
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [searchOpen]);
 
   function openCreateForm(time?: Date) {
     setEditingTask(null);
@@ -233,10 +321,13 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   };
 
   const dateLabel = (() => {
-    if (view === "day") return isToday(currentDate) ? "Hoje" : format(currentDate, "EEE, d MMM", { locale: ptBR });
+    if (view === "day") {
+      const prefix = isToday(currentDate) ? "Hoje • " : "";
+      return `${prefix}${format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })}`;
+    }
     if (view === "3days") {
       const end = addDays(currentDate, 2);
-      return `${format(currentDate, "d MMM")} — ${format(end, "d MMM", { locale: ptBR })}`;
+      return `${format(currentDate, "EEE, d MMM", { locale: ptBR })} — ${format(end, "EEE, d MMM", { locale: ptBR })}`;
     }
     if (view === "week") {
       const ws = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -246,28 +337,32 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     return format(currentDate, "MMMM yyyy", { locale: ptBR });
   })();
 
+  const overlayOpen = showForm || !!selectedTask;
+
   return (
     <div className="h-svh bg-[#202124] flex flex-col">
       {/* Header */}
       <div className="flex-shrink-0 bg-[#202124] border-b border-[#3c4043]">
-        <div className="flex items-center gap-2 px-3 py-3">
-          <button onClick={() => navigate("prev")}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:bg-[#2a2b2e] transition-colors">
-            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
+        <div className="flex items-center justify-between gap-2 px-3 py-3">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <button onClick={() => navigate("prev")}
+              className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:bg-[#2a2b2e] transition-colors">
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
 
-          <button onClick={() => setCurrentDate(new Date())} className="flex-1 text-center">
-            <p className="text-base font-medium text-[#e8eaed] capitalize">{dateLabel}</p>
-          </button>
+            <button onClick={() => setCurrentDate(new Date())} className="text-left px-1 min-w-0">
+              <p className="text-sm font-medium text-[#e8eaed] capitalize truncate">{dateLabel}</p>
+            </button>
 
-          <button onClick={() => navigate("next")}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:bg-[#2a2b2e] transition-colors">
-            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+            <button onClick={() => navigate("next")}
+              className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:bg-[#2a2b2e] transition-colors">
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
 
           {/* Migrar pendentes */}
           <button
@@ -294,6 +389,78 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           </button>
         </div>
 
+        {/* Busca global */}
+        <div className="px-3 pb-2.5">
+          <div ref={searchContainerRef} className="relative">
+            <label htmlFor="event-search" className="sr-only">Buscar eventos</label>
+            <div className="h-10 rounded-lg border border-[#3c4043] bg-[#2a2b2e] flex items-center gap-2 px-3">
+              <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#9aa0a6]" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z" />
+              </svg>
+              <input
+                id="event-search"
+                type="text"
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setSearchOpen(true);
+                }}
+                onFocus={() => setSearchOpen(true)}
+                placeholder="Buscar em todos os eventos"
+                className="flex-1 bg-transparent text-sm text-[#e8eaed] placeholder:text-[#9aa0a6] outline-none"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSearchResults([]);
+                    setSearchOpen(false);
+                  }}
+                  className="w-6 h-6 rounded-full text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#3c4043] transition-colors"
+                  aria-label="Limpar busca"
+                >
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 mx-auto" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {searchOpen && searchQuery.trim() && (
+              <div className="absolute top-full left-0 right-0 mt-2 z-40 rounded-xl border border-[#3c4043] bg-[#202124] shadow-2xl shadow-black/40 overflow-hidden">
+                {searching ? (
+                  <div className="px-4 py-5 text-sm text-[#9aa0a6] flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-[#8ab4f8]/30 border-t-[#8ab4f8] rounded-full animate-spin" />
+                    Buscando eventos...
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div className="px-4 py-5 text-sm text-[#9aa0a6]">Nenhum evento encontrado.</div>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto">
+                    {searchResults.map((task) => (
+                      <button
+                        key={`${task.calendarId ?? "primary"}:${task.id}:${task.startTime}`}
+                        type="button"
+                        onClick={() => openSearchResult(task)}
+                        className="w-full text-left px-4 py-3 border-b border-[#2f3133] last:border-b-0 hover:bg-[#2a2b2e] transition-colors"
+                      >
+                        <p className="text-sm font-medium text-[#e8eaed] truncate">{task.title}</p>
+                        <p className="text-xs text-[#9aa0a6] mt-1">
+                          {task.isAllDay
+                            ? format(new Date(task.startTime), "dd/MM/yyyy", { locale: ptBR })
+                            : format(new Date(task.startTime), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                          {task.calendarName ? ` • ${task.calendarName}` : ""}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* View switcher */}
         <div className="flex gap-1 px-3 pb-2.5">
           {(["day", "3days", "week", "month"] as View[]).map((v) => (
@@ -304,6 +471,35 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
             </button>
           ))}
         </div>
+
+        {view === "day" && isSmallMobile && (
+          <div className="px-3 pb-2.5">
+            <div className="grid grid-cols-2 gap-1 rounded-md bg-[#2a2b2e] p-1 border border-[#3c4043]">
+              <button
+                type="button"
+                onClick={() => setDayDisplayMode("list")}
+                className={`py-1.5 rounded text-xs font-medium transition-colors ${
+                  dayDisplayMode === "list"
+                    ? "bg-[#3c4043] text-[#e8eaed]"
+                    : "text-[#9aa0a6] hover:text-[#e8eaed]"
+                }`}
+              >
+                Lista
+              </button>
+              <button
+                type="button"
+                onClick={() => setDayDisplayMode("grid")}
+                className={`py-1.5 rounded text-xs font-medium transition-colors ${
+                  dayDisplayMode === "grid"
+                    ? "bg-[#3c4043] text-[#e8eaed]"
+                    : "text-[#9aa0a6] hover:text-[#e8eaed]"
+                }`}
+              >
+                Grade
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Loading */}
@@ -317,7 +513,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {!loading && view === "day" && (
         <DayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
-          onDelete={handleDelete} onTimeClick={openCreateForm} onMove={handleMove} />
+          onDelete={handleDelete} onTimeClick={openCreateForm} onMove={handleMove}
+          displayMode={dayDisplayMode} />
       )}
       {!loading && view === "3days" && (
         <ThreeDayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
@@ -336,7 +533,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
       {/* FAB */}
       <button onClick={() => openCreateForm()}
-        className="fixed bottom-6 right-4 w-14 h-14 bg-[#8ab4f8] rounded-full shadow-lg shadow-black/30 flex items-center justify-center active:scale-95 transition-transform z-30">
+        className={`fixed bottom-6 right-4 w-14 h-14 bg-[#8ab4f8] rounded-full shadow-lg shadow-black/30 flex items-center justify-center active:scale-95 transition-transform ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}>
         <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
         </svg>
@@ -344,7 +541,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
       {/* Toast migração */}
       {migrateResult && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#2a2b2e] border border-[#3c4043] text-[#e8eaed] text-sm px-4 py-2.5 rounded-md shadow-lg whitespace-nowrap">
+        <div className={`fixed top-20 left-1/2 -translate-x-1/2 ${LAYERS.toast} bg-[#2a2b2e] border border-[#3c4043] text-[#e8eaed] text-sm px-4 py-2.5 rounded-md shadow-lg whitespace-nowrap`}>
           {migrateResult}
         </div>
       )}

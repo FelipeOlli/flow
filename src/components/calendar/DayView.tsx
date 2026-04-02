@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { isToday } from "date-fns";
+import { format, isToday } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
 import { TaskBlock } from "@/components/tasks/TaskBlock";
+import { getEventSurfaceColor } from "@/lib/colors";
 import { EventAnchorPoint } from "./EventPopover";
 import {
   CALENDAR_DIMENSIONS,
@@ -21,6 +23,7 @@ interface DayViewProps {
   tasks: FlowTask[];
   currentDate: Date;
   pendingIds: Set<string>;
+  displayMode?: "grid" | "list";
   onComplete: (task: FlowTask) => void;
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onDelete: (task: FlowTask) => void;
@@ -28,7 +31,7 @@ interface DayViewProps {
   onMove?: (task: FlowTask, newStart: Date, newEnd: Date) => void;
 }
 
-export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, onDelete, onTimeClick, onMove }: DayViewProps) {
+export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", onComplete, onEdit, onDelete, onTimeClick, onMove }: DayViewProps) {
   const [nowY, setNowY] = useState(currentTimeY());
   const scrollRef = useRef<HTMLDivElement>(null);
   const isCurrentDay = isToday(currentDate);
@@ -105,6 +108,9 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
 
   const timedTasks = tasks.filter((t) => !t.isAllDay);
   const allDayTasks = tasks.filter((t) => t.isAllDay);
+  const orderedTimedTasks = [...timedTasks].sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+  );
   const completed = timedTasks.filter((t) => t.isComplete).length;
   const total = timedTasks.length;
   const layout = computeLayout(timedTasks);
@@ -132,13 +138,110 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
   }
 
+  if (displayMode === "list") {
+    const pendingCount = Math.max(0, total - completed);
+    return (
+      <div className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2">
+        <div className="mb-2 rounded-lg border border-[#3c4043] bg-[#2a2b2e] px-3 py-2 flex items-center justify-between">
+          <p className="text-sm font-semibold text-[#e8eaed]">
+            {pendingCount} tarefa(s) pendente(s)
+          </p>
+          <span className="text-xs text-[#9aa0a6] capitalize">
+            {format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
+          </span>
+        </div>
+
+        {allDayTasks.length > 0 && (
+          <div className="space-y-2 mb-3">
+            {allDayTasks.map((task) => (
+              <div
+                key={task.id}
+                onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
+                className="rounded-lg border px-3 py-2 cursor-pointer"
+                style={{
+                  backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete),
+                  borderColor: "rgba(12,14,16,0.56)",
+                }}
+              >
+                <div className="flex items-start gap-2">
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); onComplete(task); }}
+                    className={`mt-0.5 w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors
+                      ${task.isComplete ? "bg-emerald-500 border-emerald-500" : "border-white/85"}`}
+                  >
+                    {task.isComplete && (
+                      <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                  <div className="min-w-0">
+                    <p className={`text-base font-semibold leading-tight text-[#e8eaed] truncate ${task.isComplete ? "line-through opacity-80" : ""}`}>
+                      {task.title}
+                    </p>
+                    <p className="text-sm text-[#d2d6da] mt-0.5">Dia inteiro</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          {orderedTimedTasks.map((task) => (
+            <div
+              key={`${task.calendarId ?? "primary"}:${task.id}:${task.startTime}`}
+              onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
+              className="rounded-lg border px-3 py-2 cursor-pointer"
+              style={{
+                backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete),
+                borderColor: "rgba(12,14,16,0.56)",
+              }}
+            >
+              <div className="flex items-start gap-2">
+                <button
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); onComplete(task); }}
+                  className={`mt-0.5 w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors
+                    ${task.isComplete ? "bg-emerald-500 border-emerald-500" : "border-white/85"}`}
+                >
+                  {task.isComplete && (
+                    <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </button>
+                <div className="min-w-0">
+                  <p className={`text-base font-semibold leading-tight text-[#e8eaed] truncate ${task.isComplete ? "line-through opacity-80" : ""}`}>
+                    {task.title}
+                  </p>
+                  <p className="text-sm text-[#d2d6da] mt-0.5">
+                    {format(new Date(task.startTime), "HH:mm")} - {format(new Date(task.endTime), "HH:mm")}
+                  </p>
+                  {task.calendarName && (
+                    <p className="text-xs text-[#9aa0a6] mt-0.5 truncate">{task.calendarName}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col flex-1">
       {/* All-day + progress */}
       <div className="px-4 pt-2 pb-2 space-y-2">
         {allDayTasks.map((t) => (
           <div key={t.id} onClick={(e) => onEdit(t, getAnchorFromElement(e.currentTarget))}
-            className="flex items-center gap-2 px-3 py-2 rounded-md bg-[#2a2b2e] border border-[#3c4043] cursor-pointer">
+            className="flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer"
+            style={{
+              backgroundColor: getEventSurfaceColor(t.calendarBgColor, t.isComplete),
+              borderColor: "rgba(12,14,16,0.56)",
+            }}>
             <button onClick={(e) => { e.stopPropagation(); onComplete(t); }}
               type="button"
               className={`w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors
@@ -151,7 +254,7 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
         ))}
         {total > 0 && (
           <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-[#3c4043] overflow-hidden rounded-full">
+            <div className="flex-1 h-1.5 bg-[#3c4043] overflow-hidden rounded-full">
               <div className="h-full bg-emerald-500 rounded-full transition-all duration-700"
                 style={{ width: `${Math.round((completed / total) * 100)}%` }} />
             </div>
@@ -184,12 +287,12 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
           {isCurrentDay && nowY >= 0 && nowY <= (CALENDAR_DIMENSIONS.DAY_END - CALENDAR_DIMENSIONS.DAY_START) * CALENDAR_DIMENSIONS.HOUR_PX && (
             <div className="absolute left-0 right-0 flex items-center z-20 pointer-events-none"
               style={{ top: `${nowY}px` }}>
-              <div className="w-2 h-2 rounded-full bg-[#f28b82] -ml-1 flex-shrink-0" />
-              <div className="flex-1 h-px bg-[#f28b82]" />
+              <div className="w-2.5 h-2.5 rounded-full bg-[#ea4335] -ml-1.5 flex-shrink-0" />
+              <div className="flex-1 h-[2px] bg-[#ea4335]" />
             </div>
           )}
 
-          {layout.map(({ task, col, totalCols }) => {
+          {layout.map(({ task, col, totalCols, sameStartIndex, sameStartTotal }) => {
             const isBeingDragged = dragId === task.id;
             const top = isBeingDragged ? dragTop : timeToY(task.startTime);
             return (
@@ -201,6 +304,8 @@ export function DayView({ tasks, currentDate, pendingIds, onComplete, onEdit, on
                 isPending={pendingIds.has(task.id)}
                 colIndex={col}
                 totalCols={totalCols}
+                sameStartIndex={sameStartIndex}
+                sameStartTotal={sameStartTotal}
                 isDragging={isBeingDragged}
                 onTaskPointerDown={(e) => handleTaskPointerDown(e, task)}
                 onComplete={() => onComplete(task)}

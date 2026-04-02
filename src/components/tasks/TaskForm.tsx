@@ -143,8 +143,8 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+      <div className="fixed inset-0 bg-black/60 z-[3900] backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-[4000] flex items-center justify-center p-3 sm:p-6">
         <div className="w-full max-w-3xl bg-[#202124] rounded-2xl border border-[#3c4043] shadow-2xl shadow-black/40 p-4 sm:p-6 max-h-[92vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-2xl font-normal text-[#e8eaed]">

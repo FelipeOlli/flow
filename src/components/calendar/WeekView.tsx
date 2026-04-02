@@ -5,6 +5,7 @@ import { format, startOfWeek, addDays, isToday, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
 import { TaskBlock } from "@/components/tasks/TaskBlock";
+import { getEventSurfaceColor } from "@/lib/colors";
 import { EventAnchorPoint } from "./EventPopover";
 import {
   CALENDAR_DIMENSIONS,
@@ -94,7 +95,11 @@ export function WeekView({ tasks, currentDate, pendingIds, onComplete, onEdit, o
                   key={task.id}
                   type="button"
                   onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
-                  className="w-full truncate rounded px-1.5 py-0.5 text-[10px] font-medium text-left text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)] bg-[#5f6368]/40 border border-[#5f6368]/70 hover:bg-[#5f6368]/55 transition-colors"
+                  className="w-full truncate rounded px-1.5 py-0.5 text-[10px] font-medium text-left text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)] border transition-colors"
+                  style={{
+                    backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete),
+                    borderColor: "rgba(12,14,16,0.56)",
+                  }}
                 >
                   {task.title}
                 </button>
@@ -141,13 +146,13 @@ export function WeekView({ tasks, currentDate, pendingIds, onComplete, onEdit, o
                 {isCurrentDay && nowY >= 0 && (
                   <div className="absolute left-0 right-0 flex items-center z-10 pointer-events-none"
                     style={{ top: `${nowY}px` }}>
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#f28b82] -ml-0.5 flex-shrink-0" />
-                    <div className="flex-1 h-px bg-[#f28b82]" />
+                    <div className="w-2 h-2 rounded-full bg-[#ea4335] -ml-1 flex-shrink-0" />
+                    <div className="flex-1 h-[2px] bg-[#ea4335]" />
                   </div>
                 )}
 
                 {/* Events */}
-                {layout.map(({ task, col, totalCols }) => (
+                {layout.map(({ task, col, totalCols, sameStartIndex, sameStartTotal }) => (
                   <TaskBlock
                     key={task.id}
                     task={task}
@@ -156,7 +161,8 @@ export function WeekView({ tasks, currentDate, pendingIds, onComplete, onEdit, o
                     isPending={pendingIds.has(task.id)}
                     colIndex={col}
                     totalCols={totalCols}
-                    compact
+                    sameStartIndex={sameStartIndex}
+                    sameStartTotal={sameStartTotal}
                     onComplete={() => onComplete(task)}
                     onEdit={(e) => onEdit(task, { x: e.clientX, y: e.clientY })}
                     onDelete={() => onDelete(task)}
