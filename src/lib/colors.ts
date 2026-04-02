@@ -46,8 +46,12 @@ function toRgba(color: string, alpha: number): string {
 export function getEventSurfaceColor(
   calendarColor?: string,
   isComplete?: boolean,
-  selfResponseStatus?: "needsAction" | "declined" | "tentative" | "accepted"
+  selfResponseStatus?: "needsAction" | "declined" | "tentative" | "accepted",
+  isCancelled?: boolean
 ): string {
+  if (isCancelled) {
+    return "transparent";
+  }
   if (selfResponseStatus === "declined") {
     return toRgba(lightenHexColor(DECLINED_EVENT_COLOR, 0.15), EVENT_SURFACE_ALPHA);
   }

@@ -159,8 +159,13 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                 onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
                 className="rounded-lg border px-3 py-2 cursor-pointer"
                 style={{
-                  backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus),
-                  borderColor: "rgba(12,14,16,0.56)",
+                  backgroundColor: getEventSurfaceColor(
+                    task.calendarBgColor,
+                    task.isComplete,
+                    task.selfResponseStatus,
+                    task.isCancelled
+                  ),
+                  borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
                 }}
               >
                 <div className="flex items-start gap-2">
@@ -177,10 +182,10 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                     )}
                   </button>
                   <div className="min-w-0">
-                    <p className={`text-base font-semibold leading-tight text-[#e8eaed] truncate ${task.isComplete ? "line-through opacity-80" : ""}`}>
+                    <p className={`text-base font-semibold leading-tight text-[#e8eaed] truncate ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>
                       {task.title}
                     </p>
-                    <p className="text-sm text-[#d2d6da] mt-0.5">Dia inteiro</p>
+                    <p className={`text-sm text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>Dia inteiro</p>
                   </div>
                 </div>
               </div>
@@ -195,8 +200,13 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
               onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
               className="rounded-lg border px-3 py-2 cursor-pointer"
               style={{
-                backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus),
-                borderColor: "rgba(12,14,16,0.56)",
+                backgroundColor: getEventSurfaceColor(
+                  task.calendarBgColor,
+                  task.isComplete,
+                  task.selfResponseStatus,
+                  task.isCancelled
+                ),
+                borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
               }}
             >
               <div className="flex items-start gap-2">
@@ -213,10 +223,10 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                   )}
                 </button>
                 <div className="min-w-0">
-                  <p className={`text-base font-semibold leading-tight text-[#e8eaed] truncate ${task.isComplete ? "line-through opacity-80" : ""}`}>
+                  <p className={`text-base font-semibold leading-tight text-[#e8eaed] truncate ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>
                     {task.title}
                   </p>
-                  <p className="text-sm text-[#d2d6da] mt-0.5">
+                  <p className={`text-sm text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>
                     {format(new Date(task.startTime), "HH:mm")} - {format(new Date(task.endTime), "HH:mm")}
                   </p>
                   {task.calendarName && (
@@ -239,8 +249,13 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
           <div key={t.id} onClick={(e) => onEdit(t, getAnchorFromElement(e.currentTarget))}
             className="flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer"
             style={{
-              backgroundColor: getEventSurfaceColor(t.calendarBgColor, t.isComplete, t.selfResponseStatus),
-              borderColor: "rgba(12,14,16,0.56)",
+              backgroundColor: getEventSurfaceColor(
+                t.calendarBgColor,
+                t.isComplete,
+                t.selfResponseStatus,
+                t.isCancelled
+              ),
+              borderColor: t.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
             }}>
             <button onClick={(e) => { e.stopPropagation(); onComplete(t); }}
               type="button"
@@ -248,8 +263,8 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                 ${t.isComplete ? "bg-emerald-500 border-emerald-500" : "border-[#5f6368]"}`}>
               {t.isComplete && <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
             </button>
-            <span className={`text-xs font-medium truncate ${t.isComplete ? "line-through text-[#9aa0a6]" : "text-[#e8eaed] drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]"}`}>{t.title}</span>
-            <span className="ml-auto text-xs text-[#9aa0a6] flex-shrink-0">dia inteiro</span>
+            <span className={`text-xs font-medium truncate ${t.isComplete || t.isCancelled ? "line-through text-[#9aa0a6]" : "text-[#e8eaed] drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]"}`}>{t.title}</span>
+            <span className={`ml-auto text-xs text-[#9aa0a6] flex-shrink-0 ${t.isCancelled ? "line-through" : ""}`}>dia inteiro</span>
           </div>
         ))}
         {total > 0 && (

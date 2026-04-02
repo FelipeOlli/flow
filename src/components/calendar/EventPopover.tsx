@@ -166,7 +166,9 @@ export function EventPopover({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
-          <h3 className="text-[26px] leading-tight font-normal">{editing ? "Editar evento" : task.title}</h3>
+          <h3 className={`text-[26px] leading-tight font-normal ${!editing && task.isCancelled ? "line-through text-[#9aa0a6]" : ""}`}>
+            {editing ? "Editar evento" : task.title}
+          </h3>
           <button
             type="button"
             onClick={onClose}
@@ -182,7 +184,7 @@ export function EventPopover({
         <div className="px-4 pb-4 space-y-3 max-h-[min(72vh,560px)] overflow-y-auto">
           {!editing ? (
             <>
-              <div className="text-sm text-[#e8eaed]">
+              <div className={`text-sm text-[#e8eaed] ${task.isCancelled ? "line-through text-[#9aa0a6]" : ""}`}>
                 <p className="capitalize">{dateLabel}</p>
                 <p>{timeLabel}</p>
               </div>

@@ -32,7 +32,12 @@ export function TaskBlock({
   const dense = height < 30 || (compact && totalCols >= 3);
   const compactMode = !dense && (compact || height < 44);
   const fullMode = !dense && !compactMode;
-  const color = getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus);
+  const color = getEventSurfaceColor(
+    task.calendarBgColor,
+    task.isComplete,
+    task.selfResponseStatus,
+    task.isCancelled
+  );
 
   const roofMode = sameStartTotal > 1;
   const sameStartGapPx = 0;
@@ -61,7 +66,7 @@ export function TaskBlock({
         top: `${top}px`,
         height: `${height}px`,
         backgroundColor: color,
-        borderColor: "rgba(32,33,36,0.45)",
+        borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(32,33,36,0.45)",
         left: roofMode
           ? `calc(((100% - ${sameStartTotalGapPx}px) / ${sameStartTotal} + ${sameStartGapPx}px) * ${sameStartIndex} + 2px)`
           : (totalCols > 1 ? `calc(${(colIndex / totalCols) * 100}% + 2px)` : "2px"),
@@ -79,7 +84,7 @@ export function TaskBlock({
     >
       {dense ? (
         <p className={`w-full truncate leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]
-          ${task.isComplete ? "line-through opacity-80" : ""}
+          ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}
           ${compact ? "text-[10px] font-semibold" : "text-[10px] font-medium"}`}>
           {task.title}
         </p>
@@ -105,11 +110,11 @@ export function TaskBlock({
           <div className="flex-1 min-w-0">
             <p className={`font-medium leading-tight truncate text-white
               ${compactMode ? "text-[10px]" : "text-[11px]"}
-              ${task.isComplete ? "line-through opacity-70" : ""}`}>
+              ${task.isComplete || task.isCancelled ? "line-through opacity-70" : ""}`}>
               {task.title}
             </p>
             {!compactMode && (
-              <p className="text-[10px] mt-0.5 text-white/90">
+              <p className={`text-[10px] mt-0.5 text-white/90 ${task.isCancelled ? "line-through" : ""}`}>
                 {formatTime(task.startTime)} — {formatTime(task.endTime)}
               </p>
             )}

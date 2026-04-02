@@ -94,10 +94,17 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
                   key={task.id}
                   type="button"
                   onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
-                  className="w-full truncate rounded px-1.5 py-0.5 text-[10px] font-medium text-left text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)] border transition-colors"
+                  className={`w-full truncate rounded px-1.5 py-0.5 text-[10px] font-medium text-left text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)] border transition-colors ${
+                    task.isCancelled ? "line-through text-[#9aa0a6]" : ""
+                  }`}
                   style={{
-                    backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus),
-                    borderColor: "rgba(12,14,16,0.56)",
+                    backgroundColor: getEventSurfaceColor(
+                      task.calendarBgColor,
+                      task.isComplete,
+                      task.selfResponseStatus,
+                      task.isCancelled
+                    ),
+                    borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
                   }}
                 >
                   {task.title}

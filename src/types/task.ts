@@ -13,6 +13,7 @@ export interface FlowTask {
   attendees?: TaskAttendee[];
   selfResponseStatus?: AttendanceStatus;
   meetingUrl?: string;
+  isCancelled?: boolean;
 }
 
 export type AttendanceStatus = "needsAction" | "declined" | "tentative" | "accepted";

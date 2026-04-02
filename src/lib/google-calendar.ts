@@ -49,6 +49,7 @@ function mapEvent(
     attendees: attendees.length > 0 ? attendees : undefined,
     selfResponseStatus: selfAttendee?.responseStatus as AttendanceStatus | undefined,
     meetingUrl,
+    isCancelled: event.status === "cancelled",
   };
 }
 
