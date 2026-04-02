@@ -40,6 +40,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [formDefaults, setFormDefaults] = useState<{ startTime?: string; endTime?: string }>({});
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState<string | null>(null);
+  const [manualSourceDate, setManualSourceDate] = useState("");
+  const [manualTargetDate, setManualTargetDate] = useState("");
   const [selectedTask, setSelectedTask] = useState<FlowTask | null>(null);
   const [eventAnchor, setEventAnchor] = useState<EventAnchorPoint | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -47,6 +49,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [searching, setSearching] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
+  const [migrationMenuOpen, setMigrationMenuOpen] = useState(false);
+  const migrationMenuRef = useRef<HTMLDivElement | null>(null);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -207,17 +211,32 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   }
 
   async function handleManualMigration() {
+    const fromDate = manualSourceDate.trim();
+    const toDate = manualTargetDate.trim();
+    if (!fromDate || !toDate) {
+      setMigrateResult("Selecione data de origem e data de destino para migrar.");
+      setTimeout(() => setMigrateResult(null), 4000);
+      return;
+    }
+    if (fromDate === toDate) {
+      setMigrateResult("A origem e o destino não podem ser a mesma data.");
+      setTimeout(() => setMigrateResult(null), 4000);
+      return;
+    }
+
     setMigrating(true);
     setMigrateResult(null);
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo";
+      const payload: { fromDate: string; toDate: string; tz: string } = {
+        fromDate,
+        toDate,
+        tz,
+      };
       const res = await fetch("/api/cron/migrate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromDate: format(currentDate, "yyyy-MM-dd"),
-          tz,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
 
@@ -236,16 +255,25 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
       const migrated = Number(data.migrated ?? 0);
       const skipped = Number(data.skipped ?? 0);
+      const sourceDateKey = typeof data?.diagnostics?.sourceDateKey === "string"
+        ? data.diagnostics.sourceDateKey
+        : fromDate;
+      const targetDateKey = typeof data?.diagnostics?.targetDateKey === "string"
+        ? data.diagnostics.targetDateKey
+        : toDate;
       if (migrated > 0) {
-        setMigrateResult(`${migrated} tarefa(s) migrada(s) para o dia seguinte.`);
+        setMigrateResult(
+          `${migrated} tarefa(s) migrada(s) de ${sourceDateKey} para ${targetDateKey}.`
+        );
       } else if (skipped > 0) {
         setMigrateResult(
-          `Nenhuma tarefa migrada. ${skipped} tarefa(s) falharam durante a migração.`
+          `Nenhuma tarefa migrada de ${sourceDateKey} para ${targetDateKey}. ${skipped} tarefa(s) falharam durante a migração.`
         );
       } else {
-        setMigrateResult("Nenhuma tarefa pendente para migrar.");
+        setMigrateResult(`Nenhuma tarefa pendente para migrar de ${sourceDateKey} para ${targetDateKey}.`);
       }
       await fetchTasks();
+      setMigrationMenuOpen(false);
     } catch {
       setMigrateResult("Erro ao migrar. Tente novamente.");
     } finally {
@@ -325,6 +353,27 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     };
   }, [searchOpen]);
 
+  useEffect(() => {
+    if (!migrationMenuOpen) return;
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMigrationMenuOpen(false);
+    }
+
+    function handleOutsideClick(event: MouseEvent) {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (!migrationMenuRef.current?.contains(target)) setMigrationMenuOpen(false);
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [migrationMenuOpen]);
+
   function openCreateForm(time?: Date) {
     setEditingTask(null);
     if (time) {
@@ -388,29 +437,69 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
             </button>
           </div>
 
-          {/* Migrar pendentes */}
-          <button
-            onClick={handleManualMigration}
-            disabled={migrating}
-            title="Migrar tarefas pendentes para hoje"
-            aria-label="Migrar tarefas pendentes para hoje"
-            className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-          >
-            {migrating
-              ? <div className="w-3.5 h-3.5 border-2 border-[#5f6368]/40 border-t-[#e8eaed] rounded-full animate-spin" />
-              : <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.9}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 4.75v2.5M17 4.75v2.5M4.75 9.5h14.5M6.5 7h11a1.75 1.75 0 011.75 1.75v9.75A1.75 1.75 0 0117.5 20.25h-11a1.75 1.75 0 01-1.75-1.75V8.75A1.75 1.75 0 016.5 7z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 14h5M12.5 11l2 3-2 3" />
+          <div className="flex items-center gap-1.5">
+            <div ref={migrationMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setMigrationMenuOpen((prev) => !prev)}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors"
+                aria-label="Ações avançadas"
+                title="Ações avançadas"
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 5.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm0 8a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm0 8a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z" />
                 </svg>
-            }
-          </button>
+              </button>
 
-          <button onClick={() => signOut({ callbackUrl: "/sign-in" })}
-            className="w-8 h-8 flex items-center justify-center text-[#9aa0a6] hover:text-[#e8eaed] transition-colors">
-            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
+              {migrationMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-72 rounded-lg border border-[#3c4043] bg-[#202124] shadow-xl shadow-black/40 p-3 z-40">
+                  <p className="text-xs font-medium text-[#e8eaed] mb-2">Migração manual</p>
+                  <div className="space-y-2">
+                    <label htmlFor="manual-migration-source" className="block text-[11px] text-[#9aa0a6]">
+                      Origem
+                    </label>
+                    <input
+                      id="manual-migration-source"
+                      type="date"
+                      value={manualSourceDate}
+                      onChange={(event) => setManualSourceDate(event.target.value)}
+                      className="h-8 w-full rounded-md border border-[#3c4043] bg-[#2a2b2e] px-2 text-[11px] text-[#e8eaed] outline-none focus:border-[#8ab4f8]"
+                      aria-label="Data de origem da migração"
+                    />
+                    <label htmlFor="manual-migration-target" className="block text-[11px] text-[#9aa0a6]">
+                      Destino
+                    </label>
+                    <input
+                      id="manual-migration-target"
+                      type="date"
+                      value={manualTargetDate}
+                      onChange={(event) => setManualTargetDate(event.target.value)}
+                      className="h-8 w-full rounded-md border border-[#3c4043] bg-[#2a2b2e] px-2 text-[11px] text-[#e8eaed] outline-none focus:border-[#8ab4f8]"
+                      aria-label="Data de destino da migração"
+                    />
+                    <button
+                      onClick={handleManualMigration}
+                      disabled={migrating || !manualSourceDate || !manualTargetDate || manualSourceDate === manualTargetDate}
+                      title="Migrar tarefas pendentes entre a data de origem e a data de destino"
+                      aria-label="Migrar tarefas pendentes"
+                      className="w-full h-8 rounded-md border border-[#3c4043] text-xs font-medium text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors disabled:opacity-40 disabled:hover:bg-transparent flex items-center justify-center"
+                    >
+                      {migrating
+                        ? <div className="w-3.5 h-3.5 border-2 border-[#5f6368]/40 border-t-[#e8eaed] rounded-full animate-spin" />
+                        : "Migrar"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button onClick={() => signOut({ callbackUrl: "/sign-in" })}
+              className="w-8 h-8 flex items-center justify-center text-[#9aa0a6] hover:text-[#e8eaed] transition-colors">
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Busca global */}

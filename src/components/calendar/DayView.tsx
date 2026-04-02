@@ -115,6 +115,11 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
   const completed = timedTasks.filter((t) => t.isComplete).length;
   const total = timedTasks.length;
   const layout = computeLayout(timedTasks);
+  const dayRangePx = (CALENDAR_DIMENSIONS.DAY_END - CALENDAR_DIMENSIONS.DAY_START) * CALENDAR_DIMENSIONS.HOUR_PX;
+  const nowInDayRange = isCurrentDay && nowY >= 0 && nowY <= dayRangePx;
+  const nowPositionPercent = dayRangePx > 0
+    ? Math.min(100, Math.max(0, (nowY / dayRangePx) * 100))
+    : 0;
 
   function handleTaskPointerDown(e: React.PointerEvent<HTMLDivElement>, task: FlowTask) {
     if ((e.target as HTMLElement).closest("button")) return;
@@ -151,6 +156,25 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
             {format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
           </span>
         </div>
+
+        {nowInDayRange && (
+          <div className="mb-3 rounded-lg border border-[#3c4043] bg-[#2a2b2e] px-3 py-2">
+            <div className="relative h-3">
+              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px bg-[#3c4043]" />
+              <div
+                className="absolute top-1/2 -translate-y-1/2 h-[2px] bg-[#ea4335]"
+                style={{ left: 0, width: `${nowPositionPercent}%` }}
+              />
+              <div
+                className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-[#ea4335] -ml-1.5"
+                style={{ left: `${nowPositionPercent}%` }}
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-[#9aa0a6]">
+              Agora {format(new Date(), "HH:mm")}
+            </p>
+          </div>
+        )}
 
         {allDayTasks.length > 0 && (
           <div className="space-y-2 mb-3">
