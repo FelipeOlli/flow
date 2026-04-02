@@ -210,16 +210,40 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     setMigrating(true);
     setMigrateResult(null);
     try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo";
       const res = await fetch("/api/cron/migrate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fromDate: format(currentDate, "yyyy-MM-dd") }),
+        body: JSON.stringify({
+          fromDate: format(currentDate, "yyyy-MM-dd"),
+          tz,
+        }),
       });
-      const data = await res.json();
-      if (data.migrated === 0) {
-        setMigrateResult("Nenhuma tarefa pendente para migrar.");
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 401) {
+        router.replace("/sign-in");
+        return;
+      }
+      if (!res.ok) {
+        setMigrateResult(
+          typeof data.error === "string"
+            ? `Erro ao migrar: ${data.error}`
+            : "Erro ao migrar. Tente novamente."
+        );
+        return;
+      }
+
+      const migrated = Number(data.migrated ?? 0);
+      const skipped = Number(data.skipped ?? 0);
+      if (migrated > 0) {
+        setMigrateResult(`${migrated} tarefa(s) migrada(s) para o dia seguinte.`);
+      } else if (skipped > 0) {
+        setMigrateResult(
+          `Nenhuma tarefa migrada. ${skipped} tarefa(s) falharam durante a migração.`
+        );
       } else {
-        setMigrateResult(`${data.migrated} tarefa(s) migrada(s) para o dia seguinte.`);
+        setMigrateResult("Nenhuma tarefa pendente para migrar.");
       }
       await fetchTasks();
     } catch {

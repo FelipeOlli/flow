@@ -9,6 +9,10 @@ export function initCron() {
   if (initialized) return;
   initialized = true;
 
+  if (!process.env.CRON_SECRET) {
+    console.warn("[FLOW CRON] CRON_SECRET não definido. Recomendado configurar cron externo para produção.");
+  }
+
   cron.schedule(
     "1 0 * * *",
     async () => {
@@ -42,4 +46,5 @@ export function initCron() {
   );
 
   console.log("[FLOW CRON] Migração noturna agendada para 00:01");
+  console.log("[FLOW CRON] Recomendado em produção: cron externo chamando POST /api/cron/migrate às 00:01.");
 }

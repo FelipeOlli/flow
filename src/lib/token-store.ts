@@ -34,6 +34,15 @@ function loadTokens(): StoredTokens | null {
   }
 }
 
+export function hasStoredTokens(): boolean {
+  const tokens = loadTokens();
+  return Boolean(tokens?.refreshToken);
+}
+
+export function getTokenStoreFilePath(): string {
+  return TOKEN_FILE;
+}
+
 export async function getValidAccessToken(): Promise<string | null> {
   const tokens = loadTokens();
   if (!tokens?.refreshToken) {
