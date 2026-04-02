@@ -98,7 +98,9 @@ export async function POST(req: NextRequest) {
       return errorResponse("No access token for migration", 400);
     }
 
-    // Se vier fromDate na requisição, migra fromDate → fromDate+1
+    // Se vier fromDate na requisição:
+    // - com toDate opcional: migra fromDate → toDate (ex.: correção pontual)
+    // - sem toDate: migra fromDate → dia seguinte (comportamento do botão)
     // Caso contrário (cron automático), migra ontem → hoje
     let fromDate: Date | undefined;
     let toDate: Date | undefined;
@@ -107,7 +109,20 @@ export async function POST(req: NextRequest) {
       if (!sourceDateKey) {
         return errorResponse("Invalid fromDate format. Use yyyy-MM-dd.", 400);
       }
-      targetDateKey = shiftDateKey(sourceDateKey, 1);
+      const toDateRaw = body.toDate;
+      const explicitToKey = parseLocalDateInput(toDateRaw);
+      if (
+        typeof toDateRaw === "string" &&
+        toDateRaw.trim() &&
+        !explicitToKey
+      ) {
+        return errorResponse("Invalid toDate format. Use yyyy-MM-dd.", 400);
+      }
+      if (explicitToKey) {
+        targetDateKey = explicitToKey;
+      } else {
+        targetDateKey = shiftDateKey(sourceDateKey, 1);
+      }
       fromDate = getReferenceDateForDateKey(sourceDateKey, timeZone);
       toDate = getReferenceDateForDateKey(targetDateKey, timeZone);
     }
