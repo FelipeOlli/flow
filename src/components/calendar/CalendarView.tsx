@@ -552,7 +552,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       )}
       {!loading && view === "month" && (
         <MonthView tasks={tasks} currentDate={currentDate} onDayClick={goToDate}
-          onEventClick={openEventCard} />
+          onEventClick={openEventCard} onComplete={handleComplete} />
       )}
 
       {/* FAB */}

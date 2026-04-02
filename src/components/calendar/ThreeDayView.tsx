@@ -90,12 +90,19 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
           return (
             <div key={`all-day-${day.toISOString()}`} className="flex-1 px-1 py-1 border-l border-[#3c4043] min-h-9">
               {allDayTasks.map((task) => (
-                <button
+                <div
                   key={task.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
-                  className={`w-full truncate rounded px-1.5 py-0.5 text-[10px] font-medium text-left text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)] border transition-colors ${
-                    task.isCancelled ? "line-through text-[#9aa0a6]" : ""
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onEdit(task, getAnchorFromElement(e.currentTarget));
+                    }
+                  }}
+                  className={`w-full rounded px-1.5 py-0.5 text-[10px] border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                    task.isCancelled ? "text-[#9aa0a6]" : "text-white"
                   }`}
                   style={{
                     backgroundColor: getEventSurfaceColor(
@@ -107,8 +114,29 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
                     borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
                   }}
                 >
-                  {task.title}
-                </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onComplete(task);
+                    }}
+                    className={`w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors ${
+                      task.isComplete ? "bg-emerald-500 border-emerald-500" : "border-white/85"
+                    }`}
+                    aria-label={task.isComplete ? "Marcar pendente" : "Marcar concluído"}
+                  >
+                    {task.isComplete && (
+                      <svg viewBox="0 0 24 24" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                  <span className={`truncate font-medium drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)] ${
+                    task.isComplete || task.isCancelled ? "line-through opacity-80" : ""
+                  }`}>
+                    {task.title}
+                  </span>
+                </div>
               ))}
             </div>
           );

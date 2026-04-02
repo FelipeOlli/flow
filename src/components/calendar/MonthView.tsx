@@ -13,9 +13,10 @@ interface MonthViewProps {
   currentDate: Date;
   onDayClick: (date: Date) => void;
   onEventClick: (task: FlowTask, anchor: EventAnchorPoint) => void;
+  onComplete: (task: FlowTask) => void;
 }
 
-export function MonthView({ tasks, currentDate, onDayClick, onEventClick }: MonthViewProps) {
+export function MonthView({ tasks, currentDate, onDayClick, onEventClick, onComplete }: MonthViewProps) {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -69,9 +70,9 @@ export function MonthView({ tasks, currentDate, onDayClick, onEventClick }: Mont
                       const rect = e.currentTarget.getBoundingClientRect();
                       onEventClick(task, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
                     }}
-                    className={`truncate rounded-md px-1.5 py-[1px] leading-4 text-[10px] border
+                    className={`rounded-md px-1.5 py-[1px] leading-4 text-[10px] border flex items-center gap-1
                       ${task.isComplete ? "text-white/90" : "text-white"}
-                      ${task.isCancelled ? "line-through text-[#9aa0a6]" : ""}
+                      ${task.isCancelled ? "text-[#9aa0a6]" : ""}
                       drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]`}
                     style={{
                       backgroundColor: getEventSurfaceColor(
@@ -83,8 +84,27 @@ export function MonthView({ tasks, currentDate, onDayClick, onEventClick }: Mont
                       borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.62)",
                     }}
                   >
-                    {task.isAllDay ? "" : `${format(new Date(task.startTime), "HH:mm")} `}
-                    {task.title}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onComplete(task);
+                      }}
+                      className={`w-3 h-3 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors ${
+                        task.isComplete ? "bg-emerald-500 border-emerald-500" : "border-white/85"
+                      }`}
+                      aria-label={task.isComplete ? "Marcar pendente" : "Marcar concluído"}
+                    >
+                      {task.isComplete && (
+                        <svg viewBox="0 0 24 24" className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                    <span className={`truncate ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>
+                      {task.isAllDay ? "" : `${format(new Date(task.startTime), "HH:mm")} `}
+                      {task.title}
+                    </span>
                   </div>
                 ))}
                 {dayTasks.length > 3 && (
