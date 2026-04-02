@@ -32,6 +32,7 @@ export interface UpdateTaskInput {
   description?: string;
   isComplete?: boolean;
   calendarId?: string;
+  targetCalendarId?: string;
 }
 
 export interface CalendarOption {

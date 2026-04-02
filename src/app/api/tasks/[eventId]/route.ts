@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { updateEvent, markEventComplete, markEventIncomplete, deleteEvent } from "@/lib/google-calendar";
+import { updateEvent, markEventComplete, markEventIncomplete, deleteEvent, moveEventToCalendar } from "@/lib/google-calendar";
 import { NextRequest, NextResponse } from "next/server";
 import { UpdateTaskInput } from "@/types/task";
 
@@ -14,6 +14,7 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
   try {
     const body: UpdateTaskInput = await req.json();
     const calendarId = body.calendarId ?? "primary";
+    const targetCalendarId = body.targetCalendarId ?? calendarId;
     const tz = process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
 
     let task;
@@ -22,7 +23,25 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
     } else if (body.isComplete === false) {
       task = await markEventIncomplete(session.accessToken, eventId, calendarId);
     } else {
-      task = await updateEvent(session.accessToken, eventId, body, tz, calendarId);
+      const hasUpdateFields =
+        body.title !== undefined ||
+        body.startTime !== undefined ||
+        body.endTime !== undefined ||
+        body.description !== undefined;
+
+      if (targetCalendarId !== calendarId) {
+        const moved = await moveEventToCalendar(
+          session.accessToken,
+          eventId,
+          calendarId,
+          targetCalendarId
+        );
+        task = hasUpdateFields
+          ? await updateEvent(session.accessToken, moved.id, body, tz, targetCalendarId)
+          : moved;
+      } else {
+        task = await updateEvent(session.accessToken, eventId, body, tz, calendarId);
+      }
     }
     return NextResponse.json(task);
   } catch (err) {

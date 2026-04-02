@@ -171,6 +171,21 @@ export async function markEventIncomplete(
   return mapEvent(data, calendarId);
 }
 
+export async function moveEventToCalendar(
+  accessToken: string,
+  eventId: string,
+  fromCalendarId: string,
+  toCalendarId: string
+): Promise<FlowTask> {
+  const calendar = getClient(accessToken);
+  const { data } = await calendar.events.move({
+    calendarId: fromCalendarId,
+    eventId,
+    destination: toCalendarId,
+  });
+  return mapEvent(data, toCalendarId);
+}
+
 export async function deleteEvent(
   accessToken: string,
   eventId: string,

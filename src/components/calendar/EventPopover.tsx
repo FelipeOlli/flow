@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { FlowTask } from "@/types/task";
-import { UpdateTaskInput } from "@/types/task";
+import { CalendarOption, FlowTask, UpdateTaskInput } from "@/types/task";
 
 export interface EventAnchorPoint {
   x: number;
@@ -35,17 +34,47 @@ export function EventPopover({
   const [description, setDescription] = useState(task.description ?? "");
   const [startTime, setStartTime] = useState(toLocalDatetime(task.startTime));
   const [endTime, setEndTime] = useState(toLocalDatetime(task.endTime));
+  const [calendarId, setCalendarId] = useState(task.calendarId ?? "primary");
+  const [calendars, setCalendars] = useState<CalendarOption[]>([]);
+  const [loadingCalendars, setLoadingCalendars] = useState(false);
+  const [calendarLoadError, setCalendarLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
     setTitle(task.title);
     setDescription(task.description ?? "");
     setStartTime(toLocalDatetime(task.startTime));
     setEndTime(toLocalDatetime(task.endTime));
+    setCalendarId(task.calendarId ?? "primary");
     setEditing(false);
     setError("");
+    setFeedback("");
   }, [task]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadCalendars() {
+      setLoadingCalendars(true);
+      setCalendarLoadError("");
+      try {
+        const res = await fetch("/api/calendars");
+        if (!res.ok) throw new Error();
+        const data: CalendarOption[] = await res.json();
+        if (!active) return;
+        setCalendars(data);
+      } catch {
+        if (!active) return;
+        setCalendarLoadError("Nao foi possivel carregar agendas.");
+        setCalendars([]);
+      } finally {
+        if (active) setLoadingCalendars(false);
+      }
+    }
+    loadCalendars();
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -95,17 +124,23 @@ export function EventPopover({
     }
     setSaving(true);
     setError("");
+    setFeedback("");
     try {
       const updates: UpdateTaskInput = {
         title: title.trim(),
         description: description.trim() || undefined,
+        calendarId: task.calendarId ?? "primary",
       };
       if (!task.isAllDay) {
         updates.startTime = new Date(startTime).toISOString();
         updates.endTime = new Date(endTime).toISOString();
       }
+      if (calendarId !== (task.calendarId ?? "primary")) {
+        updates.targetCalendarId = calendarId;
+      }
       await onSaveEdit(task, updates);
       setEditing(false);
+      setFeedback("Evento atualizado com sucesso.");
     } catch {
       setError("Erro ao salvar alterações");
     } finally {
@@ -172,6 +207,7 @@ export function EventPopover({
                   Excluir
                 </button>
               </div>
+              {feedback && <p className="text-xs text-emerald-400">{feedback}</p>}
             </>
           ) : (
             <div className="space-y-3">
@@ -182,6 +218,31 @@ export function EventPopover({
                 className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2.5 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
                 placeholder="Título"
               />
+              <div>
+                <label className="text-xs text-[#9aa0a6] mb-1.5 block">Agenda</label>
+                <select
+                  value={calendarId}
+                  onChange={(e) => setCalendarId(e.target.value)}
+                  className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
+                >
+                  <option value={task.calendarId ?? "primary"}>
+                    {task.calendarName ?? "Agenda atual"}
+                  </option>
+                  {calendars
+                    .filter((cal) => cal.id !== (task.calendarId ?? "primary"))
+                    .map((cal) => (
+                      <option key={cal.id} value={cal.id}>
+                        {cal.name}
+                      </option>
+                    ))}
+                </select>
+                {loadingCalendars && (
+                  <p className="text-[11px] text-[#9aa0a6] mt-1">Carregando agendas...</p>
+                )}
+                {!loadingCalendars && calendarLoadError && (
+                  <p className="text-[11px] text-[#f28b82] mt-1">{calendarLoadError}</p>
+                )}
+              </div>
               {!task.isAllDay && (
                 <div className="grid grid-cols-2 gap-2">
                   <input
@@ -207,10 +268,11 @@ export function EventPopover({
                 placeholder="Descrição"
               />
               {error && <p className="text-xs text-[#f28b82]">{error}</p>}
+              {feedback && <p className="text-xs text-emerald-400">{feedback}</p>}
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => { setEditing(false); setError(""); }}
+                  onClick={() => { setEditing(false); setError(""); setFeedback(""); }}
                   className="flex-1 px-3 py-2 rounded-lg border border-[#5f6368] text-xs text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors"
                 >
                   Cancelar
