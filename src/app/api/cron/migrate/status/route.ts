@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getMigrationStatus } from "@/lib/migration-status";
 import { getTokenStoreFilePath, hasStoredTokens } from "@/lib/token-store";
+import { isCronInitialized, getCronInitError } from "@/lib/cron";
 
 export async function GET() {
   const timezone = process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
@@ -10,6 +11,8 @@ export async function GET() {
       internalCronSchedule: "1 0 * * *",
       internalCronTimeLabel: "00:01",
       timezone,
+      cronInitialized: isCronInitialized(),
+      cronInitError: getCronInitError(),
       externalCronRecommended: true,
       externalCronEndpoint: "/api/cron/migrate",
     },
