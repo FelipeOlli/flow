@@ -1,6 +1,6 @@
 import { google, calendar_v3 } from "googleapis";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, AttendanceStatus } from "@/types/task";
-import { getDateKeyInTimeZone, getUtcRangeForDateKey } from "./timezone";
+import { getDateKeyInTimeZone, getUtcRangeForDateKey, shiftDateKey } from "./timezone";
 import { formatGoogleRecurrence } from "./recurrence-format";
 
 const COMPLETE_COLOR_ID = "2";
@@ -311,16 +311,43 @@ export async function moveEvent(
   newStart: Date,
   newEnd: Date,
   timeZone: string,
-  calendarId = "primary"
+  calendarId = "primary",
+  options?: { preserveComplete?: boolean }
 ): Promise<void> {
   const calendar = getClient(accessToken);
+  const preserve = Boolean(options?.preserveComplete);
   await calendar.events.patch({
     calendarId,
     eventId,
     requestBody: {
       start: { dateTime: newStart.toISOString(), timeZone },
       end: { dateTime: newEnd.toISOString(), timeZone },
-      colorId: null,
+      colorId: preserve ? COMPLETE_COLOR_ID : null,
+    },
+  });
+}
+
+/** All-day events use `date` / `date` (end exclusive). Preserves completed color when requested. */
+export async function moveAllDayEvent(
+  accessToken: string,
+  eventId: string,
+  calendarId: string,
+  startDateKey: string,
+  endDateKeyExclusive: string,
+  dayDelta: number,
+  options?: { preserveComplete?: boolean }
+): Promise<void> {
+  const calendar = getClient(accessToken);
+  const preserve = Boolean(options?.preserveComplete);
+  const newStart = shiftDateKey(startDateKey, dayDelta);
+  const newEnd = shiftDateKey(endDateKeyExclusive, dayDelta);
+  await calendar.events.patch({
+    calendarId,
+    eventId,
+    requestBody: {
+      start: { date: newStart },
+      end: { date: newEnd },
+      colorId: preserve ? COMPLETE_COLOR_ID : null,
     },
   });
 }

@@ -25,6 +25,14 @@ export function shiftDateKey(dateKey: string, days: number): string {
   return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
 }
 
+/** toKey minus fromKey in calendar days (e.g. 2026-04-03 vs 2026-04-04 → -1). */
+export function diffDateKeysInDays(fromKey: string, toKey: string): number {
+  if (!isDateKey(fromKey) || !isDateKey(toKey)) return 0;
+  const [fy, fm, fd] = fromKey.split("-").map(Number);
+  const [ty, tm, td] = toKey.split("-").map(Number);
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86400000);
+}
+
 export function getTimePartsInTimeZone(date: Date, timeZone: string): { hour: number; minute: number } {
   const dtf = new Intl.DateTimeFormat("en-US", {
     timeZone,

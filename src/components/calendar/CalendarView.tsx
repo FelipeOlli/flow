@@ -25,6 +25,10 @@ type MigrationDiagnosticsPayload = {
   pendingEvents?: number;
   completedEvents?: number;
   allDayEvents?: number;
+  eligibleTimed?: number;
+  eligibleAllDay?: number;
+  includeCompletedTimed?: boolean;
+  includeAllDayFilter?: boolean;
 };
 
 function extractFailedDetailSamples(details: unknown): string[] {
@@ -65,12 +69,20 @@ function buildManualMigrationMessage(
     }
     return { text, autoClearMs: 10_000 };
   }
-  let text = `Nenhuma tarefa pendente foi migrada de ${sourceDateKey} para ${targetDateKey}.`;
+  let text = `Nenhuma tarefa foi migrada de ${sourceDateKey} para ${targetDateKey}.`;
   if (diagnostics && typeof diagnostics.sourceEvents === "number") {
     text += `\n\nNa origem (${sourceDateKey}):\n— Total de eventos: ${diagnostics.sourceEvents}`;
-    text += `\n— Elegíveis (com horário, não concluídos): ${diagnostics.pendingEvents ?? 0}`;
-    text += `\n— Já concluídos (verde): ${diagnostics.completedEvents ?? 0}`;
-    text += `\n— Dia inteiro (não migram): ${diagnostics.allDayEvents ?? 0}`;
+    text += `\n— Com horário, pendentes: ${diagnostics.pendingEvents ?? 0}`;
+    text += `\n— Concluídos (verde): ${diagnostics.completedEvents ?? 0}`;
+    text += `\n— Dia inteiro: ${diagnostics.allDayEvents ?? 0}`;
+    text += `\n\nFila desta execução:\n— Com horário (elegíveis): ${diagnostics.eligibleTimed ?? 0}`;
+    text += `\n— Dia inteiro (elegíveis): ${diagnostics.eligibleAllDay ?? 0}`;
+    if (
+      typeof diagnostics.includeCompletedTimed === "boolean" &&
+      typeof diagnostics.includeAllDayFilter === "boolean"
+    ) {
+      text += `\n\nOpções usadas: concluídas ${diagnostics.includeCompletedTimed ? "sim" : "não"}, dia inteiro ${diagnostics.includeAllDayFilter ? "sim" : "não"}.`;
+    }
   }
   return { text, autoClearMs: 10_000 };
 }
@@ -97,6 +109,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [migrateResult, setMigrateResult] = useState<string | null>(null);
   const [manualSourceDate, setManualSourceDate] = useState("");
   const [manualTargetDate, setManualTargetDate] = useState("");
+  const [migrationIncludeCompleted, setMigrationIncludeCompleted] = useState(true);
+  const [migrationIncludeAllDay, setMigrationIncludeAllDay] = useState(true);
   const [selectedTask, setSelectedTask] = useState<FlowTask | null>(null);
   const [eventAnchor, setEventAnchor] = useState<EventAnchorPoint | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -293,10 +307,12 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     setMigrateResult(null);
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo";
-      const payload: { fromDate: string; toDate: string; tz: string } = {
+      const payload = {
         fromDate,
         toDate,
         tz,
+        includeCompleted: migrationIncludeCompleted,
+        includeAllDay: migrationIncludeAllDay,
       };
       const res = await fetch("/api/cron/migrate", {
         method: "POST",
@@ -553,11 +569,31 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                       className="h-8 w-full rounded-md border border-[#3c4043] bg-[#2a2b2e] px-2 text-[11px] text-[#e8eaed] outline-none focus:border-[#8ab4f8]"
                       aria-label="Data de destino da migração"
                     />
+                    <label className="flex items-start gap-2 text-[11px] text-[#e8eaed] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={migrationIncludeCompleted}
+                        onChange={(e) => setMigrationIncludeCompleted(e.target.checked)}
+                        className="mt-0.5 rounded border-[#3c4043]"
+                        aria-label="Incluir concluídas na migração"
+                      />
+                      <span>Incluir concluídas (verde)</span>
+                    </label>
+                    <label className="flex items-start gap-2 text-[11px] text-[#e8eaed] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={migrationIncludeAllDay}
+                        onChange={(e) => setMigrationIncludeAllDay(e.target.checked)}
+                        className="mt-0.5 rounded border-[#3c4043]"
+                        aria-label="Incluir eventos de dia inteiro na migração"
+                      />
+                      <span>Incluir dia inteiro</span>
+                    </label>
                     <button
                       onClick={handleManualMigration}
                       disabled={migrating || !manualSourceDate || !manualTargetDate || manualSourceDate === manualTargetDate}
-                      title="Migrar tarefas pendentes entre a data de origem e a data de destino"
-                      aria-label="Migrar tarefas pendentes"
+                      title="Migrar tarefas conforme as opções marcadas entre origem e destino"
+                      aria-label="Migrar tarefas entre as datas escolhidas"
                       className="w-full h-8 rounded-md border border-[#3c4043] text-xs font-medium text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors disabled:opacity-40 disabled:hover:bg-transparent flex items-center justify-center"
                     >
                       {migrating
@@ -565,7 +601,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                         : "Migrar"}
                     </button>
                     <p className="text-[10px] text-[#9aa0a6] leading-snug pt-1">
-                      Só migram tarefas com horário definido, não concluídas (sem verde) e que não são dia inteiro.
+                      As opções definem o escopo da migração manual. O cron noturno continua migrando só tarefas com
+                      horário, pendentes (sem verde) e sem dia inteiro.
                     </p>
                   </div>
                 </div>

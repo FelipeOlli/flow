@@ -1,5 +1,10 @@
 import { auth } from "@/auth";
-import { runMigration } from "@/lib/migration";
+import {
+  runMigration,
+  MIGRATION_AUTO_FILTER,
+  MIGRATION_MANUAL_DEFAULT_FILTER,
+  type MigrationFilterOptions,
+} from "@/lib/migration";
 import { NextRequest, NextResponse } from "next/server";
 import { getValidAccessToken } from "@/lib/token-store";
 import { getDateKeyInTimeZone, getReferenceDateForDateKey, isDateKey, shiftDateKey } from "@/lib/timezone";
@@ -18,6 +23,17 @@ function parseTimeZoneInput(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+function parseBool(value: unknown, defaultValue: boolean): boolean {
+  if (value === undefined || value === null) return defaultValue;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const s = value.trim().toLowerCase();
+    if (s === "true" || s === "1") return true;
+    if (s === "false" || s === "0") return false;
+  }
+  return defaultValue;
 }
 
 function buildErrorPayload(
@@ -43,6 +59,10 @@ function buildErrorPayload(
       pendingEvents: 0,
       completedEvents: 0,
       allDayEvents: 0,
+      eligibleTimed: 0,
+      eligibleAllDay: 0,
+      includeCompletedTimed: false,
+      includeAllDayFilter: false,
     },
   };
 }
@@ -104,6 +124,8 @@ export async function POST(req: NextRequest) {
     // Caso contrário (cron automático), migra ontem → hoje
     let fromDate: Date | undefined;
     let toDate: Date | undefined;
+    let migrationFilter: MigrationFilterOptions = MIGRATION_AUTO_FILTER;
+
     if (body.fromDate) {
       sourceDateKey = parseLocalDateInput(body.fromDate);
       if (!sourceDateKey) {
@@ -125,9 +147,25 @@ export async function POST(req: NextRequest) {
       }
       fromDate = getReferenceDateForDateKey(sourceDateKey, timeZone);
       toDate = getReferenceDateForDateKey(targetDateKey, timeZone);
+
+      if (!isCronCall) {
+        migrationFilter = {
+          includeCompletedTimed: parseBool(
+            body.includeCompleted,
+            MIGRATION_MANUAL_DEFAULT_FILTER.includeCompletedTimed
+          ),
+          includeAllDay: parseBool(body.includeAllDay, MIGRATION_MANUAL_DEFAULT_FILTER.includeAllDay),
+        };
+      }
     }
 
-    const result = await runMigration(accessToken, timeZone, fromDate, toDate);
+    const result = await runMigration(
+      accessToken,
+      timeZone,
+      fromDate,
+      toDate,
+      isCronCall ? MIGRATION_AUTO_FILTER : migrationFilter
+    );
     setMigrationSuccess(source, result);
     console.log("[FLOW] Migration complete:", result);
 
