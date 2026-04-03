@@ -20,6 +20,61 @@ const LAYERS = {
   toast: "z-[1300]",
 } as const;
 
+type MigrationDiagnosticsPayload = {
+  sourceEvents?: number;
+  pendingEvents?: number;
+  completedEvents?: number;
+  allDayEvents?: number;
+};
+
+function extractFailedDetailSamples(details: unknown): string[] {
+  if (!Array.isArray(details)) return [];
+  return details
+    .filter((x): x is string => typeof x === "string" && x.includes("✗"))
+    .map((s) => s.replace(/^✗\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function buildManualMigrationMessage(
+  migrated: number,
+  skipped: number,
+  sourceDateKey: string,
+  targetDateKey: string,
+  diagnostics: MigrationDiagnosticsPayload | undefined,
+  details: unknown
+): { text: string; autoClearMs: number } {
+  const failSamples = extractFailedDetailSamples(details);
+  if (migrated > 0) {
+    let text = `${migrated} tarefa(s) migrada(s) de ${sourceDateKey} para ${targetDateKey}.`;
+    if (skipped > 0) {
+      text += `\n${skipped} tarefa(s) falharam.`;
+      if (failSamples.length) {
+        text += "\nExemplos:";
+        for (const s of failSamples.slice(0, 3)) text += `\n— ${s}`;
+      }
+    }
+    return { text, autoClearMs: skipped > 0 ? 10_000 : 4_000 };
+  }
+  if (skipped > 0) {
+    let text = `Nenhuma tarefa foi migrada com sucesso de ${sourceDateKey} para ${targetDateKey}.\n${skipped} tarefa(s) falharam.`;
+    if (failSamples.length) {
+      text += "\nExemplos:";
+      for (const s of failSamples.slice(0, 3)) text += `\n— ${s}`;
+    } else {
+      text += "\nConfira os logs do servidor para detalhes.";
+    }
+    return { text, autoClearMs: 10_000 };
+  }
+  let text = `Nenhuma tarefa pendente foi migrada de ${sourceDateKey} para ${targetDateKey}.`;
+  if (diagnostics && typeof diagnostics.sourceEvents === "number") {
+    text += `\n\nNa origem (${sourceDateKey}):\n— Total de eventos: ${diagnostics.sourceEvents}`;
+    text += `\n— Elegíveis (com horário, não concluídos): ${diagnostics.pendingEvents ?? 0}`;
+    text += `\n— Já concluídos (verde): ${diagnostics.completedEvents ?? 0}`;
+    text += `\n— Dia inteiro (não migram): ${diagnostics.allDayEvents ?? 0}`;
+  }
+  return { text, autoClearMs: 10_000 };
+}
+
 interface CalendarViewProps {
   initialDate?: string;
 }
@@ -51,6 +106,15 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const [migrationMenuOpen, setMigrationMenuOpen] = useState(false);
   const migrationMenuRef = useRef<HTMLDivElement | null>(null);
+  const migrateResultClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function scheduleMigrateResultClear(ms: number) {
+    if (migrateResultClearRef.current) clearTimeout(migrateResultClearRef.current);
+    migrateResultClearRef.current = setTimeout(() => {
+      setMigrateResult(null);
+      migrateResultClearRef.current = null;
+    }, ms);
+  }
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -215,12 +279,12 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     const toDate = manualTargetDate.trim();
     if (!fromDate || !toDate) {
       setMigrateResult("Selecione data de origem e data de destino para migrar.");
-      setTimeout(() => setMigrateResult(null), 4000);
+      scheduleMigrateResultClear(4_000);
       return;
     }
     if (fromDate === toDate) {
       setMigrateResult("A origem e o destino não podem ser a mesma data.");
-      setTimeout(() => setMigrateResult(null), 4000);
+      scheduleMigrateResultClear(4_000);
       return;
     }
 
@@ -245,11 +309,12 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
         return;
       }
       if (!res.ok) {
-        setMigrateResult(
+        const errMsg =
           typeof data.error === "string"
             ? `Erro ao migrar: ${data.error}`
-            : "Erro ao migrar. Tente novamente."
-        );
+            : "Erro ao migrar. Tente novamente.";
+        setMigrateResult(errMsg);
+        scheduleMigrateResultClear(errMsg.length > 80 ? 8_000 : 5_000);
         return;
       }
 
@@ -261,24 +326,24 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       const targetDateKey = typeof data?.diagnostics?.targetDateKey === "string"
         ? data.diagnostics.targetDateKey
         : toDate;
-      if (migrated > 0) {
-        setMigrateResult(
-          `${migrated} tarefa(s) migrada(s) de ${sourceDateKey} para ${targetDateKey}.`
-        );
-      } else if (skipped > 0) {
-        setMigrateResult(
-          `Nenhuma tarefa migrada de ${sourceDateKey} para ${targetDateKey}. ${skipped} tarefa(s) falharam durante a migração.`
-        );
-      } else {
-        setMigrateResult(`Nenhuma tarefa pendente para migrar de ${sourceDateKey} para ${targetDateKey}.`);
-      }
+      const diagnosticsRaw = data?.diagnostics as MigrationDiagnosticsPayload | undefined;
+      const { text, autoClearMs } = buildManualMigrationMessage(
+        migrated,
+        skipped,
+        sourceDateKey,
+        targetDateKey,
+        diagnosticsRaw,
+        data.details
+      );
+      setMigrateResult(text);
+      scheduleMigrateResultClear(autoClearMs);
       await fetchTasks();
       setMigrationMenuOpen(false);
     } catch {
       setMigrateResult("Erro ao migrar. Tente novamente.");
+      scheduleMigrateResultClear(5_000);
     } finally {
       setMigrating(false);
-      setTimeout(() => setMigrateResult(null), 4000);
     }
   }
 
@@ -331,6 +396,13 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
     return () => clearTimeout(timeout);
   }, [router, searchQuery]);
+
+  useEffect(
+    () => () => {
+      if (migrateResultClearRef.current) clearTimeout(migrateResultClearRef.current);
+    },
+    []
+  );
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -488,6 +560,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                         ? <div className="w-3.5 h-3.5 border-2 border-[#5f6368]/40 border-t-[#e8eaed] rounded-full animate-spin" />
                         : "Migrar"}
                     </button>
+                    <p className="text-[10px] text-[#9aa0a6] leading-snug pt-1">
+                      Só migram tarefas com horário definido, não concluídas (sem verde) e que não são dia inteiro.
+                    </p>
                   </div>
                 </div>
               )}
@@ -654,7 +729,10 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
       {/* Toast migração */}
       {migrateResult && (
-        <div className={`fixed top-20 left-1/2 -translate-x-1/2 ${LAYERS.toast} bg-[#2a2b2e] border border-[#3c4043] text-[#e8eaed] text-sm px-4 py-2.5 rounded-md shadow-lg whitespace-nowrap`}>
+        <div
+          className={`fixed top-20 left-1/2 -translate-x-1/2 ${LAYERS.toast} max-w-[min(420px,calc(100vw-32px))] bg-[#2a2b2e] border border-[#3c4043] text-[#e8eaed] text-sm px-4 py-3 rounded-md shadow-lg whitespace-pre-line text-left`}
+          role="status"
+        >
           {migrateResult}
         </div>
       )}
