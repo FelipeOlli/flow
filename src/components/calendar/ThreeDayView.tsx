@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { format, addDays, isToday, isSameDay } from "date-fns";
+import { format, addDays, isToday, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
 import { TaskBlock } from "@/components/tasks/TaskBlock";
@@ -18,6 +18,7 @@ import {
   timeToY,
   yToTime,
 } from "./calendarLayout";
+import { getDateKeyInTimeZone, getTaskGridDateKey } from "@/lib/timezone";
 
 interface ThreeDayViewProps {
   tasks: FlowTask[];
@@ -33,8 +34,9 @@ interface ThreeDayViewProps {
 export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdit, onDelete, onTimeClick, onDayClick }: ThreeDayViewProps) {
   const [nowY, setNowY] = useState(currentTimeY());
   const scrollRef = useRef<HTMLDivElement>(null);
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  const days = Array.from({ length: 3 }, (_, i) => addDays(currentDate, i));
+  const days = Array.from({ length: 3 }, (_, i) => addDays(startOfDay(currentDate), i));
 
   useEffect(() => {
     const t = setInterval(() => setNowY(currentTimeY()), 30000);
@@ -48,8 +50,12 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
   }, []);
 
   function getLayoutForDay(day: Date) {
+    const colKey = getDateKeyInTimeZone(day, tz);
     const dayTasks = tasks.filter(
-      (t) => !t.isAllDay && t.startTime && isSameDay(new Date(t.startTime), day)
+      (t) =>
+        !t.isAllDay &&
+        t.startTime &&
+        getTaskGridDateKey(t.startTime, t.isAllDay, tz) === colKey
     );
     return computeLayout(dayTasks);
   }
@@ -85,11 +91,16 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
       <div className="flex border-b border-[#3c4043] bg-[#202124] min-h-9">
         <div className="w-11 flex-shrink-0 px-1.5 py-2 text-[10px] uppercase tracking-wide text-[#9aa0a6]">dia</div>
         {days.map((day) => {
-          const allDayTasks = tasks
-            .filter((t) => t.isAllDay && t.startTime && isSameDay(new Date(t.startTime), day))
-            .slice(0, 1);
+          const colKey = getDateKeyInTimeZone(day, tz);
+          const allDayTasks = tasks.filter(
+            (t) =>
+              t.isAllDay && t.startTime && getTaskGridDateKey(t.startTime, true, tz) === colKey
+          );
           return (
-            <div key={`all-day-${day.toISOString()}`} className="flex-1 px-1 py-1 border-l border-[#3c4043] min-h-9">
+            <div
+              key={`all-day-${day.toISOString()}`}
+              className="flex-1 px-1 py-1 border-l border-[#3c4043] min-h-9 flex flex-col gap-0.5 max-h-28 overflow-y-auto"
+            >
               {allDayTasks.map((task) => (
                 <div
                   key={task.id}

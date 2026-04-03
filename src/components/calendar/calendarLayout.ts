@@ -26,7 +26,9 @@ export function formatHourLabel(hour: number): string {
 
 export function timeToY(iso: string): number {
   const d = new Date(iso);
-  return ((d.getHours() - CALENDAR_DIMENSIONS.DAY_START) + d.getMinutes() / 60) * CALENDAR_DIMENSIONS.HOUR_PX;
+  const raw =
+    (d.getHours() - CALENDAR_DIMENSIONS.DAY_START + d.getMinutes() / 60) * CALENDAR_DIMENSIONS.HOUR_PX;
+  return Math.max(0, raw);
 }
 
 export function durationToPx(start: string, end: string): number {

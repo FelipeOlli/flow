@@ -116,8 +116,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     }, ms);
   }
 
-  const fetchTasks = useCallback(async () => {
-    setLoading(true);
+  const fetchTasks = useCallback(async (opts?: { background?: boolean }) => {
+    const silent = opts?.background === true;
+    if (!silent) setLoading(true);
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     let startDate: Date, endDate: Date;
@@ -142,7 +143,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       if (res.status === 401) { router.replace("/sign-in"); return; }
       if (res.ok) setTasks(await res.json());
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, view, format(currentDate, "yyyy-MM-dd")]);
@@ -337,8 +338,11 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       );
       setMigrateResult(text);
       scheduleMigrateResultClear(autoClearMs);
-      await fetchTasks();
+      await fetchTasks({ background: true });
       setMigrationMenuOpen(false);
+      setTimeout(() => {
+        void fetchTasks({ background: true });
+      }, 600);
     } catch {
       setMigrateResult("Erro ao migrar. Tente novamente.");
       scheduleMigrateResultClear(5_000);

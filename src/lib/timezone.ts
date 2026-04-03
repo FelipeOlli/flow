@@ -94,3 +94,16 @@ function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
   const asUtc = Date.UTC(year, month - 1, day, hour, minute, second);
   return asUtc - date.getTime();
 }
+
+/**
+ * yyyy-MM-dd for placing a task in a calendar column. All-day events prefer the
+ * literal `date` prefix from Google so `new Date("yyyy-MM-dd")` UTC drift does
+ * not shift the chip to the wrong day in America/Sao_Paulo and similar zones.
+ */
+export function getTaskGridDateKey(startTime: string, isAllDay: boolean, timeZone: string): string {
+  if (isAllDay && startTime) {
+    const m = /^(\d{4}-\d{2}-\d{2})/.exec(startTime.trim());
+    if (m) return m[1];
+  }
+  return getDateKeyInTimeZone(new Date(startTime), timeZone);
+}
