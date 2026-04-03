@@ -20,8 +20,9 @@ export function saveTokens(tokens: StoredTokens): void {
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokens), "utf-8");
+    console.log(`[TOKEN STORE] Tokens salvos em ${TOKEN_FILE}`);
   } catch (err) {
-    console.error("[TOKEN STORE] Failed to save tokens:", err);
+    console.error(`[TOKEN STORE] Falha ao salvar tokens em ${TOKEN_FILE}:`, err);
   }
 }
 

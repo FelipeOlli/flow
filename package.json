@@ -9,25 +9,26 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "date-fns": "^3.6.0",
+    "date-fns-tz": "^3.1.3",
+    "googleapis": "^144.0.0",
     "next": "14.2.29",
+    "next-auth": "5.0.0-beta.25",
+    "node-cron": "^3.0.3",
     "react": "^18",
     "react-dom": "^18",
-    "next-auth": "5.0.0-beta.25",
-    "googleapis": "^144.0.0",
-    "node-cron": "^3.0.3",
-    "date-fns": "^3.6.0",
-    "date-fns-tz": "^3.1.3"
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
+    "@types/node-cron": "^3.0.11",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "@types/node-cron": "^3.0.11",
-    "tailwindcss": "^3.4.1",
-    "postcss": "^8",
     "autoprefixer": "^10.0.1",
     "eslint": "^8",
-    "eslint-config-next": "14.2.29"
+    "eslint-config-next": "14.2.29",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
   }
 }

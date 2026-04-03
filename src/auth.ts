@@ -57,8 +57,6 @@ export const config: NextAuthConfig = {
         token.refreshToken = account.refresh_token as string;
         token.expiresAt = (account.expires_at as number) * 1000;
 
-        // Persiste tokens para o cron de migração noturna.
-        // Wrapped in try-catch: middleware runs on Edge Runtime where fs is unavailable.
         try {
           const { saveTokens } = await import("@/lib/token-store");
           saveTokens({
@@ -66,8 +64,9 @@ export const config: NextAuthConfig = {
             refreshToken: token.refreshToken,
             expiresAt: token.expiresAt,
           });
-        } catch {
-          // Edge runtime — token-store persistence skipped
+          console.log("[AUTH] Tokens persistidos no login inicial");
+        } catch (err) {
+          console.warn("[AUTH] Não foi possível persistir tokens (Edge runtime?):", String(err));
         }
       }
 
@@ -78,7 +77,6 @@ export const config: NextAuthConfig = {
 
       const refreshed = await refreshAccessToken(token);
 
-      // Atualiza tokens persistidos após refresh.
       if (!refreshed.error) {
         try {
           const { saveTokens } = await import("@/lib/token-store");
@@ -87,8 +85,9 @@ export const config: NextAuthConfig = {
             refreshToken: refreshed.refreshToken as string,
             expiresAt: refreshed.expiresAt as number,
           });
-        } catch {
-          // Edge runtime — token-store persistence skipped
+          console.log("[AUTH] Tokens persistidos após refresh");
+        } catch (err) {
+          console.warn("[AUTH] Não foi possível persistir tokens após refresh (Edge runtime?):", String(err));
         }
       }
 
