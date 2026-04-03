@@ -9,6 +9,19 @@ import {
   zonedDateTimeToUtc,
 } from "./timezone";
 
+function extractErrorReason(err: unknown): string {
+  if (err && typeof err === "object") {
+    const status = (err as { code?: number; status?: number }).code ?? (err as { code?: number; status?: number }).status;
+    const msg =
+      (err as { errors?: { message?: string }[] }).errors?.[0]?.message ??
+      (err as { message?: string }).message ??
+      "";
+    if (status) return `${status}: ${msg || "erro"}`;
+    if (msg) return msg.slice(0, 80);
+  }
+  return "erro";
+}
+
 export interface MigrationFilterOptions {
   includeCompletedTimed: boolean;
   includeAllDay: boolean;
@@ -86,7 +99,7 @@ export async function runMigration(
   console.log(`[FLOW MIGRATION] Buscando eventos de ${sourceDateKey} → ${targetDateKey} (${timeZone})`);
 
   const [sourceEvents, targetEvents] = await Promise.all([
-    getEventsForDateKey(accessToken, sourceDateKey, timeZone),
+    getEventsForDateKey(accessToken, sourceDateKey, timeZone, { writableOnly: true }),
     getEventsForDateKey(accessToken, targetDateKey, timeZone),
   ]);
 
@@ -160,7 +173,7 @@ export async function runMigration(
       console.log(`[FLOW MIGRATION] Migrado: "${event.title}" para ${newStart.toISOString()}`);
     } catch (err) {
       console.error(`[FLOW MIGRATION] Falhou: "${event.title}"`, err);
-      details.push(`✗ "${event.title}" (erro)`);
+      details.push(`✗ "${event.title}" (${extractErrorReason(err)})`);
       skipped++;
     }
   }
@@ -188,7 +201,7 @@ export async function runMigration(
       console.log(`[FLOW MIGRATION] Migrado (dia inteiro): "${event.title}"`);
     } catch (err) {
       console.error(`[FLOW MIGRATION] Falhou (dia inteiro): "${event.title}"`, err);
-      details.push(`✗ "${event.title}" (erro)`);
+      details.push(`✗ "${event.title}" (${extractErrorReason(err)})`);
       skipped++;
     }
   }

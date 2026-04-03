@@ -48,6 +48,8 @@ function buildManualMigrationMessage(
   details: unknown
 ): { text: string; autoClearMs: number } {
   const failSamples = extractFailedDetailSamples(details);
+  const eligible = (diagnostics?.eligibleTimed ?? 0) + (diagnostics?.eligibleAllDay ?? 0);
+
   if (migrated > 0) {
     let text = `${migrated} tarefa(s) migrada(s) de ${sourceDateKey} para ${targetDateKey}.`;
     if (skipped > 0) {
@@ -57,7 +59,10 @@ function buildManualMigrationMessage(
         for (const s of failSamples.slice(0, 3)) text += `\n— ${s}`;
       }
     }
-    return { text, autoClearMs: skipped > 0 ? 10_000 : 4_000 };
+    if (diagnostics && typeof diagnostics.sourceEvents === "number") {
+      text += `\n\nResumo: ${diagnostics.sourceEvents} na origem, ${eligible} elegíveis, ${migrated} migradas, ${skipped} falharam.`;
+    }
+    return { text, autoClearMs: 8_000 };
   }
   if (skipped > 0) {
     let text = `Nenhuma tarefa foi migrada com sucesso de ${sourceDateKey} para ${targetDateKey}.\n${skipped} tarefa(s) falharam.`;
@@ -67,22 +72,19 @@ function buildManualMigrationMessage(
     } else {
       text += "\nConfira os logs do servidor para detalhes.";
     }
+    if (diagnostics && typeof diagnostics.sourceEvents === "number") {
+      text += `\n\nResumo: ${diagnostics.sourceEvents} na origem, ${eligible} elegíveis.`;
+    }
     return { text, autoClearMs: 10_000 };
   }
-  let text = `Nenhuma tarefa foi migrada de ${sourceDateKey} para ${targetDateKey}.`;
+  let text = `Nenhuma tarefa elegível em ${sourceDateKey}.`;
   if (diagnostics && typeof diagnostics.sourceEvents === "number") {
-    text += `\n\nNa origem (${sourceDateKey}):\n— Total de eventos: ${diagnostics.sourceEvents}`;
+    text += `\n\nNa origem (${sourceDateKey}):\n— Total de eventos (editáveis): ${diagnostics.sourceEvents}`;
     text += `\n— Com horário, pendentes: ${diagnostics.pendingEvents ?? 0}`;
     text += `\n— Concluídos (verde): ${diagnostics.completedEvents ?? 0}`;
     text += `\n— Dia inteiro: ${diagnostics.allDayEvents ?? 0}`;
-    text += `\n\nFila desta execução:\n— Com horário (elegíveis): ${diagnostics.eligibleTimed ?? 0}`;
-    text += `\n— Dia inteiro (elegíveis): ${diagnostics.eligibleAllDay ?? 0}`;
-    if (
-      typeof diagnostics.includeCompletedTimed === "boolean" &&
-      typeof diagnostics.includeAllDayFilter === "boolean"
-    ) {
-      text += `\n\nOpções usadas: concluídas ${diagnostics.includeCompletedTimed ? "sim" : "não"}, dia inteiro ${diagnostics.includeAllDayFilter ? "sim" : "não"}.`;
-    }
+    text += `\n— Elegíveis com horário: ${diagnostics.eligibleTimed ?? 0}`;
+    text += `\n— Elegíveis dia inteiro: ${diagnostics.eligibleAllDay ?? 0}`;
   }
   return { text, autoClearMs: 10_000 };
 }

@@ -67,12 +67,12 @@ async function fetchAllCalendarsEvents(
   timeMin: Date,
   timeMax: Date,
   timeZone: string,
-  options?: { q?: string; maxResults?: number }
+  options?: { q?: string; maxResults?: number; writableOnly?: boolean }
 ): Promise<FlowTask[]> {
   const calendar = getClient(accessToken);
 
   const { data: calListData } = await calendar.calendarList.list({
-    minAccessRole: "reader",
+    minAccessRole: options?.writableOnly ? "writer" : "reader",
   });
   const calendarItems = calListData.items ?? [];
 
@@ -112,10 +112,13 @@ export async function getEventsForDay(
 export async function getEventsForDateKey(
   accessToken: string,
   dateKey: string,
-  timeZone: string
+  timeZone: string,
+  options?: { writableOnly?: boolean }
 ): Promise<FlowTask[]> {
   const { startUtc, endUtc } = getUtcRangeForDateKey(dateKey, timeZone);
-  return fetchAllCalendarsEvents(accessToken, startUtc, endUtc, timeZone);
+  return fetchAllCalendarsEvents(accessToken, startUtc, endUtc, timeZone, {
+    writableOnly: options?.writableOnly,
+  });
 }
 
 export async function getEventsInRange(
