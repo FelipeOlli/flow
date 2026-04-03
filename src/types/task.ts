@@ -14,6 +14,12 @@ export interface FlowTask {
   selfResponseStatus?: AttendanceStatus;
   meetingUrl?: string;
   isCancelled?: boolean;
+  /** True se o evento tem RRULE ou é instância de série (singleEvents expandido). */
+  isRecurring?: boolean;
+  /** Ex.: "Semanalmente (seg, qua)" */
+  recurrenceSummary?: string;
+  /** Ex.: "Termina em …" ou "Termina após N ocorrências" */
+  recurrenceEndHint?: string;
 }
 
 export type AttendanceStatus = "needsAction" | "declined" | "tentative" | "accepted";

@@ -1,6 +1,7 @@
 import { google, calendar_v3 } from "googleapis";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, AttendanceStatus } from "@/types/task";
 import { getDateKeyInTimeZone, getUtcRangeForDateKey } from "./timezone";
+import { formatGoogleRecurrence } from "./recurrence-format";
 
 const COMPLETE_COLOR_ID = "2";
 
@@ -34,6 +35,11 @@ function mapEvent(
       responseStatus: att.responseStatus as AttendanceStatus | undefined,
     }));
 
+  const recurrenceDisplay = formatGoogleRecurrence(
+    event.recurrence ?? undefined,
+    event.recurringEventId
+  );
+
   return {
     id: event.id!,
     title: event.summary ?? "Sem título",
@@ -50,6 +56,9 @@ function mapEvent(
     selfResponseStatus: selfAttendee?.responseStatus as AttendanceStatus | undefined,
     meetingUrl,
     isCancelled: event.status === "cancelled",
+    isRecurring: recurrenceDisplay.isRecurring,
+    recurrenceSummary: recurrenceDisplay.summary || undefined,
+    recurrenceEndHint: recurrenceDisplay.endHint,
   };
 }
 

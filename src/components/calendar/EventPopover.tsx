@@ -189,9 +189,35 @@ export function EventPopover({
                 <p>{timeLabel}</p>
               </div>
 
-              {task.description && (
-                <p className="text-sm text-[#bdc1c6] whitespace-pre-wrap break-words">{task.description}</p>
-              )}
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-wide text-[#9aa0a6]">Recorrência</p>
+                {task.isRecurring ? (
+                  <>
+                    <p className="text-sm text-[#e8eaed]">{task.recurrenceSummary ?? "Evento recorrente"}</p>
+                    {task.recurrenceEndHint && (
+                      <p className="text-sm text-[#9aa0a6]">{task.recurrenceEndHint}</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-[#9aa0a6]">Não se repete</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-xs uppercase tracking-wide text-[#9aa0a6]">Descrição</p>
+                {task.description ? (
+                  <p className="text-sm text-[#bdc1c6] whitespace-pre-wrap break-words">{task.description}</p>
+                ) : (
+                  <p className="text-sm text-[#9aa0a6]">Nenhuma descrição ainda.</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="text-xs text-[#8ab4f8] hover:underline"
+                >
+                  {task.description ? "Editar descrição" : "Adicionar descrição"}
+                </button>
+              </div>
 
               {task.calendarName && (
                 <p className="text-sm text-[#9aa0a6]">{task.calendarName}</p>
