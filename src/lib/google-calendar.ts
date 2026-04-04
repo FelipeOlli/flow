@@ -62,6 +62,61 @@ function mapEvent(
   };
 }
 
+async function listCalendarEntries(
+  client: ReturnType<typeof getClient>,
+  minAccessRole: "reader" | "writer"
+): Promise<calendar_v3.Schema$CalendarListEntry[]> {
+  const entries: calendar_v3.Schema$CalendarListEntry[] = [];
+  let pageToken: string | undefined;
+  do {
+    const { data } = await client.calendarList.list({
+      minAccessRole,
+      maxResults: 250,
+      pageToken,
+    });
+    entries.push(...(data.items ?? []));
+    pageToken = data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return entries;
+}
+
+async function listEventsExpandedPage(
+  client: ReturnType<typeof getClient>,
+  calendarId: string,
+  timeMinIso: string,
+  timeMaxIso: string,
+  timeZone: string,
+  q?: string,
+  /** Quando definido (ex.: busca global), para após N eventos neste calendário. */
+  maxItemsPerCalendar?: number
+): Promise<calendar_v3.Schema$Event[]> {
+  const items: calendar_v3.Schema$Event[] = [];
+  let pageToken: string | undefined;
+  do {
+    const { data } = await client.events.list({
+      calendarId,
+      timeMin: timeMinIso,
+      timeMax: timeMaxIso,
+      singleEvents: true,
+      orderBy: "startTime",
+      timeZone,
+      q,
+      maxResults: 250,
+      pageToken,
+    });
+    const batch = data.items ?? [];
+    if (maxItemsPerCalendar !== undefined) {
+      const room = maxItemsPerCalendar - items.length;
+      if (room > 0) items.push(...batch.slice(0, room));
+    } else {
+      items.push(...batch);
+    }
+    pageToken = data.nextPageToken ?? undefined;
+    if (maxItemsPerCalendar !== undefined && items.length >= maxItemsPerCalendar) break;
+  } while (pageToken);
+  return items;
+}
+
 async function fetchAllCalendarsEvents(
   accessToken: string,
   timeMin: Date,
@@ -71,33 +126,48 @@ async function fetchAllCalendarsEvents(
 ): Promise<FlowTask[]> {
   const calendar = getClient(accessToken);
 
-  const { data: calListData } = await calendar.calendarList.list({
-    minAccessRole: options?.writableOnly ? "writer" : "reader",
-  });
-  const calendarItems = calListData.items ?? [];
+  const calendarItems = (await listCalendarEntries(
+    calendar,
+    options?.writableOnly ? "writer" : "reader"
+  )).filter((c) => Boolean(c.id));
+
+  const timeMinIso = timeMin.toISOString();
+  const timeMaxIso = timeMax.toISOString();
 
   const results = await Promise.allSettled(
     calendarItems.map(async (cal) => {
-      const { data } = await calendar.events.list({
-        calendarId: cal.id!,
-        timeMin: timeMin.toISOString(),
-        timeMax: timeMax.toISOString(),
-        singleEvents: true,
-        orderBy: "startTime",
+      const id = cal.id!;
+      const rawEvents = await listEventsExpandedPage(
+        calendar,
+        id,
+        timeMinIso,
+        timeMaxIso,
         timeZone,
-        q: options?.q,
-        maxResults: options?.maxResults ?? 250,
-      });
+        options?.q,
+        options?.maxResults
+      );
       const calName = cal.summary ?? "";
       const calColor = CALENDAR_COLOR_OVERRIDES[calName] ?? cal.backgroundColor ?? "#4285f4";
-      return (data.items ?? []).map((e) => mapEvent(e, cal.id!, calName, calColor));
+      return rawEvents.map((e) => mapEvent(e, id, calName, calColor));
     })
   );
 
-  return results
-    .filter((r): r is PromiseFulfilledResult<FlowTask[]> => r.status === "fulfilled")
-    .flatMap((r) => r.value)
-    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  const tasks: FlowTask[] = [];
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const cal = calendarItems[i];
+    if (r.status === "fulfilled") {
+      tasks.push(...r.value);
+    } else {
+      const reason = r.reason;
+      console.error(
+        `[FLOW CAL] Falha ao listar eventos do calendário "${cal.summary ?? cal.id}" (${cal.id}):`,
+        reason
+      );
+    }
+  }
+
+  return tasks.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 }
 
 export async function getEventsForDay(
@@ -313,18 +383,19 @@ export async function moveEvent(
   eventId: string,
   newStart: Date,
   newEnd: Date,
-  timeZone: string,
+  _timeZone: string,
   calendarId = "primary",
   options?: { preserveComplete?: boolean }
 ): Promise<void> {
   const calendar = getClient(accessToken);
   const preserve = Boolean(options?.preserveComplete);
+  // RFC3339 com offset/Z e sem `timeZone` no corpo evita interpretação dupla na API do Google.
   await calendar.events.patch({
     calendarId,
     eventId,
     requestBody: {
-      start: { dateTime: newStart.toISOString(), timeZone },
-      end: { dateTime: newEnd.toISOString(), timeZone },
+      start: { dateTime: newStart.toISOString() },
+      end: { dateTime: newEnd.toISOString() },
       colorId: preserve ? COMPLETE_COLOR_ID : null,
     },
   });

@@ -22,6 +22,8 @@ export function initCron() {
   if (!process.env.CRON_SECRET) {
     console.warn("[FLOW CRON] CRON_SECRET não definido. Recomendado configurar cron externo para produção.");
   }
+  // node-cron só roda com processo Node long-running (ex.: Docker). Em ambientes serverless,
+  // agende POST /api/cron/migrate com Authorization: Bearer CRON_SECRET e token persistido em /app/data.
 
   try {
     cron.schedule(

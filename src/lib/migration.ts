@@ -11,13 +11,17 @@ import {
 
 function extractErrorReason(err: unknown): string {
   if (err && typeof err === "object") {
-    const status = (err as { code?: number; status?: number }).code ?? (err as { code?: number; status?: number }).status;
-    const msg =
-      (err as { errors?: { message?: string }[] }).errors?.[0]?.message ??
-      (err as { message?: string }).message ??
-      "";
+    const o = err as {
+      code?: number;
+      status?: number;
+      response?: { status?: number };
+      errors?: { message?: string }[];
+      message?: string;
+    };
+    const status = o.code ?? o.status ?? o.response?.status;
+    const msg = o.errors?.[0]?.message ?? o.message ?? "";
     if (status) return `${status}: ${msg || "erro"}`;
-    if (msg) return msg.slice(0, 80);
+    if (msg) return msg.slice(0, 100);
   }
   return "erro";
 }
@@ -105,14 +109,19 @@ export async function runMigration(
 
   console.log(`[FLOW MIGRATION] Encontrados ${sourceEvents.length} eventos na origem`);
 
-  const timedPendingOnly = sourceEvents.filter((e) => !e.isAllDay && !e.isComplete);
-  const allDayOnSource = sourceEvents.filter((e) => e.isAllDay);
+  const timedPendingOnly = sourceEvents.filter(
+    (e) => !e.isCancelled && !e.isAllDay && !e.isComplete
+  );
+  const allDayOnSource = sourceEvents.filter((e) => !e.isCancelled && e.isAllDay);
 
   const timedToMove = sourceEvents.filter(
-    (e) => !e.isAllDay && (filter.includeCompletedTimed || !e.isComplete)
+    (e) =>
+      !e.isCancelled &&
+      !e.isAllDay &&
+      (filter.includeCompletedTimed || !e.isComplete)
   );
   const allDayToMove = filter.includeAllDay
-    ? allDayOnSource.filter((e) => extractAllDayBounds(e) !== null)
+    ? allDayOnSource.filter((e) => !e.isCancelled && extractAllDayBounds(e) !== null)
     : [];
 
   const diagnostics: MigrationDiagnostics = {
