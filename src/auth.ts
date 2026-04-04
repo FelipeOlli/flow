@@ -3,6 +3,37 @@ import Google from "next-auth/providers/google";
 import type { NextAuthConfig } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 
+function isEdgeRuntime(): boolean {
+  return typeof (globalThis as { EdgeRuntime?: unknown }).EdgeRuntime !== "undefined";
+}
+
+async function persistTokensSafe(
+  context: "login inicial" | "refresh",
+  accessToken: string,
+  refreshToken: string,
+  expiresAt: number
+): Promise<void> {
+  if (isEdgeRuntime()) {
+    // Middleware/auth can run on Edge; token-store uses fs/path and must stay on Node runtime.
+    return;
+  }
+  try {
+    const { saveTokens } = await import("@/lib/token-store");
+    saveTokens({
+      accessToken,
+      refreshToken,
+      expiresAt,
+    });
+    console.log(
+      context === "login inicial"
+        ? "[AUTH] Tokens persistidos no login inicial"
+        : "[AUTH] Tokens persistidos após refresh"
+    );
+  } catch (err) {
+    console.warn("[AUTH] Não foi possível persistir tokens:", String(err));
+  }
+}
+
 async function refreshAccessToken(token: JWT): Promise<JWT> {
   try {
     const response = await fetch("https://oauth2.googleapis.com/token", {
@@ -56,18 +87,12 @@ export const config: NextAuthConfig = {
         token.accessToken = account.access_token as string;
         token.refreshToken = account.refresh_token as string;
         token.expiresAt = (account.expires_at as number) * 1000;
-
-        try {
-          const { saveTokens } = await import("@/lib/token-store");
-          saveTokens({
-            accessToken: token.accessToken,
-            refreshToken: token.refreshToken,
-            expiresAt: token.expiresAt,
-          });
-          console.log("[AUTH] Tokens persistidos no login inicial");
-        } catch (err) {
-          console.warn("[AUTH] Não foi possível persistir tokens (Edge runtime?):", String(err));
-        }
+        await persistTokensSafe(
+          "login inicial",
+          token.accessToken as string,
+          token.refreshToken as string,
+          token.expiresAt as number
+        );
       }
 
       // Token still valid (with 5min buffer)
@@ -78,17 +103,12 @@ export const config: NextAuthConfig = {
       const refreshed = await refreshAccessToken(token);
 
       if (!refreshed.error) {
-        try {
-          const { saveTokens } = await import("@/lib/token-store");
-          saveTokens({
-            accessToken: refreshed.accessToken as string,
-            refreshToken: refreshed.refreshToken as string,
-            expiresAt: refreshed.expiresAt as number,
-          });
-          console.log("[AUTH] Tokens persistidos após refresh");
-        } catch (err) {
-          console.warn("[AUTH] Não foi possível persistir tokens após refresh (Edge runtime?):", String(err));
-        }
+        await persistTokensSafe(
+          "refresh",
+          refreshed.accessToken as string,
+          refreshed.refreshToken as string,
+          refreshed.expiresAt as number
+        );
       }
 
       return refreshed;

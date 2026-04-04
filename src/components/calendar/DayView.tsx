@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { format, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
@@ -115,11 +115,6 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
   const completed = timedTasks.filter((t) => t.isComplete).length;
   const total = timedTasks.length;
   const layout = computeLayout(timedTasks);
-  const dayRangePx = (CALENDAR_DIMENSIONS.DAY_END - CALENDAR_DIMENSIONS.DAY_START) * CALENDAR_DIMENSIONS.HOUR_PX;
-  const nowInDayRange = isCurrentDay && nowY >= 0 && nowY <= dayRangePx;
-  const nowPositionPercent = dayRangePx > 0
-    ? Math.min(100, Math.max(0, (nowY / dayRangePx) * 100))
-    : 0;
 
   function handleTaskPointerDown(e: React.PointerEvent<HTMLDivElement>, task: FlowTask) {
     if ((e.target as HTMLElement).closest("button")) return;
@@ -146,6 +141,20 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
 
   if (displayMode === "list") {
     const pendingCount = Math.max(0, total - completed);
+    const nowTs = Date.now();
+    const nowSeparatorIndex = isCurrentDay
+      ? orderedTimedTasks.findIndex((task) => new Date(task.startTime).getTime() > nowTs)
+      : -1;
+    const separatorInsertIndex = nowSeparatorIndex === -1 ? orderedTimedTasks.length : nowSeparatorIndex;
+    const renderNowSeparator = (key: string) => (
+      <div key={key} className="flex items-center gap-2 px-1 py-1">
+        <div className="h-[2px] w-3 rounded bg-[#ea4335]" />
+        <p className="text-[11px] font-medium text-[#ea4335]">
+          Agora {format(new Date(), "HH:mm")}
+        </p>
+        <div className="h-px flex-1 bg-[#ea4335]/50" />
+      </div>
+    );
     return (
       <div className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2">
         <div className="mb-2 rounded-lg border border-[#3c4043] bg-[#2a2b2e] px-3 py-2 flex items-center justify-between">
@@ -156,25 +165,6 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
             {format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
           </span>
         </div>
-
-        {nowInDayRange && (
-          <div className="mb-3 rounded-lg border border-[#3c4043] bg-[#2a2b2e] px-3 py-2">
-            <div className="relative h-3">
-              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px bg-[#3c4043]" />
-              <div
-                className="absolute top-1/2 -translate-y-1/2 h-[2px] bg-[#ea4335]"
-                style={{ left: 0, width: `${nowPositionPercent}%` }}
-              />
-              <div
-                className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-[#ea4335] -ml-1.5"
-                style={{ left: `${nowPositionPercent}%` }}
-              />
-            </div>
-            <p className="mt-1 text-[11px] text-[#9aa0a6]">
-              Agora {format(new Date(), "HH:mm")}
-            </p>
-          </div>
-        )}
 
         {allDayTasks.length > 0 && (
           <div className="space-y-2 mb-3">
@@ -219,48 +209,53 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
         )}
 
         <div className="space-y-2">
-          {orderedTimedTasks.map((task) => (
-            <div
-              key={`${task.calendarId ?? "primary"}:${task.id}:${task.startTime}`}
-              onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
-              className="rounded-lg border px-3 py-2 cursor-pointer"
-              style={{
-                backgroundColor: getEventSurfaceColor(
-                  task.calendarBgColor,
-                  task.isComplete,
-                  task.selfResponseStatus,
-                  task.isCancelled
-                ),
-                borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
-              }}
-            >
-              <div className="flex items-start gap-2">
-                <button
-                  type="button"
-                  onClick={(event) => { event.stopPropagation(); onComplete(task); }}
-                  className={`mt-0.5 w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors
-                    ${task.isComplete ? "bg-emerald-500 border-emerald-500" : "border-white/85"}`}
-                >
-                  {task.isComplete && (
-                    <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </button>
-                <div className="min-w-0">
-                  <p className={`text-base font-semibold leading-tight text-[#e8eaed] truncate ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>
-                    {task.title}
-                  </p>
-                  <p className={`text-sm text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>
-                    {format(new Date(task.startTime), "HH:mm")} - {format(new Date(task.endTime), "HH:mm")}
-                  </p>
-                  {task.calendarName && (
-                    <p className="text-xs text-[#9aa0a6] mt-0.5 truncate">{task.calendarName}</p>
-                  )}
+          {isCurrentDay && orderedTimedTasks.length === 0 && renderNowSeparator("now-separator-empty")}
+          {orderedTimedTasks.map((task, index) => (
+            <Fragment key={`${task.calendarId ?? "primary"}:${task.id}:${task.startTime}`}>
+              {isCurrentDay && index === separatorInsertIndex && renderNowSeparator(`now-separator-${index}`)}
+              <div
+                onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
+                className="rounded-lg border px-3 py-2 cursor-pointer"
+                style={{
+                  backgroundColor: getEventSurfaceColor(
+                    task.calendarBgColor,
+                    task.isComplete,
+                    task.selfResponseStatus,
+                    task.isCancelled
+                  ),
+                  borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
+                }}
+              >
+                <div className="flex items-start gap-2">
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); onComplete(task); }}
+                    className={`mt-0.5 w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors
+                      ${task.isComplete ? "bg-emerald-500 border-emerald-500" : "border-white/85"}`}
+                  >
+                    {task.isComplete && (
+                      <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                  <div className="min-w-0">
+                    <p className={`text-base font-semibold leading-tight text-[#e8eaed] truncate ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>
+                      {task.title}
+                    </p>
+                    <p className={`text-sm text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>
+                      {format(new Date(task.startTime), "HH:mm")} - {format(new Date(task.endTime), "HH:mm")}
+                    </p>
+                    {task.calendarName && (
+                      <p className="text-xs text-[#9aa0a6] mt-0.5 truncate">{task.calendarName}</p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            </Fragment>
           ))}
+          {isCurrentDay && orderedTimedTasks.length > 0 && separatorInsertIndex === orderedTimedTasks.length &&
+            renderNowSeparator("now-separator-end")}
         </div>
       </div>
     );

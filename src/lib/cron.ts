@@ -46,6 +46,15 @@ export function initCron() {
         try {
           const result = await runMigration(accessToken, timeZone);
           setMigrationSuccess("auto", result);
+          if (result.migrated === 0 && result.skipped === 0) {
+            const d = result.diagnostics;
+            console.log(
+              `[FLOW CRON] [${new Date().toISOString()}] Fila vazia: ` +
+                `source=${d.sourceDateKey}, target=${d.targetDateKey}, ` +
+                `sourceEvents=${d.sourceEvents}, pendingTimed=${d.pendingEvents}, ` +
+                `eligibleTimed=${d.eligibleTimed}, eligibleAllDay=${d.eligibleAllDay}`
+            );
+          }
           console.log(
             `[FLOW CRON] [${new Date().toISOString()}] Migração concluída: ` +
               `${result.migrated} migradas, ${result.skipped} ignoradas`
