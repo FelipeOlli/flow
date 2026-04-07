@@ -45,7 +45,11 @@ function mapEvent(
     title: event.summary ?? "Sem título",
     startTime: event.start?.dateTime ?? event.start?.date ?? "",
     endTime: event.end?.dateTime ?? event.end?.date ?? "",
-    isComplete: event.colorId === COMPLETE_COLOR_ID,
+    isComplete: (() => {
+      const flowCompleted = event.extendedProperties?.private?.["flowCompleted"];
+      if (flowCompleted !== undefined) return flowCompleted === "true";
+      return event.colorId === COMPLETE_COLOR_ID; // backward compat
+    })(),
     colorId: event.colorId ?? undefined,
     description: event.description ?? undefined,
     isAllDay: !event.start?.dateTime,
@@ -258,10 +262,22 @@ export async function markEventComplete(
   calendarId = "primary"
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
+  const { data: current } = await calendar.events.get({ calendarId, eventId });
+  // Salva a cor original apenas se não for já a cor de "completo"
+  const originalColorId =
+    current.colorId && current.colorId !== COMPLETE_COLOR_ID ? current.colorId : "";
   const { data } = await calendar.events.patch({
     calendarId,
     eventId,
-    requestBody: { colorId: COMPLETE_COLOR_ID },
+    requestBody: {
+      colorId: COMPLETE_COLOR_ID,
+      extendedProperties: {
+        private: {
+          flowCompleted: "true",
+          flowOriginalColorId: originalColorId,
+        },
+      },
+    },
   });
   return mapEvent(data, calendarId);
 }
@@ -272,10 +288,22 @@ export async function markEventIncomplete(
   calendarId = "primary"
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
+  const { data: current } = await calendar.events.get({ calendarId, eventId });
+  // Restaura a cor que o evento tinha antes de ser marcado como concluído
+  const restoredColorId =
+    current.extendedProperties?.private?.["flowOriginalColorId"] || null;
   const { data } = await calendar.events.patch({
     calendarId,
     eventId,
-    requestBody: { colorId: null },
+    requestBody: {
+      colorId: restoredColorId,
+      extendedProperties: {
+        private: {
+          flowCompleted: "false",
+          flowOriginalColorId: "",
+        },
+      },
+    },
   });
   return mapEvent(data, calendarId);
 }

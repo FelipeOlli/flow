@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isToday, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { signOut } from "next-auth/react";
@@ -111,7 +112,6 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [migrateResult, setMigrateResult] = useState<string | null>(null);
   const [manualSourceDate, setManualSourceDate] = useState("");
   const [manualTargetDate, setManualTargetDate] = useState("");
-  const [migrationIncludeCompleted, setMigrationIncludeCompleted] = useState(true);
   const [migrationIncludeAllDay, setMigrationIncludeAllDay] = useState(true);
   const [selectedTask, setSelectedTask] = useState<FlowTask | null>(null);
   const [eventAnchor, setEventAnchor] = useState<EventAnchorPoint | null>(null);
@@ -121,8 +121,17 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const [migrationMenuOpen, setMigrationMenuOpen] = useState(false);
+  const [migrationMenuPos, setMigrationMenuPos] = useState<{ top: number; right: number } | null>(null);
   const migrationMenuRef = useRef<HTMLDivElement | null>(null);
+  const migrationButtonRef = useRef<HTMLButtonElement | null>(null);
   const migrateResultClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autoMigrationStatus, setAutoMigrationStatus] = useState<{
+    state: "idle" | "running" | "success" | "error";
+    finishedAt?: string;
+    migrated?: number;
+    error?: string;
+    diagnostics?: { targetDateKey?: string };
+  } | null>(null);
 
   function scheduleMigrateResultClear(ms: number) {
     if (migrateResultClearRef.current) clearTimeout(migrateResultClearRef.current);
@@ -165,6 +174,40 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   }, [router, view, format(currentDate, "yyyy-MM-dd")]);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
+
+  useEffect(() => {
+    async function checkAndRecoverMigration() {
+      try {
+        const res = await fetch("/api/cron/migrate/status");
+        if (!res.ok) return;
+        const status = await res.json();
+        setAutoMigrationStatus(status);
+
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const todayKey = new Date().toLocaleDateString("sv-SE", { timeZone: tz });
+        const alreadyCoveredToday =
+          (status.state === "success" || status.state === "running") &&
+          status.diagnostics?.targetDateKey === todayKey;
+
+        if (!alreadyCoveredToday) {
+          const migrateRes = await fetch("/api/cron/migrate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tz }),
+          });
+          if (migrateRes.ok) {
+            const newStatusRes = await fetch("/api/cron/migrate/status");
+            if (newStatusRes.ok) setAutoMigrationStatus(await newStatusRes.json());
+            fetchTasks({ background: true });
+          }
+        }
+      } catch {
+        // falha silenciosa — não interrompe o uso do app
+      }
+    }
+    checkAndRecoverMigration();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 768px)");
@@ -313,7 +356,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
         fromDate,
         toDate,
         tz,
-        includeCompleted: migrationIncludeCompleted,
+        includeCompleted: false,
         includeAllDay: migrationIncludeAllDay,
       };
       const res = await fetch("/api/cron/migrate", {
@@ -457,7 +500,10 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     function handleOutsideClick(event: MouseEvent) {
       const target = event.target as Node | null;
       if (!target) return;
-      if (!migrationMenuRef.current?.contains(target)) setMigrationMenuOpen(false);
+      if (
+        !migrationMenuRef.current?.contains(target) &&
+        !migrationButtonRef.current?.contains(target)
+      ) setMigrationMenuOpen(false);
     }
 
     window.addEventListener("keydown", handleEscape);
@@ -509,7 +555,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   return (
     <div className="h-svh bg-[#202124] flex flex-col">
       {/* Header */}
-      <div className="flex-shrink-0 bg-[#202124] border-b border-[#3c4043]">
+      <div className="flex-shrink-0 bg-[#202124] border-b border-[#3c4043] relative z-10">
         <div className="flex items-center justify-between gap-2 px-3 py-3">
           <div className="flex items-center gap-1.5 min-w-0">
             <button onClick={() => navigate("prev")}
@@ -532,10 +578,17 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <div ref={migrationMenuRef} className="relative">
+            <div className="relative">
               <button
+                ref={migrationButtonRef}
                 type="button"
-                onClick={() => setMigrationMenuOpen((prev) => !prev)}
+                onClick={() => {
+                  if (!migrationMenuOpen && migrationButtonRef.current) {
+                    const rect = migrationButtonRef.current.getBoundingClientRect();
+                    setMigrationMenuPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+                  }
+                  setMigrationMenuOpen((prev) => !prev);
+                }}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors"
                 aria-label="Ações avançadas"
                 title="Ações avançadas"
@@ -545,8 +598,39 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                 </svg>
               </button>
 
-              {migrationMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-72 rounded-lg border border-[#3c4043] bg-[#202124] shadow-xl shadow-black/40 p-3 z-40">
+              {migrationMenuOpen && migrationMenuPos && createPortal(
+                <div
+                  ref={migrationMenuRef}
+                  className="fixed w-72 rounded-lg border border-[#3c4043] bg-[#202124] shadow-xl shadow-black/40 p-3 z-[9999]"
+                  style={{ top: migrationMenuPos.top, right: migrationMenuPos.right }}
+                >
+                  {/* Status da migração automática */}
+                  <div className="mb-3 pb-3 border-b border-[#3c4043]">
+                    <p className="text-xs font-medium text-[#9aa0a6] mb-1.5">Migração automática</p>
+                    {!autoMigrationStatus || autoMigrationStatus.state === "idle" ? (
+                      <p className="text-[11px] text-[#9aa0a6]">Ainda não executou desde o último boot.</p>
+                    ) : autoMigrationStatus.state === "running" ? (
+                      <div className="flex items-center gap-1.5 text-[11px] text-[#fdd663]">
+                        <div className="w-2 h-2 rounded-full bg-[#fdd663] animate-pulse" />
+                        Executando...
+                      </div>
+                    ) : autoMigrationStatus.state === "error" ? (
+                      <div className="flex items-start gap-1.5 text-[11px] text-[#f28b82]">
+                        <div className="w-2 h-2 mt-0.5 rounded-full bg-[#f28b82] flex-shrink-0" />
+                        <span>Falhou: {autoMigrationStatus.error ?? "erro desconhecido"}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-1.5 text-[11px] text-[#81c995]">
+                        <div className="w-2 h-2 mt-0.5 rounded-full bg-[#81c995] flex-shrink-0" />
+                        <span>
+                          {autoMigrationStatus.migrated ?? 0} evento(s) migrado(s)
+                          {autoMigrationStatus.finishedAt
+                            ? ` · ${new Date(autoMigrationStatus.finishedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                            : ""}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                   <p className="text-xs font-medium text-[#e8eaed] mb-2">Migração manual</p>
                   <div className="space-y-2">
                     <label htmlFor="manual-migration-source" className="block text-[11px] text-[#9aa0a6]">
@@ -574,16 +658,6 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                     <label className="flex items-start gap-2 text-[11px] text-[#e8eaed] cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={migrationIncludeCompleted}
-                        onChange={(e) => setMigrationIncludeCompleted(e.target.checked)}
-                        className="mt-0.5 rounded border-[#3c4043]"
-                        aria-label="Incluir concluídas na migração"
-                      />
-                      <span>Incluir concluídas (verde)</span>
-                    </label>
-                    <label className="flex items-start gap-2 text-[11px] text-[#e8eaed] cursor-pointer">
-                      <input
-                        type="checkbox"
                         checked={migrationIncludeAllDay}
                         onChange={(e) => setMigrationIncludeAllDay(e.target.checked)}
                         className="mt-0.5 rounded border-[#3c4043]"
@@ -607,7 +681,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                       horário, pendentes (sem verde) e sem dia inteiro.
                     </p>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
             </div>
 
