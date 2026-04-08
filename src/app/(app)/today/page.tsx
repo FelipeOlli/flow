@@ -10,8 +10,7 @@ export default async function TodayPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const session = await auth();
-  if (!session?.accessToken) redirect("/sign-in");
-  if (session.error === "RefreshAccessTokenError") redirect("/sign-in");
+  if (!session) redirect("/sign-in");
 
   const params = await searchParams;
   return <CalendarView initialDate={params.date} />;

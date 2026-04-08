@@ -1,14 +1,17 @@
 import { auth } from "@/auth";
 import { listWritableCalendars } from "@/lib/google-calendar";
+import { getValidAccessToken } from "@/lib/token-store";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   const session = await auth();
-  if (!session?.accessToken) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.error === "RefreshAccessTokenError") return NextResponse.json({ error: "TokenExpired" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const accessToken = await getValidAccessToken();
+  if (!accessToken) return NextResponse.json({ error: "GoogleCalendarNotConnected" }, { status: 503 });
 
   try {
-    const calendars = await listWritableCalendars(session.accessToken);
+    const calendars = await listWritableCalendars(accessToken);
     return NextResponse.json(calendars);
   } catch (err) {
     console.error("[API calendars GET]", err);

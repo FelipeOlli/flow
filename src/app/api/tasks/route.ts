@@ -1,12 +1,15 @@
 import { auth } from "@/auth";
 import { getEventsForDay, getEventsInRange, createEvent } from "@/lib/google-calendar";
+import { getValidAccessToken } from "@/lib/token-store";
 import { NextRequest, NextResponse } from "next/server";
 import { CreateTaskInput } from "@/types/task";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!session?.accessToken) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.error === "RefreshAccessTokenError") return NextResponse.json({ error: "TokenExpired" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const accessToken = await getValidAccessToken();
+  if (!accessToken) return NextResponse.json({ error: "GoogleCalendarNotConnected" }, { status: 503 });
 
   const tz = req.nextUrl.searchParams.get("tz") ?? process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
   const startDateParam = req.nextUrl.searchParams.get("startDate");
@@ -24,16 +27,16 @@ export async function GET(req: NextRequest) {
       startDate.setFullYear(startDate.getFullYear() - 5);
       const endDate = new Date(now);
       endDate.setFullYear(endDate.getFullYear() + 5);
-      tasks = await getEventsInRange(session.accessToken, startDate, endDate, tz, {
+      tasks = await getEventsInRange(accessToken, startDate, endDate, tz, {
         q: query,
         maxResults: limit,
       });
       tasks = tasks.slice(0, limit);
     } else if (startDateParam && endDateParam) {
-      tasks = await getEventsInRange(session.accessToken, new Date(startDateParam), new Date(endDateParam), tz);
+      tasks = await getEventsInRange(accessToken, new Date(startDateParam), new Date(endDateParam), tz);
     } else {
       const date = dateParam ? new Date(dateParam) : new Date();
-      tasks = await getEventsForDay(session.accessToken, date, tz);
+      tasks = await getEventsForDay(accessToken, date, tz);
     }
     return NextResponse.json(tasks);
   } catch (err) {
@@ -44,12 +47,15 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.accessToken) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const accessToken = await getValidAccessToken();
+  if (!accessToken) return NextResponse.json({ error: "GoogleCalendarNotConnected" }, { status: 503 });
 
   try {
     const body: CreateTaskInput = await req.json();
     const tz = process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
-    const task = await createEvent(session.accessToken, body, tz);
+    const task = await createEvent(accessToken, body, tz);
     return NextResponse.json(task, { status: 201 });
   } catch (err) {
     console.error("[API tasks POST]", err);

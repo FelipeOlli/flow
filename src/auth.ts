@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
 import type { NextAuthConfig } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 
@@ -64,6 +65,21 @@ export const config: NextAuthConfig = {
   trustHost: true,
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
   providers: [
+    Credentials({
+      credentials: {
+        username: { label: "Usuário" },
+        password: { label: "Senha", type: "password" },
+      },
+      authorize(credentials) {
+        if (
+          credentials.username === process.env.AUTH_USERNAME &&
+          credentials.password === process.env.AUTH_PASSWORD
+        ) {
+          return { id: "1", name: process.env.AUTH_USERNAME as string };
+        }
+        return null;
+      },
+    }),
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
@@ -83,7 +99,8 @@ export const config: NextAuthConfig = {
   ],
   callbacks: {
     async jwt({ token, account }) {
-      if (account) {
+      // Only Google logins have an account with tokens
+      if (account?.provider === "google") {
         token.accessToken = account.access_token as string;
         token.refreshToken = account.refresh_token as string;
         token.expiresAt = (account.expires_at as number) * 1000;
@@ -93,7 +110,11 @@ export const config: NextAuthConfig = {
           token.refreshToken as string,
           token.expiresAt as number
         );
+        return token;
       }
+
+      // For credentials login or if no Google tokens, skip refresh logic
+      if (!token.refreshToken) return token;
 
       // Token still valid (with 5min buffer)
       if (Date.now() < (token.expiresAt as number) - 5 * 60 * 1000) {
@@ -114,7 +135,6 @@ export const config: NextAuthConfig = {
       return refreshed;
     },
     async session({ session, token }) {
-      session.accessToken = token.accessToken;
       session.error = token.error;
       return session;
     },

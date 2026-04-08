@@ -103,16 +103,15 @@ export async function POST(req: NextRequest) {
         return errorResponse("No stored token available for cron migration", 400);
       }
     } else {
-      // Check user session as fallback (manual trigger from UI)
+      // Check user session (manual trigger from UI)
       const session = await auth();
-      const sessionError = (session as { error?: string } | null)?.error;
-      if (sessionError === "RefreshAccessTokenError") {
-        return errorResponse("TokenExpired", 401);
-      }
-      if (!session?.accessToken) {
+      if (!session) {
         return errorResponse("Unauthorized", 401);
       }
-      accessToken = session.accessToken;
+      accessToken = await getValidAccessToken();
+      if (!accessToken) {
+        return errorResponse("GoogleCalendarNotConnected", 503);
+      }
     }
     if (!accessToken) {
       return errorResponse("No access token for migration", 400);

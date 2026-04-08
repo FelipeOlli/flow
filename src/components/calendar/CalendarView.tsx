@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isToday, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { signOut } from "next-auth/react";
+import { signOut, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { FlowTask, CreateTaskInput, UpdateTaskInput } from "@/types/task";
 import { DayView } from "./DayView";
@@ -115,10 +115,12 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [migrationIncludeAllDay, setMigrationIncludeAllDay] = useState(true);
   const [selectedTask, setSelectedTask] = useState<FlowTask | null>(null);
   const [eventAnchor, setEventAnchor] = useState<EventAnchorPoint | null>(null);
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FlowTask[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchDropdownPos, setSearchDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const [migrationMenuOpen, setMigrationMenuOpen] = useState(false);
   const [migrationMenuPos, setMigrationMenuPos] = useState<{ top: number; right: number } | null>(null);
@@ -174,6 +176,13 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   }, [router, view, format(currentDate, "yyyy-MM-dd")]);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
+
+  useEffect(() => {
+    fetch("/api/google-status")
+      .then((r) => r.json())
+      .then((data) => setGoogleConnected(data.connected === true))
+      .catch(() => setGoogleConnected(false));
+  }, []);
 
   useEffect(() => {
     async function checkAndRecoverMigration() {
@@ -554,6 +563,21 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
   return (
     <div className="h-svh bg-[#202124] flex flex-col">
+      {/* Banner: Google Calendar não conectado */}
+      {googleConnected === false && (
+        <div className="flex-shrink-0 bg-[#3c2a00] border-b border-[#fdd663]/30 px-4 py-2.5 flex items-center gap-3">
+          <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#fdd663] flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <p className="text-xs text-[#fdd663] flex-1">Google Calendar não conectado.</p>
+          <button
+            onClick={() => signIn("google", { callbackUrl: "/today" })}
+            className="text-xs font-medium text-[#fdd663] underline underline-offset-2 hover:text-yellow-300 whitespace-nowrap"
+          >
+            Conectar agora
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex-shrink-0 bg-[#202124] border-b border-[#3c4043] relative z-10">
         <div className="flex items-center justify-between gap-2 px-3 py-3">
@@ -709,9 +733,19 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                 value={searchQuery}
                 onChange={(event) => {
                   setSearchQuery(event.target.value);
+                  if (searchContainerRef.current) {
+                    const rect = searchContainerRef.current.getBoundingClientRect();
+                    setSearchDropdownPos({ top: rect.bottom + 8, left: rect.left, width: rect.width });
+                  }
                   setSearchOpen(true);
                 }}
-                onFocus={() => setSearchOpen(true)}
+                onFocus={() => {
+                  if (searchContainerRef.current) {
+                    const rect = searchContainerRef.current.getBoundingClientRect();
+                    setSearchDropdownPos({ top: rect.bottom + 8, left: rect.left, width: rect.width });
+                  }
+                  setSearchOpen(true);
+                }}
                 placeholder="Buscar em todos os eventos"
                 className="flex-1 bg-transparent text-sm text-[#e8eaed] placeholder:text-[#9aa0a6] outline-none"
               />
@@ -733,8 +767,11 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
               )}
             </div>
 
-            {searchOpen && searchQuery.trim() && (
-              <div className="absolute top-full left-0 right-0 mt-2 z-40 rounded-xl border border-[#3c4043] bg-[#202124] shadow-2xl shadow-black/40 overflow-hidden">
+            {searchOpen && searchQuery.trim() && searchDropdownPos && createPortal(
+              <div
+                className="fixed z-[9999] rounded-xl border border-[#3c4043] bg-[#202124] shadow-2xl shadow-black/40 overflow-hidden"
+                style={{ top: searchDropdownPos.top, left: searchDropdownPos.left, width: searchDropdownPos.width }}
+              >
                 {searching ? (
                   <div className="px-4 py-5 text-sm text-[#9aa0a6] flex items-center gap-2">
                     <div className="w-4 h-4 border-2 border-[#8ab4f8]/30 border-t-[#8ab4f8] rounded-full animate-spin" />
@@ -762,7 +799,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                     ))}
                   </div>
                 )}
-              </div>
+              </div>,
+              document.body
             )}
           </div>
         </div>

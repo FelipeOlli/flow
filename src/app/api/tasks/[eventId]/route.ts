@@ -8,6 +8,7 @@ import {
   updateEventRsvp,
   getEventById,
 } from "@/lib/google-calendar";
+import { getValidAccessToken } from "@/lib/token-store";
 import { NextRequest, NextResponse } from "next/server";
 import { UpdateTaskInput } from "@/types/task";
 
@@ -15,7 +16,10 @@ type Params = Promise<{ eventId: string }>;
 
 export async function PATCH(req: NextRequest, context: { params: Params }) {
   const session = await auth();
-  if (!session?.accessToken) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const accessToken = await getValidAccessToken();
+  if (!accessToken) return NextResponse.json({ error: "GoogleCalendarNotConnected" }, { status: 503 });
 
   const { eventId } = await context.params;
 
@@ -25,12 +29,13 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
     const targetCalendarId = body.targetCalendarId ?? calendarId;
     const attendanceStatus = body.attendanceStatus;
     const tz = process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
+    const userEmail = process.env.AUTH_USER_EMAIL ?? undefined;
 
     let task;
     if (body.isComplete === true) {
-      task = await markEventComplete(session.accessToken, eventId, calendarId);
+      task = await markEventComplete(accessToken, eventId, calendarId);
     } else if (body.isComplete === false) {
-      task = await markEventIncomplete(session.accessToken, eventId, calendarId);
+      task = await markEventIncomplete(accessToken, eventId, calendarId);
     } else {
       const hasUpdateFields =
         body.title !== undefined ||
@@ -40,37 +45,37 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
 
       if (targetCalendarId !== calendarId) {
         const moved = await moveEventToCalendar(
-          session.accessToken,
+          accessToken,
           eventId,
           calendarId,
           targetCalendarId
         );
         const edited = hasUpdateFields
-          ? await updateEvent(session.accessToken, moved.id, body, tz, targetCalendarId)
+          ? await updateEvent(accessToken, moved.id, body, tz, targetCalendarId)
           : moved;
         task = attendanceStatus
           ? await updateEventRsvp(
-              session.accessToken,
+              accessToken,
               edited.id,
               targetCalendarId,
               attendanceStatus,
-              session.user?.email ?? undefined
+              userEmail
             )
           : edited;
       } else {
         const edited = hasUpdateFields
-          ? await updateEvent(session.accessToken, eventId, body, tz, calendarId)
+          ? await updateEvent(accessToken, eventId, body, tz, calendarId)
           : null;
         if (attendanceStatus) {
           task = await updateEventRsvp(
-            session.accessToken,
+            accessToken,
             edited?.id ?? eventId,
             calendarId,
             attendanceStatus,
-            session.user?.email ?? undefined
+            userEmail
           );
         } else {
-          task = edited ?? (await getEventById(session.accessToken, eventId, calendarId));
+          task = edited ?? (await getEventById(accessToken, eventId, calendarId));
         }
       }
     }
@@ -83,13 +88,16 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
 
 export async function DELETE(req: NextRequest, context: { params: Params }) {
   const session = await auth();
-  if (!session?.accessToken) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const accessToken = await getValidAccessToken();
+  if (!accessToken) return NextResponse.json({ error: "GoogleCalendarNotConnected" }, { status: 503 });
 
   const { eventId } = await context.params;
   const calendarId = req.nextUrl.searchParams.get("calendarId") ?? "primary";
 
   try {
-    await deleteEvent(session.accessToken, eventId, calendarId);
+    await deleteEvent(accessToken, eventId, calendarId);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     console.error("[API tasks DELETE]", err);
