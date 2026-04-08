@@ -458,7 +458,14 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
         }
         if (!res.ok) throw new Error("Failed to search events");
         const data: FlowTask[] = await res.json();
-        const ordered = [...data].sort(
+        const normalize = (s: string) =>
+          s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        const words = normalize(term).split(/\s+/).filter(Boolean);
+        const filtered = data.filter((t) => {
+          const hay = normalize(`${t.title ?? ""} ${t.description ?? ""}`);
+          return words.every((w) => hay.includes(w));
+        });
+        const ordered = filtered.sort(
           (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
         );
         setSearchResults(ordered);
