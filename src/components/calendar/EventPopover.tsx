@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarOption, FlowTask, UpdateTaskInput } from "@/types/task";
@@ -32,6 +32,7 @@ export function EventPopover({
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const [startTime, setStartTime] = useState(toLocalDatetime(task.startTime));
   const [endTime, setEndTime] = useState(toLocalDatetime(task.endTime));
   const [calendarId, setCalendarId] = useState(task.calendarId ?? "primary");
@@ -52,6 +53,13 @@ export function EventPopover({
     setError("");
     setFeedback("");
   }, [task]);
+
+  useEffect(() => {
+    const el = descriptionRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [description]);
 
   useEffect(() => {
     let active = true;
@@ -376,10 +384,11 @@ export function EventPopover({
                 </div>
               )}
               <textarea
+                ref={descriptionRef}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
-                className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] resize-none"
+                className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] resize-none overflow-hidden"
                 placeholder="Descrição"
               />
               {error && <p className="text-xs text-[#f28b82]">{error}</p>}

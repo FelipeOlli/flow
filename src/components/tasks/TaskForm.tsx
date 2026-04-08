@@ -45,6 +45,7 @@ function buildDefaultEnd(start: string, defaultIso?: string): string {
 export function TaskForm({ task, currentDate, defaults, onClose, onSave, onComplete }: TaskFormProps) {
   const isEditing = !!task;
   const titleRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
   const defaultStart = task
     ? toLocalDatetimeValue(task.startTime)
@@ -67,6 +68,13 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
   useEffect(() => {
     setTimeout(() => titleRef.current?.focus(), 100);
   }, []);
+
+  useEffect(() => {
+    const el = descriptionRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [description]);
 
   useEffect(() => {
     if (isEditing) return;
@@ -203,8 +211,14 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
                   className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043]" />
               </div>
             </div>
-            <textarea placeholder="Descrição (opcional)" value={description} onChange={(e) => setDescription(e.target.value)}
-              rows={2} className="w-full bg-[#2a2b2e] text-[#e8eaed] placeholder-[#9aa0a6] rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043] resize-none" />
+            <textarea
+              ref={descriptionRef}
+              placeholder="Descrição (opcional)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              className="w-full bg-[#2a2b2e] text-[#e8eaed] placeholder-[#9aa0a6] rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043] resize-none overflow-hidden"
+            />
             {!isEditing && (
               <div>
                 <label className="text-xs text-[#9aa0a6] mb-1.5 block">Calendário</label>

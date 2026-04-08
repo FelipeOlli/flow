@@ -877,7 +877,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
       {/* FAB */}
       <button onClick={() => openCreateForm()}
-        className={`fixed bottom-6 right-4 w-14 h-14 bg-[#8ab4f8] rounded-full shadow-lg shadow-black/30 flex items-center justify-center active:scale-95 transition-transform ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}>
+        className={`fixed bottom-6 right-4 w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform backdrop-blur-md bg-[#8ab4f8]/30 border border-[#8ab4f8]/40 shadow-lg shadow-black/30 ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}>
         <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
         </svg>
