@@ -122,6 +122,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchDropdownPos, setSearchDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
+  const searchDropdownRef = useRef<HTMLDivElement | null>(null);
   const [migrationMenuOpen, setMigrationMenuOpen] = useState(false);
   const [migrationMenuPos, setMigrationMenuPos] = useState<{ top: number; right: number } | null>(null);
   const migrationMenuRef = useRef<HTMLDivElement | null>(null);
@@ -488,7 +489,10 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     function handleOutsideClick(event: MouseEvent) {
       const target = event.target as Node | null;
       if (!target) return;
-      if (!searchContainerRef.current?.contains(target)) setSearchOpen(false);
+      if (
+        !searchContainerRef.current?.contains(target) &&
+        !searchDropdownRef.current?.contains(target)
+      ) setSearchOpen(false);
     }
 
     window.addEventListener("keydown", handleEscape);
@@ -769,6 +773,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
             {searchOpen && searchQuery.trim() && searchDropdownPos && createPortal(
               <div
+                ref={searchDropdownRef}
                 className="fixed z-[9999] rounded-xl border border-[#3c4043] bg-[#202124] shadow-2xl shadow-black/40 overflow-hidden"
                 style={{ top: searchDropdownPos.top, left: searchDropdownPos.left, width: searchDropdownPos.width }}
               >
