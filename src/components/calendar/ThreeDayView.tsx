@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { format, addDays, isToday, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
@@ -24,6 +24,7 @@ interface ThreeDayViewProps {
   tasks: FlowTask[];
   currentDate: Date;
   pendingIds: Set<string>;
+  displayMode?: "grid" | "list";
   onComplete: (task: FlowTask) => void;
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onDelete: (task: FlowTask) => void;
@@ -31,7 +32,7 @@ interface ThreeDayViewProps {
   onDayClick: (date: Date) => void;
 }
 
-export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdit, onDelete, onTimeClick, onDayClick }: ThreeDayViewProps) {
+export function ThreeDayView({ tasks, currentDate, pendingIds, displayMode = "grid", onComplete, onEdit, onDelete, onTimeClick, onDayClick }: ThreeDayViewProps) {
   const [nowY, setNowY] = useState(currentTimeY());
   const scrollRef = useRef<HTMLDivElement>(null);
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -63,6 +64,110 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, onComplete, onEdi
   function getAnchorFromElement(el: HTMLElement): EventAnchorPoint {
     const rect = el.getBoundingClientRect();
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  }
+
+  if (displayMode === "list") {
+    const nowTs = Date.now();
+    return (
+      <div className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2 space-y-4">
+        {days.map((day) => {
+          const colKey = getDateKeyInTimeZone(day, tz);
+          const dayAllDay = tasks.filter(
+            (t) => t.isAllDay && t.startTime && getTaskGridDateKey(t.startTime, true, tz) === colKey
+          );
+          const dayTimed = tasks
+            .filter((t) => !t.isAllDay && t.startTime && getTaskGridDateKey(t.startTime, t.isAllDay, tz) === colKey)
+            .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+          const isCurrentDay = isToday(day);
+          const nowSeparatorIndex = isCurrentDay
+            ? dayTimed.findIndex((t) => new Date(t.startTime).getTime() > nowTs)
+            : -1;
+          const separatorIndex = nowSeparatorIndex === -1 ? dayTimed.length : nowSeparatorIndex;
+          const renderNowSeparator = (key: string) => (
+            <div key={key} className="flex items-center gap-2 px-1 py-1">
+              <div className="h-[2px] w-3 rounded bg-[#ea4335]" />
+              <p className="text-[11px] font-medium text-[#ea4335]">Agora {format(new Date(), "HH:mm")}</p>
+              <div className="h-px flex-1 bg-[#ea4335]/50" />
+            </div>
+          );
+          return (
+            <div key={day.toISOString()}>
+              <button
+                onClick={() => onDayClick(day)}
+                className="flex items-center gap-2 mb-2 w-full text-left hover:opacity-80 transition-opacity"
+              >
+                <div className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-semibold flex-shrink-0
+                  ${isCurrentDay ? "bg-[#8ab4f8] text-[#202124]" : "text-[#e8eaed]"}`}>
+                  {format(day, "d")}
+                </div>
+                <span className="text-sm font-medium text-[#9aa0a6] capitalize">
+                  {format(day, "EEE, d 'de' MMM", { locale: ptBR })}
+                </span>
+              </button>
+              <div className="space-y-2">
+                {dayAllDay.map((task) => (
+                  <div
+                    key={task.id}
+                    onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
+                    className="rounded-lg border px-3 py-2 cursor-pointer"
+                    style={{
+                      backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus, task.isCancelled),
+                      borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
+                    }}
+                  >
+                    <div className="flex items-start gap-2">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); onComplete(task); }}
+                        className={`mt-0.5 w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors
+                          ${task.isComplete ? "bg-emerald-500 border-emerald-500" : "border-white/85"}`}>
+                        {task.isComplete && <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                      </button>
+                      <div className="min-w-0">
+                        <p className={`text-base font-semibold leading-tight text-[#e8eaed] truncate ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>{task.title}</p>
+                        <p className={`text-sm text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>Dia inteiro</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {isCurrentDay && dayTimed.length === 0 && renderNowSeparator(`now-empty-${day.toISOString()}`)}
+                {dayTimed.map((task, index) => (
+                  <Fragment key={`${task.calendarId ?? "primary"}:${task.id}:${task.startTime}`}>
+                    {isCurrentDay && index === separatorIndex && renderNowSeparator(`now-${day.toISOString()}-${index}`)}
+                    <div
+                      onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
+                      className="rounded-lg border px-3 py-2 cursor-pointer"
+                      style={{
+                        backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus, task.isCancelled),
+                        borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
+                      }}
+                    >
+                      <div className="flex items-start gap-2">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); onComplete(task); }}
+                          className={`mt-0.5 w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors
+                            ${task.isComplete ? "bg-emerald-500 border-emerald-500" : "border-white/85"}`}>
+                          {task.isComplete && <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                        </button>
+                        <div className="min-w-0">
+                          <p className={`text-base font-semibold leading-tight text-[#e8eaed] truncate ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>{task.title}</p>
+                          <p className={`text-sm text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>
+                            {format(new Date(task.startTime), "HH:mm")} - {format(new Date(task.endTime), "HH:mm")}
+                          </p>
+                          {task.calendarName && <p className="text-xs text-[#9aa0a6] mt-0.5 truncate">{task.calendarName}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  </Fragment>
+                ))}
+                {isCurrentDay && dayTimed.length > 0 && separatorIndex === dayTimed.length &&
+                  renderNowSeparator(`now-end-${day.toISOString()}`)}
+                {dayAllDay.length === 0 && dayTimed.length === 0 && (
+                  <p className="text-xs text-[#5f6368] px-1">Sem tarefas</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   }
 
   return (

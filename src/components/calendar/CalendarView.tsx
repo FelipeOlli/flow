@@ -97,8 +97,8 @@ interface CalendarViewProps {
 export function CalendarView({ initialDate }: CalendarViewProps) {
   const router = useRouter();
   const [view, setView] = useState<View>("day");
-  const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list">("grid");
-  const [isSmallMobile, setIsSmallMobile] = useState(false);
+  const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list">("list");
+  const [multiDayDisplayMode, setMultiDayDisplayMode] = useState<"grid" | "list">("grid");
   const [currentDate, setCurrentDate] = useState(() =>
     initialDate ? new Date(initialDate) : new Date()
   );
@@ -219,17 +219,6 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 768px)");
-    const apply = (matches: boolean) => {
-      setIsSmallMobile(matches);
-      setDayDisplayMode(matches ? "list" : "grid");
-    };
-    apply(mediaQuery.matches);
-    const listener = (event: MediaQueryListEvent) => apply(event.matches);
-    mediaQuery.addEventListener("change", listener);
-    return () => mediaQuery.removeEventListener("change", listener);
-  }, []);
 
   function navigate(dir: "prev" | "next") {
     const delta = dir === "prev" ? -1 : 1;
@@ -828,31 +817,39 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           ))}
         </div>
 
-        {view === "day" && isSmallMobile && (
+        {(view === "day" || view === "3days" || view === "week") && (
           <div className="px-3 pb-2.5">
             <div className="grid grid-cols-2 gap-1 rounded-md bg-[#2a2b2e] p-1 border border-[#3c4043]">
-              <button
-                type="button"
-                onClick={() => setDayDisplayMode("list")}
-                className={`py-1.5 rounded text-xs font-medium transition-colors ${
-                  dayDisplayMode === "list"
-                    ? "bg-[#3c4043] text-[#e8eaed]"
-                    : "text-[#9aa0a6] hover:text-[#e8eaed]"
-                }`}
-              >
-                Lista
-              </button>
-              <button
-                type="button"
-                onClick={() => setDayDisplayMode("grid")}
-                className={`py-1.5 rounded text-xs font-medium transition-colors ${
-                  dayDisplayMode === "grid"
-                    ? "bg-[#3c4043] text-[#e8eaed]"
-                    : "text-[#9aa0a6] hover:text-[#e8eaed]"
-                }`}
-              >
-                Grade
-              </button>
+              {(() => {
+                const currentMode = view === "day" ? dayDisplayMode : multiDayDisplayMode;
+                const setMode = view === "day" ? setDayDisplayMode : setMultiDayDisplayMode;
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setMode("list")}
+                      className={`py-1.5 rounded text-xs font-medium transition-colors ${
+                        currentMode === "list"
+                          ? "bg-[#3c4043] text-[#e8eaed]"
+                          : "text-[#9aa0a6] hover:text-[#e8eaed]"
+                      }`}
+                    >
+                      Lista
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode("grid")}
+                      className={`py-1.5 rounded text-xs font-medium transition-colors ${
+                        currentMode === "grid"
+                          ? "bg-[#3c4043] text-[#e8eaed]"
+                          : "text-[#9aa0a6] hover:text-[#e8eaed]"
+                      }`}
+                    >
+                      Grade
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -875,12 +872,12 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {!loading && view === "3days" && (
         <ThreeDayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
-          onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate} />
+          onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate} displayMode={multiDayDisplayMode} />
       )}
       {!loading && view === "week" && (
         <WeekView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
-          onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate} />
+          onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate} displayMode={multiDayDisplayMode} />
       )}
       {!loading && view === "month" && (
         <MonthView tasks={tasks} currentDate={currentDate} onDayClick={goToDate}
