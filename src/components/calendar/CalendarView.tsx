@@ -355,7 +355,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
         fromDate,
         toDate,
         tz,
-        includeCompleted: false,
+        includeCompleted: true,
         includeAllDay: migrationIncludeAllDay,
       };
       const res = await fetch("/api/cron/migrate", {
