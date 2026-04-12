@@ -96,7 +96,8 @@ function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
   const year = Number(parts.find((p) => p.type === "year")?.value ?? "0");
   const month = Number(parts.find((p) => p.type === "month")?.value ?? "1");
   const day = Number(parts.find((p) => p.type === "day")?.value ?? "1");
-  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  // Some Intl implementations return "24" for midnight instead of "0" — normalise.
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0") % 24;
   const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
   const second = Number(parts.find((p) => p.type === "second")?.value ?? "0");
   const asUtc = Date.UTC(year, month - 1, day, hour, minute, second);
