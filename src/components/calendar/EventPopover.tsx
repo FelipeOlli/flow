@@ -20,6 +20,14 @@ interface EventPopoverProps {
   onToggleComplete: (task: FlowTask) => void;
 }
 
+const QUICK_DURATIONS = [
+  { mins: 15, label: "15m" },
+  { mins: 30, label: "30m" },
+  { mins: 60, label: "1h" },
+  { mins: 90, label: "1.5h" },
+  { mins: 120, label: "2h" },
+];
+
 export function EventPopover({
   task,
   anchor,
@@ -42,6 +50,26 @@ export function EventPopover({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
+
+  const currentDurationMins = Math.round(
+    (new Date(endTime).getTime() - new Date(startTime).getTime()) / 60000
+  );
+
+  function setDuration(mins: number) {
+    const end = new Date(startTime);
+    end.setMinutes(end.getMinutes() + mins);
+    setEndTime(format(end, "yyyy-MM-dd'T'HH:mm"));
+  }
+
+  function handleStartChange(value: string) {
+    setStartTime(value);
+    const end = new Date(endTime);
+    if (end <= new Date(value)) {
+      const newEnd = new Date(value);
+      newEnd.setMinutes(newEnd.getMinutes() + 60);
+      setEndTime(format(newEnd, "yyyy-MM-dd'T'HH:mm"));
+    }
+  }
 
   useEffect(() => {
     setTitle(task.title);
@@ -367,21 +395,47 @@ export function EventPopover({
                 )}
               </div>
               {!task.isAllDay && (
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="datetime-local"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
-                  />
-                  <input
-                    type="datetime-local"
-                    value={endTime}
-                    min={startTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className="text-xs text-[#9aa0a6] mb-1.5 block">Duração rápida</label>
+                    <div className="flex gap-2">
+                      {QUICK_DURATIONS.map(({ mins, label }) => (
+                        <button
+                          key={mins}
+                          type="button"
+                          onClick={() => setDuration(mins)}
+                          className={`flex-1 py-2 rounded-xl text-xs font-medium transition-colors
+                            ${currentDurationMins === mins
+                              ? "bg-emerald-500 text-white"
+                              : "bg-[#2a2b2e] text-[#bdc1c6] hover:text-[#e8eaed] border border-[#3c4043]"}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-[#9aa0a6] mb-1.5 block">Início</label>
+                      <input
+                        type="datetime-local"
+                        value={startTime}
+                        onChange={(e) => handleStartChange(e.target.value)}
+                        className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-[#9aa0a6] mb-1.5 block">Fim</label>
+                      <input
+                        type="datetime-local"
+                        value={endTime}
+                        min={startTime}
+                        onChange={(e) => setEndTime(e.target.value)}
+                        className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
+                      />
+                    </div>
+                  </div>
+                </>
               )}
               <textarea
                 ref={descriptionRef}
