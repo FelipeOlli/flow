@@ -398,11 +398,16 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       );
       setMigrateResult(text);
       scheduleMigrateResultClear(autoClearMs);
+      if (migrated > 0 && sourceDateKey) {
+        setTasks((prev) =>
+          prev.filter((t) => format(new Date(t.startTime), "yyyy-MM-dd") !== sourceDateKey)
+        );
+      }
       await fetchTasks({ background: true });
       setMigrationMenuOpen(false);
       setTimeout(() => {
         void fetchTasks({ background: true });
-      }, 600);
+      }, 2500);
     } catch {
       setMigrateResult("Erro ao migrar. Tente novamente.");
       scheduleMigrateResultClear(5_000);
