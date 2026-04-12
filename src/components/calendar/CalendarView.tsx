@@ -97,7 +97,7 @@ interface CalendarViewProps {
 export function CalendarView({ initialDate }: CalendarViewProps) {
   const router = useRouter();
   const [view, setView] = useState<View>("day");
-  const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list">("list");
+  const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list" | "calendar">("list");
   const [multiDayDisplayMode, setMultiDayDisplayMode] = useState<"grid" | "list">("grid");
   const [currentDate, setCurrentDate] = useState(() =>
     initialDate ? new Date(initialDate) : new Date()
@@ -826,38 +826,37 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
         {(view === "day" || view === "3days" || view === "week") && (
           <div className="px-3 pb-2.5">
-            <div className="grid grid-cols-2 gap-1 rounded-md bg-[#2a2b2e] p-1 border border-[#3c4043]">
-              {(() => {
-                const currentMode = view === "day" ? dayDisplayMode : multiDayDisplayMode;
-                const setMode = view === "day" ? setDayDisplayMode : setMultiDayDisplayMode;
-                return (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setMode("list")}
-                      className={`py-1.5 rounded text-xs font-medium transition-colors ${
-                        currentMode === "list"
-                          ? "bg-[#3c4043] text-[#e8eaed]"
-                          : "text-[#9aa0a6] hover:text-[#e8eaed]"
-                      }`}
-                    >
-                      Lista
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMode("grid")}
-                      className={`py-1.5 rounded text-xs font-medium transition-colors ${
-                        currentMode === "grid"
-                          ? "bg-[#3c4043] text-[#e8eaed]"
-                          : "text-[#9aa0a6] hover:text-[#e8eaed]"
-                      }`}
-                    >
-                      Grade
-                    </button>
-                  </>
-                );
-              })()}
-            </div>
+            {view === "day" ? (
+              <div className="grid grid-cols-3 gap-1 rounded-md bg-[#2a2b2e] p-1 border border-[#3c4043]">
+                {(["list", "grid", "calendar"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setDayDisplayMode(m)}
+                    className={`py-1.5 rounded text-xs font-medium transition-colors ${
+                      dayDisplayMode === m ? "bg-[#3c4043] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"
+                    }`}
+                  >
+                    {m === "list" ? "Lista" : m === "grid" ? "Grade" : "Agenda"}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-1 rounded-md bg-[#2a2b2e] p-1 border border-[#3c4043]">
+                {(["list", "grid"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMultiDayDisplayMode(m)}
+                    className={`py-1.5 rounded text-xs font-medium transition-colors ${
+                      multiDayDisplayMode === m ? "bg-[#3c4043] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"
+                    }`}
+                  >
+                    {m === "list" ? "Lista" : "Grade"}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

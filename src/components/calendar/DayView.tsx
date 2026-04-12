@@ -24,7 +24,7 @@ interface DayViewProps {
   tasks: FlowTask[];
   currentDate: Date;
   pendingIds: Set<string>;
-  displayMode?: "grid" | "list";
+  displayMode?: "grid" | "list" | "calendar";
   onComplete: (task: FlowTask) => void;
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onDelete: (task: FlowTask) => void;
@@ -262,6 +262,95 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
           {isCurrentDay && orderedTimedTasks.length > 0 && separatorInsertIndex === orderedTimedTasks.length &&
             renderNowSeparator("now-separator-end")}
         </div>
+      </div>
+    );
+  }
+
+  if (displayMode === "calendar") {
+    // Group tasks by calendar
+    const calendarMap = new Map<string, { name: string; color: string; tasks: FlowTask[] }>();
+    for (const task of tasks) {
+      const key = task.calendarId ?? "primary";
+      if (!calendarMap.has(key)) {
+        calendarMap.set(key, { name: task.calendarName || key, color: task.calendarBgColor || "#4285f4", tasks: [] });
+      }
+      calendarMap.get(key)!.tasks.push(task);
+    }
+    // Sort each calendar's tasks by start time
+    calendarMap.forEach((entry) => {
+      entry.tasks.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    });
+    const calendars = Array.from(calendarMap.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name));
+
+    return (
+      <div className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2 space-y-4">
+        <div className="rounded-lg border border-[#3c4043] bg-[#2a2b2e] px-3 py-2 flex items-center justify-between">
+          <p className="text-sm font-semibold text-[#e8eaed]">
+            {calendars.length} calendário(s)
+          </p>
+          <span className="text-xs text-[#9aa0a6] capitalize">
+            {format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
+          </span>
+        </div>
+
+        {calendars.length === 0 && (
+          <p className="text-sm text-[#9aa0a6] text-center py-6">Nenhum evento para este dia.</p>
+        )}
+
+        {calendars.map(([calId, cal]) => (
+          <div key={calId}>
+            {/* Calendar header */}
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cal.color }} />
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#e8eaed] truncate">{cal.name}</p>
+              <div className="flex-1 h-px bg-[#3c4043]" />
+              <span className="text-xs text-[#9aa0a6]">{cal.tasks.length}</span>
+            </div>
+
+            {/* Events */}
+            <div className="space-y-1.5 pl-5">
+              {cal.tasks.map((task) => (
+                <div
+                  key={task.id}
+                  onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
+                  className="rounded-lg border px-3 py-2 cursor-pointer"
+                  style={{
+                    backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus, task.isCancelled),
+                    borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
+                  }}
+                >
+                  <div className="flex items-start gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onComplete(task); }}
+                      className={`mt-0.5 w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors
+                        ${task.isComplete ? "bg-emerald-500 border-emerald-500" : "border-white/85"}`}
+                    >
+                      {task.isComplete && (
+                        <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className={`flex items-center gap-1.5 text-sm font-semibold leading-tight text-[#e8eaed] ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>
+                        <span className="truncate">{task.title}</span>
+                        {task.attendees && task.attendees.length > 0 && (
+                          <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0 text-white" fill="currentColor">
+                            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                          </svg>
+                        )}
+                      </div>
+                      <p className={`text-xs text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>
+                        {task.isAllDay ? "Dia inteiro" : `${format(new Date(task.startTime), "HH:mm")} - ${format(new Date(task.endTime), "HH:mm")}`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
