@@ -103,7 +103,7 @@ export async function runMigration(
   console.log(`[FLOW MIGRATION] Buscando eventos de ${sourceDateKey} → ${targetDateKey} (${timeZone})`);
 
   const [sourceEvents, targetEvents] = await Promise.all([
-    getEventsForDateKey(accessToken, sourceDateKey, timeZone, { writableOnly: true }),
+    getEventsForDateKey(accessToken, sourceDateKey, timeZone),
     getEventsForDateKey(accessToken, targetDateKey, timeZone),
   ]);
 
