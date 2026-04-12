@@ -83,11 +83,18 @@ export function TaskBlock({
       onClick={(e) => { e.stopPropagation(); onEdit(e); }}
     >
       {dense ? (
-        <p className={`w-full truncate leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]
-          ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}
-          ${compact ? "text-[10px] font-semibold" : "text-[10px] font-medium"}`}>
-          {task.title}
-        </p>
+        <div className="flex items-center gap-1 w-full overflow-hidden">
+          <p className={`flex-1 truncate leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]
+            ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}
+            ${compact ? "text-[10px] font-semibold" : "text-[10px] font-medium"}`}>
+            {task.title}
+          </p>
+          {task.attendees && task.attendees.length > 0 && (
+            <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 flex-shrink-0 text-white/70" fill="currentColor">
+              <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+            </svg>
+          )}
+        </div>
       ) : (
         <div className="flex items-start gap-1.5">
           {/* Checkbox */}
@@ -108,11 +115,16 @@ export function TaskBlock({
           )}
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <p className={`font-medium leading-tight truncate text-white
+            <div className={`flex items-center gap-1 font-medium leading-tight text-white
               ${compactMode ? "text-[10px]" : "text-[11px]"}
               ${task.isComplete || task.isCancelled ? "line-through opacity-70" : ""}`}>
-              {task.title}
-            </p>
+              <span className="truncate">{task.title}</span>
+              {task.attendees && task.attendees.length > 0 && (
+                <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 flex-shrink-0 text-white/70" fill="currentColor">
+                  <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                </svg>
+              )}
+            </div>
             {!compactMode && (
               <p className={`text-[10px] mt-0.5 text-white/90 ${task.isCancelled ? "line-through" : ""}`}>
                 {formatTime(task.startTime)} — {formatTime(task.endTime)}
@@ -122,11 +134,6 @@ export function TaskBlock({
               <p className="text-[10px] mt-0.5 text-white/60 truncate">
                 {task.calendarName}
               </p>
-            )}
-            {(fullMode || compactMode) && task.attendees && task.attendees.length > 0 && (
-              <svg viewBox="0 0 24 24" className={`${compactMode ? "w-2.5 h-2.5 mt-0.5" : "w-3 h-3 mt-0.5"} text-white/70 flex-shrink-0`} fill="currentColor">
-                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-              </svg>
             )}
           </div>
           {/* Delete */}
