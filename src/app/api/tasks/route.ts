@@ -38,7 +38,9 @@ export async function GET(req: NextRequest) {
       const date = dateParam ? new Date(dateParam) : new Date();
       tasks = await getEventsForDay(accessToken, date, tz);
     }
-    return NextResponse.json(tasks);
+    return NextResponse.json(tasks, {
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch (err) {
     console.error("[API tasks GET]", err);
     return NextResponse.json({ error: "Failed to fetch tasks" }, { status: 500 });
