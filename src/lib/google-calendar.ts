@@ -138,6 +138,11 @@ async function fetchAllCalendarsEvents(
   const timeMinIso = timeMin.toISOString();
   const timeMaxIso = timeMax.toISOString();
 
+  console.log(
+    `[FLOW CAL] Consultando ${calendarItems.length} calendário(s) entre ${timeMinIso} e ${timeMaxIso}:`,
+    calendarItems.map((c) => c.id).join(", ")
+  );
+
   const results = await Promise.allSettled(
     calendarItems.map(async (cal) => {
       const id = cal.id!;
