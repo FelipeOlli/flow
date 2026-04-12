@@ -267,6 +267,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     } catch {
       // Revert optimistic state when the server rejects the update.
       setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isComplete: task.isComplete } : t));
+      setMigrateResult("Não foi possível salvar. Verifique o acesso ao calendário.");
+      scheduleMigrateResultClear(4_000);
     } finally {
       setPendingIds((p) => { const n = new Set(p); n.delete(task.id); return n; });
     }
