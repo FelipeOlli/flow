@@ -3,9 +3,15 @@ import cron from "node-cron";
 import { runMigration } from "./migration";
 import { getValidAccessToken } from "./token-store";
 import { setMigrationError, setMigrationRunning, setMigrationSuccess } from "./migration-status";
-import { getDateKeyInTimeZone, getTimePartsInTimeZone, shiftDateKey } from "./timezone";
+import {
+  getDateKeyInTimeZone,
+  getReferenceDateForDateKey,
+  getTimePartsInTimeZone,
+  shiftDateKey,
+} from "./timezone";
 
 const CRON_STATE_PATH = "/app/data/.migration-cron-state.json";
+const CATCHUP_MAX_DAYS = 30;
 
 function loadLastRunDate(): string | null {
   try {
@@ -24,7 +30,17 @@ function saveLastRunDate(dateKey: string) {
   }
 }
 
-async function runNightlyMigration(timeZone: string, label: string) {
+/**
+ * Runs a single migration step.
+ * When fromDateKey/toDateKey are provided, migrates that specific range.
+ * Without them, migrates yesterday → today (default cron behavior).
+ */
+async function runNightlyMigration(
+  timeZone: string,
+  label: string,
+  fromDateKey?: string,
+  toDateKey?: string
+) {
   const startedAt = new Date().toISOString();
   console.log(`[FLOW CRON] [${startedAt}] ${label}`);
   setMigrationRunning("auto");
@@ -37,8 +53,11 @@ async function runNightlyMigration(timeZone: string, label: string) {
     return;
   }
 
+  const fromDate = fromDateKey ? getReferenceDateForDateKey(fromDateKey, timeZone) : undefined;
+  const toDate = toDateKey ? getReferenceDateForDateKey(toDateKey, timeZone) : undefined;
+
   try {
-    const result = await runMigration(accessToken, timeZone);
+    const result = await runMigration(accessToken, timeZone, fromDate, toDate);
     setMigrationSuccess("auto", result);
     saveLastRunDate(result.diagnostics.targetDateKey);
     if (result.migrated === 0 && result.skipped === 0) {
@@ -49,11 +68,12 @@ async function runNightlyMigration(timeZone: string, label: string) {
           `sourceEvents=${d.sourceEvents}, pendingTimed=${d.pendingEvents}, ` +
           `eligibleTimed=${d.eligibleTimed}, eligibleAllDay=${d.eligibleAllDay}`
       );
+    } else {
+      console.log(
+        `[FLOW CRON] [${new Date().toISOString()}] Migração concluída: ` +
+          `${result.migrated} migradas, ${result.skipped} ignoradas`
+      );
     }
-    console.log(
-      `[FLOW CRON] [${new Date().toISOString()}] Migração concluída: ` +
-        `${result.migrated} migradas, ${result.skipped} ignoradas`
-    );
   } catch (err) {
     setMigrationError("auto", err);
     console.error(`[FLOW CRON] [${new Date().toISOString()}] Erro na migração:`, err);
@@ -101,8 +121,8 @@ export function initCron() {
     console.error("[FLOW CRON] Falha ao agendar migração noturna:", err);
   }
 
-  // Catch-up: se o app reiniciou depois das 00:01 e a migração de ontem não foi registrada,
-  // executa imediatamente para recuperar eventos pendentes perdidos.
+  // Catch-up: se o app reiniciou após 00:01 e há dias sem migração registrada,
+  // executa sequencialmente cada dia perdido para trazer os eventos até hoje.
   const now = new Date();
   const todayDateKey = getDateKeyInTimeZone(now, timeZone);
   const { hour, minute } = getTimePartsInTimeZone(now, timeZone);
@@ -110,13 +130,24 @@ export function initCron() {
   const lastRunDate = loadLastRunDate();
 
   if (pastMidnight && lastRunDate !== todayDateKey) {
-    const yesterdayDateKey = shiftDateKey(todayDateKey, -1);
+    // Compute all missed target dates: from (lastRunDate + 1) up to todayDateKey
+    const missedDays: Array<{ from: string; to: string }> = [];
+    const startDateKey = lastRunDate ? shiftDateKey(lastRunDate, 1) : todayDateKey;
+    let cursor = startDateKey;
+    while (cursor <= todayDateKey && missedDays.length < CATCHUP_MAX_DAYS) {
+      missedDays.push({ from: shiftDateKey(cursor, -1), to: cursor });
+      cursor = shiftDateKey(cursor, 1);
+    }
+
     console.log(
       `[FLOW CRON] Catch-up detectado: última migração registrada=${lastRunDate ?? "nunca"}, ` +
-        `hoje=${todayDateKey}. Executando migração ${yesterdayDateKey} → ${todayDateKey}...`
+        `hoje=${todayDateKey}. Dias a recuperar: ${missedDays.map((d) => d.to).join(", ")}`
     );
-    setImmediate(() =>
-      runNightlyMigration(timeZone, `Catch-up: migração ${yesterdayDateKey} → ${todayDateKey}`)
-    );
+
+    setImmediate(async () => {
+      for (const { from, to } of missedDays) {
+        await runNightlyMigration(timeZone, `Catch-up: ${from} → ${to}`, from, to);
+      }
+    });
   }
 }
