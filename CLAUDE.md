@@ -1,0 +1,281 @@
+# CLAUDE.md — Flow Calendar
+
+Arquivo de contexto para o assistente Claude Code. Leia inteiro antes de qualquer sessão.
+
+---
+
+## 1. Stack Completa e Versões
+
+| Camada | Tecnologia | Versão |
+|--------|-----------|--------|
+| Framework | Next.js (App Router) | 14.2.29 |
+| Linguagem | TypeScript | 5.x |
+| UI | React | 18.x |
+| Estilo | Tailwind CSS | 3.4.1 |
+| Auth | NextAuth v5 beta | 5.0.0-beta.25 |
+| Calendar API | googleapis | 144.0.0 |
+| Datas | date-fns + date-fns-tz | 3.6.0 / 3.1.3 |
+| Agendamento | node-cron | 3.0.3 |
+| Imagens | sharp | 0.34.5 |
+| Runtime | Node.js | 20 (Alpine no Docker) |
+| Deploy | Docker + EasyPanel | — |
+| Banco de dados | **Nenhum** (file-based token store) | — |
+| Timezone padrão | America/Sao_Paulo | via ENV |
+
+**Variáveis de ambiente obrigatórias:**
+```env
+NEXTAUTH_URL=https://yourdomain.com
+NEXTAUTH_SECRET=<openssl rand -base64 32>
+AUTH_USERNAME=admin
+AUTH_PASSWORD=suasenha
+AUTH_USER_EMAIL=seuemail@gmail.com
+GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-xxxxx
+CRON_SECRET=<openssl rand -base64 32>
+DEFAULT_TIMEZONE=America/Sao_Paulo
+```
+
+---
+
+## 2. Estrutura de Pastas
+
+```
+flow/
+├── Dockerfile                    # Multi-stage Alpine, output standalone
+├── docker-compose.yml            # Dev/prod compose com volume flow-data
+├── next.config.mjs               # output: standalone, serverExternalPackages: [node-cron]
+├── tailwind.config.ts
+├── tsconfig.json                 # path alias @/* → ./src/*
+│
+└── src/
+    ├── instrumentation.ts        # Hook de startup Next.js → chama initCron()
+    ├── middleware.ts             # Protege todas as rotas exceto /sign-in, /api/auth/*, /api/health
+    ├── auth.ts                   # Config NextAuth: Credentials + Google OAuth, refresh automático
+    │
+    ├── app/
+    │   ├── layout.tsx            # Root layout (metadata, PWA, lang pt-BR)
+    │   ├── page.tsx              # Redirect "/" → "/today"
+    │   ├── globals.css
+    │   ├── (app)/                # Grupo protegido por auth
+    │   │   ├── layout.tsx        # Verifica sessão, redireciona se expirada
+    │   │   └── today/
+    │   │       └── page.tsx      # force-dynamic — renderiza CalendarView
+    │   ├── (auth)/
+    │   │   └── sign-in/page.tsx  # Formulário login (Credentials + botão Google)
+    │   └── api/
+    │       ├── auth/[...nextauth]/route.ts   # Handlers NextAuth
+    │       ├── health/route.ts              # GET { status: "ok" } — sem auth
+    │       ├── google-status/route.ts       # GET — verifica se tokens existem
+    │       ├── calendars/route.ts           # GET — lista calendários graváveis
+    │       ├── tasks/
+    │       │   ├── route.ts                 # GET (por dia/range/busca) · POST (criar)
+    │       │   └── [eventId]/route.ts       # PATCH (editar/completar/mover) · DELETE
+    │       └── cron/
+    │           ├── migrate/route.ts         # POST — migração manual e automática
+    │           └── migrate/status/route.ts  # GET — status + config da automação
+    │
+    ├── components/
+    │   ├── calendar/
+    │   │   ├── CalendarView.tsx   # Componente principal (client) — toda a lógica de estado
+    │   │   ├── DayView.tsx        # View dia: grid / lista / agenda (por calendário)
+    │   │   ├── WeekView.tsx       # View semana: grid / lista
+    │   │   ├── ThreeDayView.tsx   # View 3 dias: grid / lista
+    │   │   ├── MonthView.tsx      # View mês: chips por dia
+    │   │   ├── EventPopover.tsx   # Popover de detalhe/edição do evento
+    │   │   └── calendarLayout.ts  # Funções de layout (timeToY, computeLayout, etc.)
+    │   └── tasks/
+    │       ├── TaskBlock.tsx      # Bloco de evento no grid (drag & drop)
+    │       ├── TaskItem.tsx       # Item de evento na lista
+    │       ├── TaskList.tsx       # Lista de eventos
+    │       ├── TaskForm.tsx       # Formulário de criação
+    │       └── DateHeader.tsx     # Cabeçalho de data + botão de migração
+    │
+    ├── lib/
+    │   ├── google-calendar.ts    # Wrapper completo da Google Calendar API
+    │   ├── migration.ts          # Lógica de migração de eventos
+    │   ├── cron.ts               # Agendamento node-cron + catch-up na reinicialização
+    │   ├── migration-status.ts   # Estado em memória da última migração
+    │   ├── timezone.ts           # Utilitários de timezone (Intl-based, sem lib externa)
+    │   ├── token-store.ts        # Persistência de tokens OAuth em arquivo
+    │   ├── recurrence-format.ts  # RRULE → texto em português
+    │   └── colors.ts             # Cores de eventos (lighten, surface color)
+    │
+    └── types/
+        ├── task.ts               # FlowTask, CreateTaskInput, UpdateTaskInput, etc.
+        └── next-auth.d.ts        # Extensões de tipo: accessToken, refreshToken, error
+```
+
+---
+
+## 3. Decisões Técnicas Importantes — NÃO REVERTER
+
+### Auth
+- **NextAuth v5 beta com Credentials**: Google OAuth é usado **apenas** para acessar a API do Calendar, não para login. O login é feito com usuário/senha via variáveis de ambiente (`AUTH_USERNAME` / `AUTH_PASSWORD`).
+- **Tokens salvos em arquivo**: `/app/data/.token-store.json`. Não há banco de dados. O volume Docker `/app/data` é obrigatório para persistência entre reinicializações.
+- **Refresh automático com buffer de 5 minutos**: `getValidAccessToken()` verifica expiração antes de cada chamada à API.
+
+### Google Calendar
+- **`minAccessRole: "reader"`** em `listCalendarEntries`: A migração usa `reader` (não `writer`) para enxergar todos os calendários, incluindo os compartilhados como `ti@cfcontabilidade.com`. Não reverter para `writer`.
+- **`singleEvents: true`** em todas as listagens: Eventos recorrentes são expandidos individualmente.
+- **Completion via extended properties + colorId**: `flowCompleted: "true"` em `extendedProperties.private` + `colorId: "2"` (verde). A cor original é salva em `flowOriginalColorId` para restauração ao desmarcar.
+- **All-day events usam `date` prefix** (não `dateTime`): Evita UTC drift em fusos como America/Sao_Paulo. `getTaskGridDateKey()` extrai o prefixo literal da string.
+
+### Timezone
+- **Nunca usar `new Date("YYYY-MM-DD")` direto**: Causa UTC drift. Sempre usar `getDateKeyInTimeZone()` ou `zonedDateTimeToUtc()`.
+- **Fix crítico em `getTimeZoneOffsetMs()`**: Alguns runtimes Node.js (Docker Alpine) retornam `"24"` para meia-noite no Intl.DateTimeFormat com `hour12: false`. O código normaliza com `% 24`. NÃO remover este `% 24`.
+- **dateKey format**: `YYYY-MM-DD` como string. Sempre passar pelo `isDateKey()` antes de parsear.
+
+### Migração
+- **Filtro automático (cron)**: `MIGRATION_AUTO_FILTER = { includeCompletedTimed: false, includeAllDay: false }`. Só move eventos com horário não concluídos.
+- **Filtro manual (UI)**: `MIGRATION_MANUAL_DEFAULT_FILTER = { includeCompletedTimed: true, includeAllDay: true }`.
+- **Estado da migração em memória**: `migration-status.ts` guarda o último resultado. Reset ao reiniciar o processo.
+- **Arquivo de estado do cron**: `/app/data/.migration-cron-state.json`. Guarda `lastRunDate` para catch-up ao reiniciar.
+
+### Build & Deploy
+- **`output: "standalone"`** no next.config.mjs: Necessário para Docker.
+- **`serverExternalPackages: ["node-cron"]`**: node-cron não pode ser bundled pelo webpack, deve rodar no Node nativo.
+- **`experimentalInstrumentationHook: true`**: Habilita `instrumentation.ts` que inicializa o cron no startup.
+- **EasyPanel**: Deploy via Dockerfile. Volume `/app/data` deve ser montado como persistente. Secrets injetados como variáveis de ambiente — nunca baked no build.
+
+### UI
+- **Dark theme fixo**: Toda a UI usa paleta Google Material Dark (`#202124`, `#2a2b2e`, `#3c4043`, `#e8eaed`, `#9aa0a6`).
+- **Português brasileiro**: Todos os textos de UI, mensagens de erro, labels.
+- **Otimistic UI**: Complete/incomplete e migração atualizam o estado local antes da resposta da API, com revert em caso de erro.
+- **Toast de erro**: `migrateResult` / `scheduleMigrateResultClear` reutilizado para erros de complete (`"Não foi possível salvar. Verifique o acesso ao calendário."`).
+
+---
+
+## 4. Comandos Docker Essenciais
+
+### Desenvolvimento local
+```bash
+# Instalar dependências
+npm install
+
+# Rodar em dev (porta 3001)
+npm run dev
+
+# Build de produção
+npm run build
+```
+
+### Docker
+```bash
+# Build da imagem
+docker build -t flow-app .
+
+# Rodar container com variáveis de ambiente
+docker run -p 3000:3000 \
+  -v flow-data:/app/data \
+  -e NEXTAUTH_URL=http://localhost:3000 \
+  -e NEXTAUTH_SECRET=xxx \
+  -e AUTH_USERNAME=admin \
+  -e AUTH_PASSWORD=senha \
+  -e AUTH_USER_EMAIL=email@gmail.com \
+  -e GOOGLE_CLIENT_ID=xxx \
+  -e GOOGLE_CLIENT_SECRET=xxx \
+  -e CRON_SECRET=xxx \
+  -e DEFAULT_TIMEZONE=America/Sao_Paulo \
+  flow-app
+
+# Docker Compose
+docker compose up -d
+docker compose logs -f
+docker compose down
+
+# Ver logs do container em produção (EasyPanel)
+docker logs <container_id> -f --tail 100
+
+# Inspecionar volume de dados (tokens + cron state)
+docker exec <container_id> cat /app/data/.token-store.json
+docker exec <container_id> cat /app/data/.migration-cron-state.json
+```
+
+### Debug da migração
+```bash
+# Acionar migração manual via cURL (com CRON_SECRET)
+curl -X POST https://yourdomain.com/api/cron/migrate \
+  -H "Authorization: Bearer SEU_CRON_SECRET"
+
+# Ver status da migração
+curl https://yourdomain.com/api/cron/migrate/status
+
+# Ver health
+curl https://yourdomain.com/api/health
+
+# Ver status do Google Calendar
+curl https://yourdomain.com/api/google-status \
+  -H "Cookie: <session-cookie>"
+```
+
+### TypeScript check
+```bash
+npx tsc --noEmit
+```
+
+---
+
+## 5. Regra Obrigatória — Atualização de Sessão
+
+**Ao final de TODA sessão de desenvolvimento**, adicionar uma entrada no histórico abaixo com:
+
+```markdown
+### YYYY-MM-DD
+**O que foi feito:** resumo das mudanças
+**Arquivos modificados:** lista de arquivos
+**Decisões tomadas:** o que foi decidido e por quê
+**Próximos passos:** o que ficou pendente ou foi sugerido
+```
+
+Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em uma linha.
+
+---
+
+## 6. Última Sessão
+
+### 2026-04-13
+
+**O que foi feito:**
+
+1. **Fix: migração não via eventos de todos os calendários** — `getEventsForDateKey` chamado sem `writableOnly: true` na migração, permitindo ver calendários compartilhados (ex: `ti@cfcontabilidade.com`).
+
+2. **Fix: timezone Docker** — `getTimeZoneOffsetMs()` em `timezone.ts` retornava hour=24 para meia-noite em runtimes Alpine, causando offset errado de 1 dia. Corrigido com `% 24`.
+
+3. **Fix: Cache API** — `Cache-Control: no-store` adicionado ao GET `/api/tasks` para evitar dados stale após migração.
+
+4. **Fix: UI otimista pós-migração** — eventos da data de origem são removidos imediatamente do estado local após migração bem-sucedida. Refresh diferido extendido para 2500ms.
+
+5. **Fix: toast de erro ao marcar completo** — catch block de `handleComplete` em `CalendarView.tsx` agora exibe toast usando o sistema `migrateResult` existente.
+
+6. **Feature: ícone de convidados** — ícone de pessoas (SVG inline, Material Design) exibido ao lado do título em todas as views (grid compacto, denso, lista dia/semana/3dias) e no `EventPopover` ao lado do título. Cor branca. Só aparece quando `task.attendees && task.attendees.length > 0`.
+
+7. **Feature: view "Agenda"** — terceiro modo de exibição na view Dia (toggle: Lista / Grade / Agenda). Agrupa eventos por calendário com cabeçalho colorido, contagem e seta de colapso/expansão por seção. Cada seção pode ser retraída/expandida individualmente.
+
+**Arquivos modificados:**
+- `src/lib/migration.ts` — removido `writableOnly`
+- `src/lib/timezone.ts` — fix `% 24` no hour
+- `src/app/api/tasks/route.ts` — `Cache-Control: no-store`
+- `src/components/calendar/CalendarView.tsx` — otimismo pós-migração, toast de erro, novo modo "Agenda" no toggle, `dayDisplayMode` type atualizado
+- `src/components/calendar/DayView.tsx` — componente `AgendaView` (colapso/expansão), prop type atualizado
+- `src/components/calendar/WeekView.tsx` — ícone de convidados
+- `src/components/calendar/ThreeDayView.tsx` — ícone de convidados
+- `src/components/calendar/EventPopover.tsx` — ícone de convidados no título
+- `src/components/tasks/TaskBlock.tsx` — ícone de convidados (todos os modos: dense, compact, full)
+- `src/lib/google-calendar.ts` — log de diagnóstico adicionado
+
+**Decisões tomadas:**
+- `minAccessRole: "reader"` (não `"writer"`) na migração para enxergar todos os calendários
+- Ícone de convidados sempre branco (`text-white`) para consistência com o tema escuro
+- View "Agenda" extrai `calendarId` como chave de agrupamento, com fallback `"primary"`
+- `AgendaView` extraído como componente separado dentro de `DayView.tsx` para ter seu próprio estado de colapso (`useState<Set<string>>`)
+- Estado de colapso inicializa vazio (todas seções expandidas por padrão)
+
+**Próximos passos sugeridos pelo usuário:** nenhum pendente explicitamente — sessão encerrada com commit e push.
+
+---
+
+## 7. Histórico de Sessões Anteriores
+
+*(Sessões anteriores a 2026-04-13 condensadas — projeto criado e evolui neste período)*
+
+- **Até 2026-04-12** — Criação do projeto, auth por usuário/senha substituindo Google OAuth login, views de calendário (dia/semana/3dias/mês), grade e lista, busca, migração automática e manual de eventos, drag & drop, RSVP, recurrence display, toggle grade/lista por view, FAB, auto-expand de descrições, filtros de busca case/accent insensitive.
