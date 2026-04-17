@@ -4,6 +4,7 @@ export interface FlowTask {
   startTime: string;
   endTime: string;
   isComplete: boolean;
+  isImportant?: boolean;
   colorId?: string;
   description?: string;
   isAllDay: boolean;
@@ -49,6 +50,7 @@ export interface UpdateTaskInput {
   endTime?: string;
   description?: string;
   isComplete?: boolean;
+  isImportant?: boolean;
   calendarId?: string;
   targetCalendarId?: string;
   attendanceStatus?: Exclude<AttendanceStatus, "needsAction">;

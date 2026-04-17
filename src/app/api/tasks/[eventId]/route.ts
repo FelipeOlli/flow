@@ -3,6 +3,8 @@ import {
   updateEvent,
   markEventComplete,
   markEventIncomplete,
+  markEventImportant,
+  markEventUnimportant,
   deleteEvent,
   moveEventToCalendar,
   updateEventRsvp,
@@ -36,6 +38,10 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
       task = await markEventComplete(accessToken, eventId, calendarId);
     } else if (body.isComplete === false) {
       task = await markEventIncomplete(accessToken, eventId, calendarId);
+    } else if (body.isImportant === true) {
+      task = await markEventImportant(accessToken, eventId, calendarId);
+    } else if (body.isImportant === false) {
+      task = await markEventUnimportant(accessToken, eventId, calendarId);
     } else {
       const hasUpdateFields =
         body.title !== undefined ||

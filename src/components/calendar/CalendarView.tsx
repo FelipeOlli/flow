@@ -274,6 +274,30 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     }
   }
 
+  async function handleImportant(task: FlowTask) {
+    const newImportant = !task.isImportant;
+    setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isImportant: newImportant } : t));
+    setPendingIds((p) => new Set(p).add(task.id));
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isImportant: newImportant, calendarId: task.calendarId ?? "primary" }),
+      });
+      if (res.status === 401) {
+        router.replace("/sign-in");
+        return;
+      }
+      if (!res.ok) throw new Error("Failed to toggle important");
+    } catch {
+      setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isImportant: task.isImportant } : t));
+      setMigrateResult("Não foi possível salvar. Verifique o acesso ao calendário.");
+      scheduleMigrateResultClear(4_000);
+    } finally {
+      setPendingIds((p) => { const n = new Set(p); n.delete(task.id); return n; });
+    }
+  }
+
   async function handleSave(data: CreateTaskInput | UpdateTaskInput) {
     if (editingTask) {
       const res = await fetch(`/api/tasks/${editingTask.id}`, {
@@ -873,21 +897,26 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
         <DayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onMove={handleMove}
+          onImportant={handleImportant}
           displayMode={dayDisplayMode} />
       )}
       {!loading && view === "3days" && (
         <ThreeDayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
-          onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate} displayMode={multiDayDisplayMode} />
+          onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
+          onImportant={handleImportant}
+          displayMode={multiDayDisplayMode} />
       )}
       {!loading && view === "week" && (
         <WeekView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
-          onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate} displayMode={multiDayDisplayMode} />
+          onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
+          onImportant={handleImportant}
+          displayMode={multiDayDisplayMode} />
       )}
       {!loading && view === "month" && (
         <MonthView tasks={tasks} currentDate={currentDate} onDayClick={goToDate}
-          onEventClick={openEventCard} onComplete={handleComplete} />
+          onEventClick={openEventCard} onComplete={handleComplete} onImportant={handleImportant} />
       )}
 
       {/* FAB */}
@@ -927,6 +956,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
             await handleComplete(task);
             closeEventCard();
           }}
+          onToggleImportant={handleImportant}
         />
       )}
     </div>

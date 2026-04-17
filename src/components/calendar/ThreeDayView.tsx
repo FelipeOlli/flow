@@ -30,9 +30,10 @@ interface ThreeDayViewProps {
   onDelete: (task: FlowTask) => void;
   onTimeClick: (time: Date) => void;
   onDayClick: (date: Date) => void;
+  onImportant?: (task: FlowTask) => void;
 }
 
-export function ThreeDayView({ tasks, currentDate, pendingIds, displayMode = "grid", onComplete, onEdit, onDelete, onTimeClick, onDayClick }: ThreeDayViewProps) {
+export function ThreeDayView({ tasks, currentDate, pendingIds, displayMode = "grid", onComplete, onEdit, onDelete, onTimeClick, onDayClick, onImportant }: ThreeDayViewProps) {
   const [nowY, setNowY] = useState(currentTimeY());
   const scrollRef = useRef<HTMLDivElement>(null);
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -111,7 +112,7 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, displayMode = "gr
                     onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
                     className="rounded-lg border px-3 py-2 cursor-pointer"
                     style={{
-                      backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus, task.isCancelled),
+                      backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus, task.isCancelled, task.isImportant),
                       borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
                     }}
                   >
@@ -136,7 +137,7 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, displayMode = "gr
                       onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
                       className="rounded-lg border px-3 py-2 cursor-pointer"
                       style={{
-                        backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus, task.isCancelled),
+                        backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus, task.isCancelled, task.isImportant),
                         borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
                       }}
                     >
@@ -146,7 +147,7 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, displayMode = "gr
                             ${task.isComplete ? "bg-emerald-500 border-emerald-500" : "border-white/85"}`}>
                           {task.isComplete && <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                         </button>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className={`flex items-center gap-1.5 text-base font-semibold leading-tight text-[#e8eaed] ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>
                             <span className="truncate">{task.title}</span>
                             {task.attendees && task.attendees.length > 0 && (
@@ -160,6 +161,21 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, displayMode = "gr
                           </p>
                           {task.calendarName && <p className="text-xs text-[#9aa0a6] mt-0.5 truncate">{task.calendarName}</p>}
                         </div>
+                        {onImportant && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onImportant(task); }}
+                            className={`flex-shrink-0 mt-0.5 transition-colors ${task.isImportant ? "text-[#F6BF26]" : "text-white/30 hover:text-white/60"}`}
+                            aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
+                          >
+                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>
+                              {task.isImportant
+                                ? <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                                : <path d="M22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/>
+                              }
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </Fragment>
@@ -324,6 +340,7 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, displayMode = "gr
                     onComplete={() => onComplete(task)}
                     onEdit={(e) => onEdit(task, { x: e.clientX, y: e.clientY })}
                     onDelete={() => onDelete(task)}
+                    onImportant={() => onImportant?.(task)}
                   />
                 ))}
               </div>

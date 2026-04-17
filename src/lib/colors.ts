@@ -1,5 +1,6 @@
 const DEFAULT_EVENT_COLOR = "#4285f4";
 const COMPLETE_EVENT_COLOR = "#188038";
+const IMPORTANT_EVENT_COLOR = "#F6BF26";
 const DECLINED_EVENT_COLOR = "#5f6368";
 const EVENT_SURFACE_ALPHA = 0.9;
 
@@ -47,7 +48,8 @@ export function getEventSurfaceColor(
   calendarColor?: string,
   isComplete?: boolean,
   selfResponseStatus?: "needsAction" | "declined" | "tentative" | "accepted",
-  isCancelled?: boolean
+  isCancelled?: boolean,
+  isImportant?: boolean
 ): string {
   if (isCancelled) {
     return "transparent";
@@ -57,6 +59,8 @@ export function getEventSurfaceColor(
   }
   const base = isComplete
     ? lightenHexColor(COMPLETE_EVENT_COLOR, 0.18)
-    : lightenHexColor(calendarColor ?? DEFAULT_EVENT_COLOR, 0.22);
+    : isImportant
+      ? lightenHexColor(IMPORTANT_EVENT_COLOR, 0.18)
+      : lightenHexColor(calendarColor ?? DEFAULT_EVENT_COLOR, 0.22);
   return toRgba(base, EVENT_SURFACE_ALPHA);
 }

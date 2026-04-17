@@ -4,6 +4,7 @@ import { getDateKeyInTimeZone, getUtcRangeForDateKey, shiftDateKey } from "./tim
 import { formatGoogleRecurrence } from "./recurrence-format";
 
 const COMPLETE_COLOR_ID = "2";
+const IMPORTANT_COLOR_ID = "5";
 
 // Sobrescreve a cor de calendários específicos pelo nome
 const CALENDAR_COLOR_OVERRIDES: Record<string, string> = {
@@ -50,6 +51,7 @@ function mapEvent(
       if (flowCompleted !== undefined) return flowCompleted === "true";
       return event.colorId === COMPLETE_COLOR_ID; // backward compat
     })(),
+    isImportant: event.extendedProperties?.private?.["flowImportant"] === "true",
     colorId: event.colorId ?? undefined,
     description: event.description ?? undefined,
     isAllDay: !event.start?.dateTime,
@@ -306,6 +308,56 @@ export async function markEventIncomplete(
         private: {
           flowCompleted: "false",
           flowOriginalColorId: "",
+        },
+      },
+    },
+  });
+  return mapEvent(data, calendarId);
+}
+
+export async function markEventImportant(
+  accessToken: string,
+  eventId: string,
+  calendarId = "primary"
+): Promise<FlowTask> {
+  const calendar = getClient(accessToken);
+  const { data: current } = await calendar.events.get({ calendarId, eventId });
+  const originalColorId =
+    current.colorId && current.colorId !== IMPORTANT_COLOR_ID ? current.colorId : "";
+  const { data } = await calendar.events.patch({
+    calendarId,
+    eventId,
+    requestBody: {
+      colorId: IMPORTANT_COLOR_ID,
+      extendedProperties: {
+        private: {
+          flowImportant: "true",
+          flowOriginalImportantColorId: originalColorId,
+        },
+      },
+    },
+  });
+  return mapEvent(data, calendarId);
+}
+
+export async function markEventUnimportant(
+  accessToken: string,
+  eventId: string,
+  calendarId = "primary"
+): Promise<FlowTask> {
+  const calendar = getClient(accessToken);
+  const { data: current } = await calendar.events.get({ calendarId, eventId });
+  const restoredColorId =
+    current.extendedProperties?.private?.["flowOriginalImportantColorId"] || null;
+  const { data } = await calendar.events.patch({
+    calendarId,
+    eventId,
+    requestBody: {
+      colorId: restoredColorId,
+      extendedProperties: {
+        private: {
+          flowImportant: "false",
+          flowOriginalImportantColorId: "",
         },
       },
     },

@@ -20,11 +20,12 @@ import {
   yToTime,
 } from "./calendarLayout";
 
-function AgendaView({ tasks, currentDate, onComplete, onEdit, getAnchorFromElement }: {
+function AgendaView({ tasks, currentDate, onComplete, onEdit, onImportant, getAnchorFromElement }: {
   tasks: FlowTask[];
   currentDate: Date;
   onComplete: (task: FlowTask) => void;
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
+  onImportant?: (task: FlowTask) => void;
   getAnchorFromElement: (el: HTMLElement) => EventAnchorPoint;
 }) {
   const calendarMap = new Map<string, { name: string; color: string; tasks: FlowTask[] }>();
@@ -94,7 +95,7 @@ function AgendaView({ tasks, currentDate, onComplete, onEdit, getAnchorFromEleme
                     onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
                     className="rounded-lg border px-3 py-2 cursor-pointer"
                     style={{
-                      backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus, task.isCancelled),
+                      backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus, task.isCancelled, task.isImportant),
                       borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
                     }}
                   >
@@ -124,6 +125,21 @@ function AgendaView({ tasks, currentDate, onComplete, onEdit, getAnchorFromEleme
                           {task.isAllDay ? "Dia inteiro" : `${format(new Date(task.startTime), "HH:mm")} - ${format(new Date(task.endTime), "HH:mm")}`}
                         </p>
                       </div>
+                      {onImportant && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onImportant(task); }}
+                          className={`flex-shrink-0 transition-colors ${task.isImportant ? "text-[#F6BF26]" : "text-white/30 hover:text-white/60"}`}
+                          aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
+                        >
+                          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>
+                            {task.isImportant
+                              ? <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                              : <path d="M22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/>
+                            }
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -146,9 +162,10 @@ interface DayViewProps {
   onDelete: (task: FlowTask) => void;
   onTimeClick: (time: Date) => void;
   onMove?: (task: FlowTask, newStart: Date, newEnd: Date) => void;
+  onImportant?: (task: FlowTask) => void;
 }
 
-export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", onComplete, onEdit, onDelete, onTimeClick, onMove }: DayViewProps) {
+export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", onComplete, onEdit, onDelete, onTimeClick, onMove, onImportant }: DayViewProps) {
   const [nowY, setNowY] = useState(currentTimeY());
   const scrollRef = useRef<HTMLDivElement>(null);
   const isCurrentDay = isToday(currentDate);
@@ -294,7 +311,8 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                     task.calendarBgColor,
                     task.isComplete,
                     task.selfResponseStatus,
-                    task.isCancelled
+                    task.isCancelled,
+                    task.isImportant
                   ),
                   borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
                 }}
@@ -337,7 +355,8 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                     task.calendarBgColor,
                     task.isComplete,
                     task.selfResponseStatus,
-                    task.isCancelled
+                    task.isCancelled,
+                    task.isImportant
                   ),
                   borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
                 }}
@@ -355,7 +374,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                       </svg>
                     )}
                   </button>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className={`flex items-center gap-1.5 text-base font-semibold leading-tight text-[#e8eaed] ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>
                       <span className="truncate">{task.title}</span>
                       {task.attendees && task.attendees.length > 0 && (
@@ -371,6 +390,21 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                       <p className="text-xs text-[#9aa0a6] mt-0.5 truncate">{task.calendarName}</p>
                     )}
                   </div>
+                  {onImportant && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onImportant(task); }}
+                      className={`flex-shrink-0 mt-0.5 transition-colors ${task.isImportant ? "text-[#F6BF26]" : "text-white/30 hover:text-white/60"}`}
+                      aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
+                    >
+                      <svg viewBox="0 0 24 24" className="w-4 h-4" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>
+                        {task.isImportant
+                          ? <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                          : <path d="M22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/>
+                        }
+                      </svg>
+                    </button>
+                  )}
                 </div>
               </div>
             </Fragment>
@@ -383,7 +417,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
   }
 
   if (displayMode === "calendar") {
-    return <AgendaView tasks={tasks} currentDate={currentDate} onComplete={onComplete} onEdit={onEdit} getAnchorFromElement={getAnchorFromElement} />;
+    return <AgendaView tasks={tasks} currentDate={currentDate} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
   }
 
   return (
@@ -398,7 +432,8 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                 t.calendarBgColor,
                 t.isComplete,
                 t.selfResponseStatus,
-                t.isCancelled
+                t.isCancelled,
+                t.isImportant
               ),
               borderColor: t.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
             }}>
@@ -471,6 +506,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                 onComplete={() => onComplete(task)}
                 onEdit={(e) => { if (!justDraggedRef.current) onEdit(task, { x: e.clientX, y: e.clientY }); }}
                 onDelete={() => onDelete(task)}
+                onImportant={() => onImportant?.(task)}
               />
             );
           })}

@@ -18,6 +18,7 @@ interface EventPopoverProps {
   onSaveEdit: (task: FlowTask, updates: UpdateTaskInput) => Promise<void>;
   onDelete: (task: FlowTask) => void;
   onToggleComplete: (task: FlowTask) => void;
+  onToggleImportant?: (task: FlowTask) => void;
 }
 
 const QUICK_DURATIONS = [
@@ -36,6 +37,7 @@ export function EventPopover({
   onSaveEdit,
   onDelete,
   onToggleComplete,
+  onToggleImportant,
 }: EventPopoverProps) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
@@ -209,6 +211,21 @@ export function EventPopover({
                 <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
               </svg>
             )}
+            {!editing && onToggleImportant && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onToggleImportant(task); }}
+                className={`flex-shrink-0 transition-colors ${task.isImportant ? "text-[#F6BF26]" : "text-white/30 hover:text-white/60"}`}
+                aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
+              >
+                <svg viewBox="0 0 24 24" className="w-5 h-5" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>
+                  {task.isImportant
+                    ? <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                    : <path d="M22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/>
+                  }
+                </svg>
+              </button>
+            )}
           </h3>
           <button
             type="button"
@@ -348,6 +365,20 @@ export function EventPopover({
                 >
                   {task.isComplete ? "Marcar pendente" : "Marcar concluido"}
                 </button>
+                {onToggleImportant && (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => onToggleImportant(task)}
+                    className={`px-3 py-1.5 rounded-lg border text-xs transition-colors disabled:opacity-50 ${
+                      task.isImportant
+                        ? "border-[#F6BF26]/70 bg-[#F6BF26]/10 text-[#F6BF26]"
+                        : "border-[#5f6368] text-[#e8eaed] hover:bg-[#2a2b2e]"
+                    }`}
+                  >
+                    {task.isImportant ? "Remover destaque" : "Marcar como importante"}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setEditing(true)}

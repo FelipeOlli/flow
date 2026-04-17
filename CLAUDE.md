@@ -233,6 +233,52 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
+### 2026-04-17
+
+**O que foi feito:**
+
+1. **Feature: flag "Importante" com estrela dourada** — Novo campo `isImportant?: boolean` em `FlowTask` e `UpdateTaskInput`. Clicar na estrela marca/desmarca o evento como importante. Quando marcado, o evento fica com fundo dourado (#F6BF26, Google Banana). O estado persiste via `extendedProperties.private.flowImportant` no Google Calendar.
+
+2. **Persistência via Google Calendar extended properties** — `markEventImportant()`: salva colorId="5" e `flowImportant: "true"`, preservando colorId original em `flowOriginalImportantColorId`. `markEventUnimportant()`: restaura colorId original.
+
+3. **Cor dourada na `getEventSurfaceColor()`** — Adicionado 5º parâmetro `isImportant` (opcional, backward-compatible). Prioridade: `cancelled > declined > isComplete > isImportant > calendarColor`.
+
+4. **API PATCH estendida** — `/api/tasks/[eventId]` agora aceita `isImportant: boolean` e chama `markEventImportant/Unimportant`. Branch separado dos outros campos.
+
+5. **UI otimista em CalendarView** — `handleImportant()` espelha `handleComplete()`: toggle local imediato, PATCH assíncrono, revert+toast em caso de erro.
+
+6. **Ícone de estrela em todas as views**:
+   - `TaskBlock`: compact/full mode (outline/filled, w-2.5 ou w-3). Dense mode: sem estrela.
+   - `DayView`: lista (timed), agenda/calendar mode
+   - `WeekView`, `ThreeDayView`: lista (timed)
+   - `MonthView`: indicador visual dourado no chip (botão clicável quando importante)
+   - `EventPopover`: estrela no título + botão "Marcar como importante" nas ações
+
+**Arquivos modificados:**
+- `src/types/task.ts`
+- `src/lib/google-calendar.ts`
+- `src/lib/colors.ts`
+- `src/app/api/tasks/[eventId]/route.ts`
+- `src/components/calendar/CalendarView.tsx`
+- `src/components/tasks/TaskBlock.tsx`
+- `src/components/tasks/TaskItem.tsx`
+- `src/components/calendar/DayView.tsx`
+- `src/components/calendar/WeekView.tsx`
+- `src/components/calendar/ThreeDayView.tsx`
+- `src/components/calendar/MonthView.tsx`
+- `src/components/calendar/EventPopover.tsx`
+
+**Decisões tomadas:**
+- `colorId: "5"` (Google Banana) para estado importante — mesmo mecanismo do colorId "2" para completo
+- Dense mode no TaskBlock: sem estrela (espaço crítico)
+- Conflito complete+important resolvido naturalmente: completar evento dourado salva "5" em `flowOriginalColorId`, ao desmarcar volta ao dourado
+- `isImportant` como 5º parâmetro opcional em `getEventSurfaceColor()` — backward-compatible
+- MonthView: chip mostra estrela dourada apenas quando importante (botão clicável para desmarcar), sem estrela outline por falta de espaço
+
+**Próximos passos:** nenhum pendente.
+
+---
+
 ### 2026-04-13
 
 **O que foi feito:**

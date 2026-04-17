@@ -14,9 +14,10 @@ interface MonthViewProps {
   onDayClick: (date: Date) => void;
   onEventClick: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onComplete: (task: FlowTask) => void;
+  onImportant?: (task: FlowTask) => void;
 }
 
-export function MonthView({ tasks, currentDate, onDayClick, onEventClick, onComplete }: MonthViewProps) {
+export function MonthView({ tasks, currentDate, onDayClick, onEventClick, onComplete, onImportant }: MonthViewProps) {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -79,7 +80,8 @@ export function MonthView({ tasks, currentDate, onDayClick, onEventClick, onComp
                         task.calendarBgColor,
                         task.isComplete,
                         task.selfResponseStatus,
-                        task.isCancelled
+                        task.isCancelled,
+                        task.isImportant
                       ),
                       borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.62)",
                     }}
@@ -105,6 +107,18 @@ export function MonthView({ tasks, currentDate, onDayClick, onEventClick, onComp
                       {task.isAllDay ? "" : `${format(new Date(task.startTime), "HH:mm")} `}
                       {task.title}
                     </span>
+                    {task.isImportant && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onImportant?.(task); }}
+                        className="flex-shrink-0 text-[#F6BF26]"
+                        aria-label="Remover destaque"
+                      >
+                        <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="currentColor">
+                          <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 ))}
                 {dayTasks.length > 3 && (

@@ -10,9 +10,10 @@ interface TaskItemProps {
   onEdit: () => void;
   onDelete: () => void;
   isPending?: boolean;
+  onImportant?: () => void;
 }
 
-export function TaskItem({ task, onComplete, onEdit, onDelete, isPending }: TaskItemProps) {
+export function TaskItem({ task, onComplete, onEdit, onDelete, isPending, onImportant }: TaskItemProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   function formatTime(iso: string) {
@@ -83,6 +84,23 @@ export function TaskItem({ task, onComplete, onEdit, onDelete, isPending }: Task
           <p className="text-xs text-gray-600 mt-1 truncate">{task.description}</p>
         )}
       </div>
+
+      {/* Important button */}
+      {onImportant && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onImportant(); }}
+          className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full transition-all
+            ${task.isImportant ? "text-[#F6BF26]" : "text-gray-600 hover:text-gray-400 hover:bg-gray-800"}`}
+          aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
+        >
+          <svg viewBox="0 0 24 24" className="w-4 h-4" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>
+            {task.isImportant
+              ? <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+              : <path d="M22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/>
+            }
+          </svg>
+        </button>
+      )}
 
       {/* Delete button */}
       <button
