@@ -233,7 +233,32 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
-### 2026-04-18
+### 2026-04-18 (sessão 2)
+
+**O que foi feito:**
+
+1. **Estrela branca para eventos marcados como importante** — Alterado o ícone de estrela de dourado (`text-[#F6BF26]`) para branco (`text-white`) em todas as views quando `task.isImportant` é verdadeiro. A estrela outline permanece em `text-white/30` quando não marcado.
+
+2. **Nome do calendário em branco** — `text-[#9aa0a6]` substituído por `text-white/70` no nome do calendário exibido abaixo do horário nos modos lista de DayView, WeekView e ThreeDayView.
+
+**Arquivos modificados:**
+- `src/components/calendar/DayView.tsx`
+- `src/components/calendar/WeekView.tsx`
+- `src/components/calendar/ThreeDayView.tsx`
+- `src/components/calendar/MonthView.tsx`
+- `src/components/calendar/EventPopover.tsx`
+- `src/components/tasks/TaskBlock.tsx`
+- `src/components/tasks/TaskItem.tsx`
+
+**Decisões tomadas:**
+- Estrela branca (não dourada) quando marcado como destaque — o fundo dourado do evento já indica o estado; a estrela branca contrasta melhor sobre ele
+- Nome do calendário em `text-white/70` — cor universal legível sobre qualquer cor de fundo de evento, sem depender de `calendarBgColor`
+
+**Próximos passos:** nenhum pendente.
+
+---
+
+### 2026-04-18 (sessão 1)
 
 **O que foi feito:**
 
