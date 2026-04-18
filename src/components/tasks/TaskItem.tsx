@@ -90,7 +90,7 @@ export function TaskItem({ task, onComplete, onEdit, onDelete, isPending, onImpo
         <button
           onClick={(e) => { e.stopPropagation(); onImportant(); }}
           className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full transition-all
-            ${task.isImportant ? "text-[#F6BF26]" : "text-gray-600 hover:text-gray-400 hover:bg-gray-800"}`}
+            ${task.isImportant ? "text-white" : "text-gray-600 hover:text-gray-400 hover:bg-gray-800"}`}
           aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
         >
           <svg viewBox="0 0 24 24" className="w-4 h-4" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>

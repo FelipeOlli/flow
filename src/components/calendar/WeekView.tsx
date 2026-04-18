@@ -160,13 +160,13 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
                           <p className={`text-sm text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>
                             {format(new Date(task.startTime), "HH:mm")} - {format(new Date(task.endTime), "HH:mm")}
                           </p>
-                          {task.calendarName && <p className="text-xs text-[#9aa0a6] mt-0.5 truncate">{task.calendarName}</p>}
+                          {task.calendarName && <p className="text-xs mt-0.5 truncate text-white/70">{task.calendarName}</p>}
                         </div>
                         {onImportant && (
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); onImportant(task); }}
-                            className={`flex-shrink-0 mt-0.5 transition-colors ${task.isImportant ? "text-[#F6BF26]" : "text-white/30 hover:text-white/60"}`}
+                            className={`flex-shrink-0 mt-0.5 transition-colors ${task.isImportant ? "text-white" : "text-white/30 hover:text-white/60"}`}
                             aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
                           >
                             <svg viewBox="0 0 24 24" className="w-4 h-4" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>

@@ -130,7 +130,7 @@ export function TaskBlock({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onImportant(); }}
-                  className={`flex-shrink-0 transition-colors ${task.isImportant ? "text-[#F6BF26]" : "text-white/40 hover:text-white/70"}`}
+                  className={`flex-shrink-0 transition-colors ${task.isImportant ? "text-white" : "text-white/40 hover:text-white/70"}`}
                   aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
                 >
                   <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>
@@ -159,7 +159,7 @@ export function TaskBlock({
               type="button"
               onClick={(e) => { e.stopPropagation(); onImportant(); }}
               className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center transition-all
-                ${task.isImportant ? "text-[#F6BF26]" : "text-white/40 hover:text-white/80"}`}
+                ${task.isImportant ? "text-white" : "text-white/40 hover:text-white/80"}`}
               aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
             >
               <svg viewBox="0 0 24 24" className="w-3 h-3" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>

@@ -111,7 +111,7 @@ export function MonthView({ tasks, currentDate, onDayClick, onEventClick, onComp
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onImportant?.(task); }}
-                        className="flex-shrink-0 text-[#F6BF26]"
+                        className="flex-shrink-0 text-white"
                         aria-label="Remover destaque"
                       >
                         <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="currentColor">

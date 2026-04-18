@@ -215,7 +215,7 @@ export function EventPopover({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onToggleImportant(task); }}
-                className={`flex-shrink-0 transition-colors ${task.isImportant ? "text-[#F6BF26]" : "text-white/30 hover:text-white/60"}`}
+                className={`flex-shrink-0 transition-colors ${task.isImportant ? "text-white" : "text-white/30 hover:text-white/60"}`}
                 aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
               >
                 <svg viewBox="0 0 24 24" className="w-5 h-5" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>
