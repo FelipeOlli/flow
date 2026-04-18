@@ -226,6 +226,7 @@ export async function createEvent(
       description: input.description,
       start: { dateTime: input.startTime, timeZone },
       end: { dateTime: input.endTime, timeZone },
+      recurrence: input.recurrence?.length ? input.recurrence : undefined,
     },
   });
   return mapEvent(data, calendarId);

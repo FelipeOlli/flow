@@ -275,6 +275,10 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 - `isImportant` como 5º parâmetro opcional em `getEventSurfaceColor()` — backward-compatible
 - MonthView: chip mostra estrela dourada apenas quando importante (botão clicável para desmarcar), sem estrela outline por falta de espaço
 
+**Problema de deploy:** As mudanças ficaram apenas como arquivos modificados localmente — o commit/push inicial não foi executado pelo assistente. Foi necessário fazer `git add` + `git commit` + `git push` manualmente na sessão para o código chegar ao EasyPanel. Commit final: `e3a8af7`.
+
+**Lição:** Ao final de sessões de implementação, sempre verificar com `git status` se as mudanças foram de fato commitadas antes de encerrar.
+
 **Próximos passos:** nenhum pendente.
 
 ---

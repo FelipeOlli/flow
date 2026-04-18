@@ -42,6 +42,8 @@ export interface CreateTaskInput {
   endTime: string;
   description?: string;
   calendarId?: string;
+  /** RRULE array, ex.: ["RRULE:FREQ=WEEKLY;BYDAY=MO"] */
+  recurrence?: string[];
 }
 
 export interface UpdateTaskInput {

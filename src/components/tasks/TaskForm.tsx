@@ -64,6 +64,10 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
   const [calendarLoadError, setCalendarLoadError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [recurring, setRecurring] = useState(false);
+  const [recurrenceType, setRecurrenceType] = useState<
+    "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "weekdays"
+  >("weekly");
 
   useEffect(() => {
     setTimeout(() => titleRef.current?.focus(), 100);
@@ -124,6 +128,21 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
     }
   }
 
+  const BYDAY_MAP = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+
+  function buildRRule(): string[] {
+    if (!recurring) return [];
+    const dayCode = BYDAY_MAP[new Date(startTime).getDay()];
+    switch (recurrenceType) {
+      case "daily":     return ["RRULE:FREQ=DAILY"];
+      case "weekly":    return [`RRULE:FREQ=WEEKLY;BYDAY=${dayCode}`];
+      case "biweekly":  return [`RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=${dayCode}`];
+      case "monthly":   return ["RRULE:FREQ=MONTHLY"];
+      case "yearly":    return ["RRULE:FREQ=YEARLY"];
+      case "weekdays":  return ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"];
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) { setError("Digite um título"); return; }
@@ -140,7 +159,11 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
         endTime: new Date(endTime).toISOString(),
         description: description.trim() || undefined,
       };
-      if (!isEditing) payload.calendarId = calendarId;
+      if (!isEditing) {
+        payload.calendarId = calendarId;
+        const rrule = buildRRule();
+        if (rrule.length) (payload as CreateTaskInput).recurrence = rrule;
+      }
       await onSave(payload);
       onClose();
     } catch {
@@ -219,6 +242,62 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
               rows={2}
               className="w-full bg-[#2a2b2e] text-[#e8eaed] placeholder-[#9aa0a6] rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043] resize-none overflow-hidden"
             />
+            {/* Recurrence — only for new events */}
+            {!isEditing && (
+              <div className="rounded-xl border border-[#3c4043] bg-[#2a2b2e] overflow-hidden">
+                {/* Toggle row */}
+                <button
+                  type="button"
+                  onClick={() => setRecurring((v) => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 text-sm text-[#e8eaed] hover:bg-[#313236] transition-colors"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#9aa0a6]" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span className={recurring ? "text-[#e8eaed]" : "text-[#9aa0a6]"}>
+                      {recurring ? "Evento recorrente" : "Repetir"}
+                    </span>
+                  </div>
+                  {/* Toggle switch */}
+                  <div className={`w-10 h-5.5 rounded-full relative transition-colors ${recurring ? "bg-[#8ab4f8]" : "bg-[#3c4043]"}`}
+                    style={{ height: 22, width: 40 }}>
+                    <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white shadow transition-transform ${recurring ? "translate-x-5" : "translate-x-0.5"}`}
+                      style={{ width: 18, height: 18, top: 2, left: 2, transform: recurring ? "translateX(18px)" : "translateX(0)" }} />
+                  </div>
+                </button>
+
+                {/* Frequency options */}
+                {recurring && (
+                  <div className="px-4 pb-3 grid grid-cols-3 gap-1.5">
+                    {(
+                      [
+                        { value: "daily",    label: "Diária" },
+                        { value: "weekdays", label: "Dias úteis" },
+                        { value: "weekly",   label: "Semanal" },
+                        { value: "biweekly", label: "Quinzenal" },
+                        { value: "monthly",  label: "Mensal" },
+                        { value: "yearly",   label: "Anual" },
+                      ] as const
+                    ).map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setRecurrenceType(value)}
+                        className={`py-2 rounded-lg text-xs font-medium transition-colors border ${
+                          recurrenceType === value
+                            ? "bg-[#8ab4f8]/20 border-[#8ab4f8]/60 text-[#8ab4f8]"
+                            : "bg-[#202124] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {!isEditing && (
               <div>
                 <label className="text-xs text-[#9aa0a6] mb-1.5 block">Calendário</label>

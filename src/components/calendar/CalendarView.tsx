@@ -13,6 +13,7 @@ import { WeekView } from "./WeekView";
 import { MonthView } from "./MonthView";
 import { EventPopover, EventAnchorPoint } from "./EventPopover";
 import { TaskForm } from "@/components/tasks/TaskForm";
+import { DashboardView } from "@/components/dashboard/DashboardView";
 
 type View = "day" | "3days" | "week" | "month";
 const LAYERS = {
@@ -97,6 +98,7 @@ interface CalendarViewProps {
 export function CalendarView({ initialDate }: CalendarViewProps) {
   const router = useRouter();
   const [view, setView] = useState<View>("day");
+  const [showDashboard, setShowDashboard] = useState(false);
   const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list" | "calendar">("list");
   const [multiDayDisplayMode, setMultiDayDisplayMode] = useState<"grid" | "list">("grid");
   const [currentDate, setCurrentDate] = useState(() =>
@@ -633,6 +635,42 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           </div>
 
           <div className="flex items-center gap-1.5">
+            {/* Calendário */}
+            <button
+              onClick={() => setShowDashboard(false)}
+              className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+                !showDashboard
+                  ? "bg-[#3c4043] text-[#e8eaed]"
+                  : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
+              }`}
+              aria-label="Calendário"
+              title="Calendário"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+            </button>
+
+            {/* Dashboard */}
+            <button
+              onClick={() => setShowDashboard(true)}
+              className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+                showDashboard
+                  ? "bg-[#3c4043] text-[#e8eaed]"
+                  : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
+              }`}
+              aria-label="Painel de desempenho"
+              title="Painel de desempenho"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </button>
+
+            {/* Migração (3 pontos) */}
             <div className="relative">
               <button
                 ref={migrationButtonRef}
@@ -837,95 +875,104 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           </div>
         </div>
 
-        {/* View switcher */}
-        <div className="flex gap-1 px-3 pb-2.5">
-          {(["day", "3days", "week", "month"] as View[]).map((v) => (
-            <button key={v} onClick={() => setView(v)}
-              className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors
-                ${view === v ? "bg-[#3c4043] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"}`}>
-              {VIEW_LABELS[v]}
-            </button>
-          ))}
-        </div>
+        {!showDashboard && (
+          <>
+            {/* View switcher */}
+            <div className="flex gap-1 px-3 pb-2.5">
+              {(["day", "3days", "week", "month"] as View[]).map((v) => (
+                <button key={v} onClick={() => setView(v)}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors
+                    ${view === v ? "bg-[#3c4043] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"}`}>
+                  {VIEW_LABELS[v]}
+                </button>
+              ))}
+            </div>
 
-        {(view === "day" || view === "3days" || view === "week") && (
-          <div className="px-3 pb-2.5">
-            {view === "day" ? (
-              <div className="grid grid-cols-3 gap-1 rounded-md bg-[#2a2b2e] p-1 border border-[#3c4043]">
-                {(["list", "grid", "calendar"] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setDayDisplayMode(m)}
-                    className={`py-1.5 rounded text-xs font-medium transition-colors ${
-                      dayDisplayMode === m ? "bg-[#3c4043] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"
-                    }`}
-                  >
-                    {m === "list" ? "Lista" : m === "grid" ? "Grade" : "Agenda"}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-1 rounded-md bg-[#2a2b2e] p-1 border border-[#3c4043]">
-                {(["list", "grid"] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setMultiDayDisplayMode(m)}
-                    className={`py-1.5 rounded text-xs font-medium transition-colors ${
-                      multiDayDisplayMode === m ? "bg-[#3c4043] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"
-                    }`}
-                  >
-                    {m === "list" ? "Lista" : "Grade"}
-                  </button>
-                ))}
+            {(view === "day" || view === "3days" || view === "week") && (
+              <div className="px-3 pb-2.5">
+                {view === "day" ? (
+                  <div className="grid grid-cols-3 gap-1 rounded-md bg-[#2a2b2e] p-1 border border-[#3c4043]">
+                    {(["list", "grid", "calendar"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setDayDisplayMode(m)}
+                        className={`py-1.5 rounded text-xs font-medium transition-colors ${
+                          dayDisplayMode === m ? "bg-[#3c4043] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"
+                        }`}
+                      >
+                        {m === "list" ? "Lista" : m === "grid" ? "Grade" : "Agenda"}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1 rounded-md bg-[#2a2b2e] p-1 border border-[#3c4043]">
+                    {(["list", "grid"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setMultiDayDisplayMode(m)}
+                        className={`py-1.5 rounded text-xs font-medium transition-colors ${
+                          multiDayDisplayMode === m ? "bg-[#3c4043] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"
+                        }`}
+                      >
+                        {m === "list" ? "Lista" : "Grade"}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
+      {/* Dashboard */}
+      {showDashboard && <DashboardView onBack={() => setShowDashboard(false)} />}
+
       {/* Loading */}
-      {loading && (
+      {!showDashboard && loading && (
         <div className="flex justify-center items-center py-8">
           <div className="w-5 h-5 border-2 border-[#8ab4f8]/30 border-t-[#8ab4f8] rounded-full animate-spin" />
         </div>
       )}
 
       {/* Views */}
-      {!loading && view === "day" && (
+      {!showDashboard && !loading && view === "day" && (
         <DayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onMove={handleMove}
           onImportant={handleImportant}
           displayMode={dayDisplayMode} />
       )}
-      {!loading && view === "3days" && (
+      {!showDashboard && !loading && view === "3days" && (
         <ThreeDayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
           onImportant={handleImportant}
           displayMode={multiDayDisplayMode} />
       )}
-      {!loading && view === "week" && (
+      {!showDashboard && !loading && view === "week" && (
         <WeekView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
           onImportant={handleImportant}
           displayMode={multiDayDisplayMode} />
       )}
-      {!loading && view === "month" && (
+      {!showDashboard && !loading && view === "month" && (
         <MonthView tasks={tasks} currentDate={currentDate} onDayClick={goToDate}
           onEventClick={openEventCard} onComplete={handleComplete} onImportant={handleImportant} />
       )}
 
-      {/* FAB */}
-      <button onClick={() => openCreateForm()}
-        className={`fixed bottom-6 right-4 w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform backdrop-blur-md bg-[#8ab4f8]/30 border border-[#8ab4f8]/40 shadow-lg shadow-black/30 ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}>
-        <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-        </svg>
-      </button>
+      {/* FAB — hidden in dashboard mode */}
+      {!showDashboard && (
+        <button onClick={() => openCreateForm()}
+          className={`fixed bottom-6 right-4 w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform backdrop-blur-md bg-[#8ab4f8]/30 border border-[#8ab4f8]/40 shadow-lg shadow-black/30 ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}>
+          <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+      )}
 
       {/* Toast migração */}
       {migrateResult && (
