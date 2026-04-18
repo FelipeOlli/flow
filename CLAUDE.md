@@ -233,6 +233,43 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
+### 2026-04-18
+
+**O que foi feito:**
+
+1. **Dashboard de desempenho** — Novo painel acessível via ícone de gráfico no header do CalendarView. Mostra: 4 cards de resumo (concluídos, taxa, sequência atual, melhor dia), heatmap anual estilo GitHub (53 semanas × 7 dias, cores em roxo #a78bfa), gráfico de barras mensais com total (cinza) e concluídos (roxo), e tabela de detalhamento mensal (visível em sm+). Sem bibliotecas externas — tudo CSS + Tailwind + SVG inline.
+
+2. **Endpoint `/api/stats`** — `GET ?year=2026&tz=...` busca todos os eventos do ano via `getEventsInRange`, agrega server-side por dia e por mês, calcula streak atual/melhor e melhor dia. Retorna JSON compacto sem objetos de evento completos.
+
+3. **Toggle calendário/dashboard no header** — Dois ícones individuais (📅 calendário, 📊 dashboard) com estado ativo destacado (`bg-[#3c4043]`). Ordem: calendário → dashboard → ⋮ migração → sair. Ícones soltos, sem agrupamento com borda.
+
+4. **Recorrência no formulário de criação** — Seção "Repetir" com toggle e 6 opções: Diária, Dias úteis, Semanal, Quinzenal, Mensal, Anual. Gera RRULE correto (ex: `RRULE:FREQ=WEEKLY;BYDAY=MO`). "Semanal" e "Quinzenal" detectam o dia da semana automaticamente pelo horário de início. Passa `recurrence: string[]` para `createEvent()` → Google Calendar API. Só disponível na criação (não edição).
+
+5. **Ajustes de UI no dashboard** — Números dos cards em branco, cores em roxo (#a78bfa), fix de barras mensais (altura em pixels absolutos para evitar bug de `height: X%` em flex containers sem altura explícita).
+
+**Arquivos criados:**
+- `src/app/api/stats/route.ts`
+- `src/components/dashboard/DashboardView.tsx`
+
+**Arquivos modificados:**
+- `src/components/calendar/CalendarView.tsx`
+- `src/components/tasks/TaskForm.tsx`
+- `src/lib/google-calendar.ts`
+- `src/types/task.ts`
+
+**Decisões tomadas:**
+- Dashboard sem bibliotecas de gráficos (recharts, chart.js etc.) — tudo inline para manter bundle enxuto e tema escuro consistente
+- Barras mensais usam `style={{ height: px }}` com valor absoluto calculado (não `height: X%`) — percentagem não funciona em `flex-1` sem altura explícita no pai
+- Cor roxa (#a78bfa) escolhida por não conflitar com nenhum calendário existente (dourado = importante, verde = concluído, azul = Google Calendar primário)
+- Recorrência apenas na criação: editar recorrência de evento existente é operação complexa (afeta todas vs esta instância) — deixado para versão futura
+- `NEXTAUTH_URL` no `.env.local` corrigido de `localhost:3001` para `localhost:3000`
+
+**Commit:** `bd5158c`
+
+**Próximos passos:** nenhum pendente.
+
+---
+
 ### 2026-04-17
 
 **O que foi feito:**
