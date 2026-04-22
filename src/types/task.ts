@@ -21,6 +21,8 @@ export interface FlowTask {
   recurrenceSummary?: string;
   /** Ex.: "Termina em …" ou "Termina após N ocorrências" */
   recurrenceEndHint?: string;
+  /** ISO 8601 — quando o evento foi criado no Google Calendar */
+  createdAt?: string;
 }
 
 export type AttendanceStatus = "needsAction" | "declined" | "tentative" | "accepted";

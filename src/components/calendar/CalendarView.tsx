@@ -14,6 +14,7 @@ import { MonthView } from "./MonthView";
 import { EventPopover, EventAnchorPoint } from "./EventPopover";
 import { TaskForm } from "@/components/tasks/TaskForm";
 import { DashboardView } from "@/components/dashboard/DashboardView";
+import { ProjectsView } from "@/components/projects/ProjectsView";
 
 type View = "day" | "3days" | "week" | "month";
 const LAYERS = {
@@ -99,6 +100,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const router = useRouter();
   const [view, setView] = useState<View>("day");
   const [showDashboard, setShowDashboard] = useState(false);
+  const [showProjects, setShowProjects] = useState(false);
   const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list" | "calendar">("list");
   const [multiDayDisplayMode, setMultiDayDisplayMode] = useState<"grid" | "list">("grid");
   const [currentDate, setCurrentDate] = useState(() =>
@@ -637,9 +639,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           <div className="flex items-center gap-1.5">
             {/* Calendário */}
             <button
-              onClick={() => setShowDashboard(false)}
+              onClick={() => { setShowDashboard(false); setShowProjects(false); }}
               className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
-                !showDashboard
+                !showDashboard && !showProjects
                   ? "bg-[#3c4043] text-[#e8eaed]"
                   : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
               }`}
@@ -656,9 +658,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
             {/* Dashboard */}
             <button
-              onClick={() => setShowDashboard(true)}
+              onClick={() => { setShowDashboard(true); setShowProjects(false); }}
               className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
-                showDashboard
+                showDashboard && !showProjects
                   ? "bg-[#3c4043] text-[#e8eaed]"
                   : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
               }`}
@@ -667,6 +669,24 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
             >
               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </button>
+
+            {/* Projetos (Kanban) */}
+            <button
+              onClick={() => { setShowProjects(true); setShowDashboard(false); }}
+              className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+                showProjects
+                  ? "bg-[#3c4043] text-[#e8eaed]"
+                  : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
+              }`}
+              aria-label="Projetos"
+              title="Projetos"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
+                <rect x="3" y="3" width="5" height="18" rx="1" />
+                <rect x="10" y="3" width="5" height="12" rx="1" />
+                <rect x="17" y="3" width="5" height="15" rx="1" />
               </svg>
             </button>
 
@@ -927,45 +947,48 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
         )}
       </div>
 
+      {/* Projetos (Kanban) */}
+      {showProjects && <ProjectsView />}
+
       {/* Dashboard */}
-      {showDashboard && <DashboardView onBack={() => setShowDashboard(false)} />}
+      {showDashboard && !showProjects && <DashboardView onBack={() => setShowDashboard(false)} />}
 
       {/* Loading */}
-      {!showDashboard && loading && (
+      {!showDashboard && !showProjects && loading && (
         <div className="flex justify-center items-center py-8">
           <div className="w-5 h-5 border-2 border-[#8ab4f8]/30 border-t-[#8ab4f8] rounded-full animate-spin" />
         </div>
       )}
 
       {/* Views */}
-      {!showDashboard && !loading && view === "day" && (
+      {!showDashboard && !showProjects && !loading && view === "day" && (
         <DayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onMove={handleMove}
           onImportant={handleImportant}
           displayMode={dayDisplayMode} />
       )}
-      {!showDashboard && !loading && view === "3days" && (
+      {!showDashboard && !showProjects && !loading && view === "3days" && (
         <ThreeDayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
           onImportant={handleImportant}
           displayMode={multiDayDisplayMode} />
       )}
-      {!showDashboard && !loading && view === "week" && (
+      {!showDashboard && !showProjects && !loading && view === "week" && (
         <WeekView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
           onImportant={handleImportant}
           displayMode={multiDayDisplayMode} />
       )}
-      {!showDashboard && !loading && view === "month" && (
+      {!showDashboard && !showProjects && !loading && view === "month" && (
         <MonthView tasks={tasks} currentDate={currentDate} onDayClick={goToDate}
           onEventClick={openEventCard} onComplete={handleComplete} onImportant={handleImportant} />
       )}
 
-      {/* FAB — hidden in dashboard mode */}
-      {!showDashboard && (
+      {/* FAB — hidden in dashboard/projects mode */}
+      {!showDashboard && !showProjects && (
         <button onClick={() => openCreateForm()}
           className={`fixed bottom-6 right-4 w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform backdrop-blur-md bg-[#8ab4f8]/30 border border-[#8ab4f8]/40 shadow-lg shadow-black/30 ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}>
           <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>

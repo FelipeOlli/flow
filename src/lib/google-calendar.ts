@@ -65,6 +65,7 @@ function mapEvent(
     isRecurring: recurrenceDisplay.isRecurring,
     recurrenceSummary: recurrenceDisplay.summary || undefined,
     recurrenceEndHint: recurrenceDisplay.endHint,
+    createdAt: event.created ?? undefined,
   };
 }
 
