@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { getEventsInRange } from "@/lib/google-calendar";
 import { getValidAccessToken } from "@/lib/token-store";
+import { getDateKeyInTimeZone, getUtcRangeForDateKey } from "@/lib/timezone";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -12,9 +13,10 @@ export async function GET(req: NextRequest) {
 
   const tz = req.nextUrl.searchParams.get("tz") ?? process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
 
+  // Busca eventos atrasados + do dia atual
   const startDate = new Date("2026-01-01T00:00:00Z");
-  const endDate = new Date();
-  endDate.setFullYear(endDate.getFullYear() + 2);
+  const todayKey = getDateKeyInTimeZone(new Date(), tz);
+  const { endUtc: endDate } = getUtcRangeForDateKey(todayKey, tz);
 
   const tasks = await getEventsInRange(accessToken, startDate, endDate, tz);
 
