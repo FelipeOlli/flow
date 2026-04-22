@@ -15,6 +15,7 @@ interface KanbanColumn {
 
 interface ProjectsViewProps {
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
+  onComplete: (task: FlowTask) => Promise<void>;
 }
 
 function timeOpen(task: FlowTask): number {
@@ -152,7 +153,7 @@ function ColumnSkeleton() {
   );
 }
 
-export function ProjectsView({ onEdit }: ProjectsViewProps) {
+export function ProjectsView({ onEdit, onComplete }: ProjectsViewProps) {
   const [columns, setColumns] = useState<KanbanColumn[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -176,7 +177,7 @@ export function ProjectsView({ onEdit }: ProjectsViewProps) {
   }, []);
 
   const handleComplete = useCallback(async (task: FlowTask) => {
-    // Remove otimisticamente da view (kanban só exibe abertos)
+    // Remove otimisticamente do kanban (só exibe abertos)
     setPendingIds((p) => new Set(p).add(task.id));
     setColumns((prev) =>
       prev
@@ -185,12 +186,8 @@ export function ProjectsView({ onEdit }: ProjectsViewProps) {
     );
 
     try {
-      const res = await fetch(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isComplete: true, calendarId: task.calendarId ?? "primary" }),
-      });
-      if (!res.ok) throw new Error("Falha ao concluir");
+      // Delega a chamada API ao CalendarView para que o estado do calendário também seja atualizado
+      await onComplete(task);
     } catch {
       // Revert: re-insere o card na coluna
       setColumns((prev) => {
@@ -208,7 +205,7 @@ export function ProjectsView({ onEdit }: ProjectsViewProps) {
     } finally {
       setPendingIds((p) => { const n = new Set(p); n.delete(task.id); return n; });
     }
-  }, []);
+  }, [onComplete]);
 
   if (error) {
     return (
