@@ -948,7 +948,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       </div>
 
       {/* Projetos (Kanban) */}
-      {showProjects && <ProjectsView />}
+      {showProjects && <ProjectsView onEdit={openEventCard} />}
 
       {/* Dashboard */}
       {showDashboard && !showProjects && <DashboardView onBack={() => setShowDashboard(false)} />}

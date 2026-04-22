@@ -1,15 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
+import { EventAnchorPoint } from "@/components/calendar/EventPopover";
 
 interface KanbanColumn {
   calendarId: string;
   calendarName: string;
   calendarBgColor: string;
   tasks: FlowTask[];
+}
+
+interface ProjectsViewProps {
+  onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
 }
 
 function timeOpen(task: FlowTask): number {
@@ -47,7 +52,6 @@ function groupByCalendar(tasks: FlowTask[]): KanbanColumn[] {
 
   const cols = Array.from(map.values());
 
-  // Ordena tarefas dentro de cada coluna: mais antiga primeiro (maior tempo em aberto)
   for (const col of cols) {
     col.tasks.sort((a: FlowTask, b: FlowTask) => timeOpen(b) - timeOpen(a));
   }
@@ -57,53 +61,82 @@ function groupByCalendar(tasks: FlowTask[]): KanbanColumn[] {
   );
 }
 
-function KanbanCard({ task }: { task: FlowTask }) {
+interface KanbanCardProps {
+  task: FlowTask;
+  pending: boolean;
+  onComplete: (task: FlowTask) => void;
+  onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
+}
+
+function KanbanCard({ task, pending, onComplete, onEdit }: KanbanCardProps) {
   const ms = timeOpen(task);
   const openLabel = formatTimeOpen(ms);
-  const isOld = ms > 7 * 86_400_000; // mais de 7 dias
+  const isOld = ms > 7 * 86_400_000;
 
   let dateLabel = "";
   if (!task.isAllDay && task.startTime) {
     try {
-      const d = parseISO(task.startTime);
-      dateLabel = format(d, "HH:mm · dd/MM", { locale: ptBR });
-    } catch {
-      // silencioso
-    }
+      dateLabel = format(parseISO(task.startTime), "HH:mm · dd/MM", { locale: ptBR });
+    } catch { /* silencioso */ }
   } else if (task.isAllDay && task.startTime) {
     try {
-      const d = parseISO(task.startTime.slice(0, 10) + "T00:00:00");
-      dateLabel = format(d, "dd/MM", { locale: ptBR });
-    } catch {
-      // silencioso
-    }
+      dateLabel = format(parseISO(task.startTime.slice(0, 10) + "T00:00:00"), "dd/MM", { locale: ptBR });
+    } catch { /* silencioso */ }
   }
 
   return (
     <div
-      className="bg-[#2a2b2e] rounded-lg p-3 border-l-4 shadow-sm"
+      className="bg-[#2a2b2e] rounded-lg border-l-4 shadow-sm flex overflow-hidden"
       style={{ borderLeftColor: task.calendarBgColor ?? "#4285f4" }}
     >
-      <p className="text-[#e8eaed] text-sm font-medium leading-snug line-clamp-2">
-        {task.title}
-      </p>
-
-      <div className="mt-1.5 flex items-center gap-2">
+      {/* Bullet de conclusão */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onComplete(task); }}
+        disabled={pending}
+        className="flex items-start justify-center pt-3.5 px-3 shrink-0 group"
+        aria-label="Marcar como concluído"
+        title="Marcar como concluído"
+      >
         <span
-          className={`text-[11px] font-medium ${isOld ? "text-red-400" : "text-[#9aa0a6]"}`}
+          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors shrink-0 ${
+            pending
+              ? "border-[#9aa0a6] opacity-50"
+              : "border-[#9aa0a6] group-hover:border-[#e8eaed]"
+          }`}
+          style={{ borderColor: pending ? undefined : task.calendarBgColor ?? "#4285f4" }}
         >
-          {openLabel}
+          {pending && (
+            <span className="w-1.5 h-1.5 rounded-full bg-[#9aa0a6] animate-pulse" />
+          )}
         </span>
-        {task.isImportant && (
-          <svg viewBox="0 0 24 24" className="w-3 h-3 fill-white shrink-0" aria-label="Importante">
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-          </svg>
-        )}
-      </div>
+      </button>
 
-      {dateLabel && (
-        <p className="mt-1 text-[11px] text-[#9aa0a6]">{dateLabel}</p>
-      )}
+      {/* Corpo clicável — abre o evento */}
+      <button
+        onClick={(e) => {
+          onEdit(task, { x: e.clientX, y: e.clientY });
+        }}
+        className="flex-1 text-left py-3 pr-3 min-w-0"
+      >
+        <p className="text-[#e8eaed] text-sm font-medium leading-snug line-clamp-2">
+          {task.title}
+        </p>
+
+        <div className="mt-1.5 flex items-center gap-2">
+          <span className={`text-[11px] font-medium ${isOld ? "text-red-400" : "text-[#9aa0a6]"}`}>
+            {openLabel}
+          </span>
+          {task.isImportant && (
+            <svg viewBox="0 0 24 24" className="w-3 h-3 fill-white shrink-0" aria-label="Importante">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            </svg>
+          )}
+        </div>
+
+        {dateLabel && (
+          <p className="mt-1 text-[11px] text-[#9aa0a6]">{dateLabel}</p>
+        )}
+      </button>
     </div>
   );
 }
@@ -119,10 +152,11 @@ function ColumnSkeleton() {
   );
 }
 
-export function ProjectsView() {
+export function ProjectsView({ onEdit }: ProjectsViewProps) {
   const [columns, setColumns] = useState<KanbanColumn[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -139,6 +173,41 @@ export function ProjectsView() {
         setError(e.message);
         setLoading(false);
       });
+  }, []);
+
+  const handleComplete = useCallback(async (task: FlowTask) => {
+    // Remove otimisticamente da view (kanban só exibe abertos)
+    setPendingIds((p) => new Set(p).add(task.id));
+    setColumns((prev) =>
+      prev
+        .map((col) => ({ ...col, tasks: col.tasks.filter((t) => t.id !== task.id) }))
+        .filter((col) => col.tasks.length > 0)
+    );
+
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isComplete: true, calendarId: task.calendarId ?? "primary" }),
+      });
+      if (!res.ok) throw new Error("Falha ao concluir");
+    } catch {
+      // Revert: re-insere o card na coluna
+      setColumns((prev) => {
+        const key = task.calendarId ?? "primary";
+        const exists = prev.find((c) => c.calendarId === key);
+        if (exists) {
+          return prev.map((col) =>
+            col.calendarId === key
+              ? { ...col, tasks: [...col.tasks, task].sort((a, b) => timeOpen(b) - timeOpen(a)) }
+              : col
+          );
+        }
+        return groupByCalendar([...prev.flatMap((c) => c.tasks), task]);
+      });
+    } finally {
+      setPendingIds((p) => { const n = new Set(p); n.delete(task.id); return n; });
+    }
   }, []);
 
   if (error) {
@@ -189,7 +258,13 @@ export function ProjectsView() {
                 {/* Cards */}
                 <div className="flex flex-col gap-2 overflow-y-auto pr-1">
                   {col.tasks.map((task) => (
-                    <KanbanCard key={task.id} task={task} />
+                    <KanbanCard
+                      key={task.id}
+                      task={task}
+                      pending={pendingIds.has(task.id)}
+                      onComplete={handleComplete}
+                      onEdit={onEdit}
+                    />
                   ))}
                 </div>
               </div>
