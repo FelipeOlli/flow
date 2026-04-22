@@ -223,7 +223,7 @@ export function ProjectsView({ onEdit, onComplete }: ProjectsViewProps) {
       </div>
 
       <div className="flex-1 overflow-x-auto overflow-y-hidden">
-        <div className="flex gap-4 p-4 h-full items-start">
+        <div className="flex gap-4 p-4 items-start">
           {loading ? (
             <>
               <ColumnSkeleton />
@@ -236,7 +236,11 @@ export function ProjectsView({ onEdit, onComplete }: ProjectsViewProps) {
             </div>
           ) : (
             columns.map((col) => (
-              <div key={col.calendarId} className="shrink-0 w-72 flex flex-col gap-2 max-h-full">
+              <div
+                key={col.calendarId}
+                className="shrink-0 w-72 flex flex-col gap-2"
+                style={{ maxHeight: "calc(100svh - 160px)" }}
+              >
                 {/* Header da coluna */}
                 <div
                   className="flex items-center gap-2 px-3 py-2 rounded-lg"
