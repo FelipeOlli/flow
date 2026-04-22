@@ -87,38 +87,35 @@ function KanbanCard({ task, pending, onComplete, onEdit }: KanbanCardProps) {
 
   return (
     <div
-      className="bg-[#2a2b2e] rounded-lg border-l-4 shadow-sm flex overflow-hidden"
+      className="bg-[#2a2b2e] rounded-lg border-l-4 shadow-sm"
       style={{ borderLeftColor: task.calendarBgColor ?? "#4285f4" }}
     >
-      {/* Bullet de conclusão */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onComplete(task); }}
-        disabled={pending}
-        className="flex items-start justify-center pt-3.5 px-3 shrink-0 group"
-        aria-label="Marcar como concluído"
-        title="Marcar como concluído"
-      >
-        <span
-          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors shrink-0 ${
-            pending
-              ? "border-[#9aa0a6] opacity-50"
-              : "border-[#9aa0a6] group-hover:border-[#e8eaed]"
-          }`}
-          style={{ borderColor: pending ? undefined : task.calendarBgColor ?? "#4285f4" }}
+      <div className="flex items-start">
+        {/* Bullet de conclusão */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onComplete(task); }}
+          disabled={pending}
+          className="flex items-start justify-center pt-3.5 px-3 shrink-0 group"
+          aria-label="Marcar como concluído"
+          title="Marcar como concluído"
         >
-          {pending && (
-            <span className="w-1.5 h-1.5 rounded-full bg-[#9aa0a6] animate-pulse" />
-          )}
-        </span>
-      </button>
+          <span
+            className="w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors shrink-0"
+            style={{ borderColor: task.calendarBgColor ?? "#4285f4", opacity: pending ? 0.5 : 1 }}
+          >
+            {pending && (
+              <span className="w-1.5 h-1.5 rounded-full bg-[#9aa0a6] animate-pulse" />
+            )}
+          </span>
+        </button>
 
-      {/* Corpo clicável — abre o evento */}
-      <button
-        onClick={(e) => {
-          onEdit(task, { x: e.clientX, y: e.clientY });
-        }}
-        className="flex-1 text-left py-3 pr-3 min-w-0"
-      >
+        {/* Corpo clicável — abre o evento */}
+        <button
+          onClick={(e) => {
+            onEdit(task, { x: e.clientX, y: e.clientY });
+          }}
+          className="flex-1 text-left py-3 pr-3 min-w-0 w-0"
+        >
         <p className="text-[#e8eaed] text-sm font-medium leading-snug line-clamp-2">
           {task.title}
         </p>
@@ -137,7 +134,8 @@ function KanbanCard({ task, pending, onComplete, onEdit }: KanbanCardProps) {
         {dateLabel && (
           <p className="mt-1 text-[11px] text-[#9aa0a6]">{dateLabel}</p>
         )}
-      </button>
+        </button>
+      </div>
     </div>
   );
 }

@@ -895,7 +895,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           </div>
         </div>
 
-        {!showDashboard && (
+        {!showDashboard && !showProjects && (
           <>
             {/* View switcher */}
             <div className="flex gap-1 px-3 pb-2.5">
