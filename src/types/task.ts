@@ -46,6 +46,9 @@ export interface CreateTaskInput {
   calendarId?: string;
   /** RRULE array, ex.: ["RRULE:FREQ=WEEKLY;BYDAY=MO"] */
   recurrence?: string[];
+  isImportant?: boolean;
+  /** Lista de e-mails dos convidados */
+  attendees?: string[];
 }
 
 export interface UpdateTaskInput {

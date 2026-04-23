@@ -220,16 +220,26 @@ export async function createEvent(
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
   const calendarId = input.calendarId ?? "primary";
-  const { data } = await calendar.events.insert({
-    calendarId,
-    requestBody: {
-      summary: input.title,
-      description: input.description,
-      start: { dateTime: input.startTime, timeZone },
-      end: { dateTime: input.endTime, timeZone },
-      recurrence: input.recurrence?.length ? input.recurrence : undefined,
-    },
-  });
+  const requestBody: calendar_v3.Schema$Event = {
+    summary: input.title,
+    description: input.description,
+    start: { dateTime: input.startTime, timeZone },
+    end: { dateTime: input.endTime, timeZone },
+    recurrence: input.recurrence?.length ? input.recurrence : undefined,
+  };
+
+  if (input.isImportant) {
+    requestBody.colorId = "5";
+    requestBody.extendedProperties = {
+      private: { flowImportant: "true", flowOriginalImportantColorId: "" },
+    };
+  }
+
+  if (input.attendees?.length) {
+    requestBody.attendees = input.attendees.map((email) => ({ email }));
+  }
+
+  const { data } = await calendar.events.insert({ calendarId, requestBody });
   return mapEvent(data, calendarId);
 }
 

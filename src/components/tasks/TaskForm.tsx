@@ -68,6 +68,9 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
   const [recurrenceType, setRecurrenceType] = useState<
     "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "weekdays"
   >("weekly");
+  const [isImportant, setIsImportant] = useState(false);
+  const [attendeeInput, setAttendeeInput] = useState("");
+  const [attendees, setAttendees] = useState<string[]>([]);
 
   useEffect(() => {
     setTimeout(() => titleRef.current?.focus(), 100);
@@ -163,6 +166,8 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
         payload.calendarId = calendarId;
         const rrule = buildRRule();
         if (rrule.length) (payload as CreateTaskInput).recurrence = rrule;
+        if (isImportant) (payload as CreateTaskInput).isImportant = true;
+        if (attendees.length) (payload as CreateTaskInput).attendees = attendees;
       }
       await onSave(payload);
       onClose();
@@ -292,6 +297,85 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
                       >
                         {label}
                       </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Importante + Convidados — só na criação */}
+            {!isEditing && (
+              <div className="flex gap-3">
+                {/* Toggle Importante */}
+                <button
+                  type="button"
+                  onClick={() => setIsImportant((v) => !v)}
+                  title={isImportant ? "Remover destaque" : "Marcar como importante"}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-colors border
+                    ${isImportant
+                      ? "bg-[#F6BF26]/20 border-[#F6BF26]/50 text-[#F6BF26]"
+                      : "bg-[#2a2b2e] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"}`}
+                >
+                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill={isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                  Importante
+                </button>
+              </div>
+            )}
+
+            {/* Convidados — só na criação */}
+            {!isEditing && (
+              <div>
+                <label className="text-xs text-[#9aa0a6] mb-1.5 block">Convidados</label>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    placeholder="email@exemplo.com"
+                    value={attendeeInput}
+                    onChange={(e) => setAttendeeInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const email = attendeeInput.trim().toLowerCase();
+                        if (email && !attendees.includes(email)) {
+                          setAttendees((prev) => [...prev, email]);
+                        }
+                        setAttendeeInput("");
+                      }
+                    }}
+                    className="flex-1 bg-[#2a2b2e] text-[#e8eaed] placeholder-[#9aa0a6] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const email = attendeeInput.trim().toLowerCase();
+                      if (email && !attendees.includes(email)) {
+                        setAttendees((prev) => [...prev, email]);
+                      }
+                      setAttendeeInput("");
+                    }}
+                    className="px-3 py-2.5 rounded-xl bg-[#2a2b2e] border border-[#3c4043] text-[#8ab4f8] hover:bg-[#313236] transition-colors text-sm"
+                  >
+                    Adicionar
+                  </button>
+                </div>
+                {attendees.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {attendees.map((email) => (
+                      <span key={email} className="flex items-center gap-1 bg-[#3c4043] text-[#e8eaed] text-xs px-2.5 py-1 rounded-full">
+                        {email}
+                        <button
+                          type="button"
+                          onClick={() => setAttendees((prev) => prev.filter((e) => e !== email))}
+                          className="text-[#9aa0a6] hover:text-[#e8eaed] ml-0.5"
+                          aria-label={`Remover ${email}`}
+                        >
+                          <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </span>
                     ))}
                   </div>
                 )}
