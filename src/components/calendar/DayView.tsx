@@ -168,6 +168,8 @@ interface DayViewProps {
 export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", onComplete, onEdit, onDelete, onTimeClick, onMove, onImportant }: DayViewProps) {
   const [nowY, setNowY] = useState(currentTimeY());
   const scrollRef = useRef<HTMLDivElement>(null);
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const listNowSepRef = useRef<HTMLDivElement>(null);
   const isCurrentDay = isToday(currentDate);
 
   // Drag state
@@ -196,6 +198,12 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
     scrollRef.current.scrollTop = Math.max(0, nowY - 120);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!isCurrentDay || !listScrollRef.current || !listNowSepRef.current) return;
+    listScrollRef.current.scrollTop = Math.max(0, listNowSepRef.current.offsetTop - 80);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCurrentDay, tasks.length]);
 
   // Global pointer events for drag
   useEffect(() => {
@@ -280,7 +288,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
       : -1;
     const separatorInsertIndex = nowSeparatorIndex === -1 ? orderedTimedTasks.length : nowSeparatorIndex;
     const renderNowSeparator = (key: string) => (
-      <div key={key} className="flex items-center gap-2 px-1 py-1">
+      <div ref={listNowSepRef} key={key} className="flex items-center gap-2 px-1 py-1">
         <div className="h-[2px] w-3 rounded bg-[#ea4335]" />
         <p className="text-[11px] font-medium text-[#ea4335]">
           Agora {format(new Date(), "HH:mm")}
@@ -289,7 +297,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
       </div>
     );
     return (
-      <div className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2">
+      <div ref={listScrollRef} className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2">
         <div className="mb-2 rounded-lg border border-[#3c4043] bg-[#2a2b2e] px-3 py-2 flex items-center justify-between">
           <p className="text-sm font-semibold text-[#e8eaed]">
             {pendingCount} tarefa(s) pendente(s)

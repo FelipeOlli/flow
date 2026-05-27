@@ -36,6 +36,8 @@ interface WeekViewProps {
 export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid", onComplete, onEdit, onDelete, onTimeClick, onDayClick, onImportant }: WeekViewProps) {
   const [nowY, setNowY] = useState(currentTimeY());
   const scrollRef = useRef<HTMLDivElement>(null);
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const listNowSepRef = useRef<HTMLDivElement>(null);
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const weekStart = startOfDay(startOfWeek(currentDate, { weekStartsOn: 1 }));
@@ -51,6 +53,12 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
     scrollRef.current.scrollTop = Math.max(0, nowY - 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!listScrollRef.current || !listNowSepRef.current) return;
+    listScrollRef.current.scrollTop = Math.max(0, listNowSepRef.current.offsetTop - 80);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks.length]);
 
   function getLayoutForDay(day: Date) {
     const colKey = getDateKeyInTimeZone(day, tz);
@@ -71,7 +79,7 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
   if (displayMode === "list") {
     const nowTs = Date.now();
     return (
-      <div className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2 space-y-4">
+      <div ref={listScrollRef} className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2 space-y-4">
         {weekDays.map((day) => {
           const colKey = getDateKeyInTimeZone(day, tz);
           const dayAllDay = tasks.filter(
@@ -86,7 +94,7 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
             : -1;
           const separatorIndex = nowSeparatorIndex === -1 ? dayTimed.length : nowSeparatorIndex;
           const renderNowSeparator = (key: string) => (
-            <div key={key} className="flex items-center gap-2 px-1 py-1">
+            <div ref={listNowSepRef} key={key} className="flex items-center gap-2 px-1 py-1">
               <div className="h-[2px] w-3 rounded bg-[#ea4335]" />
               <p className="text-[11px] font-medium text-[#ea4335]">Agora {format(new Date(), "HH:mm")}</p>
               <div className="h-px flex-1 bg-[#ea4335]/50" />
