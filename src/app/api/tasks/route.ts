@@ -30,14 +30,25 @@ export async function GET(req: NextRequest) {
 
       const normalizedQuery = normalizeForSearch(query);
       const rawQuery = query.trim();
-      const queries = [rawQuery];
-      if (normalizedQuery !== rawQuery.toLowerCase()) queries.push(normalizedQuery);
+      const isAsciiQuery = rawQuery.toLowerCase() === normalizedQuery;
 
-      const resultSets = await Promise.all(
-        queries.map((q) =>
-          getEventsInRange(accessToken, startDate, endDate, tz, { q, maxResults: limit })
-        )
-      );
+      const fetches: Promise<FlowTask[]>[] = [
+        getEventsInRange(accessToken, startDate, endDate, tz, { q: rawQuery, maxResults: limit }),
+      ];
+      if (!isAsciiQuery) {
+        fetches.push(
+          getEventsInRange(accessToken, startDate, endDate, tz, { q: normalizedQuery, maxResults: limit })
+        );
+      }
+      if (isAsciiQuery) {
+        const broadStart = new Date(now);
+        broadStart.setFullYear(broadStart.getFullYear() - 2);
+        const broadEnd = new Date(now);
+        broadEnd.setFullYear(broadEnd.getFullYear() + 2);
+        fetches.push(getEventsInRange(accessToken, broadStart, broadEnd, tz, { maxResults: limit }));
+      }
+
+      const resultSets = await Promise.all(fetches);
 
       const seen = new Map<string, FlowTask>();
       for (const set of resultSets) {
