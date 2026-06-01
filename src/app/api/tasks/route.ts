@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
         broadStart.setFullYear(broadStart.getFullYear() - 2);
         const broadEnd = new Date(now);
         broadEnd.setFullYear(broadEnd.getFullYear() + 2);
-        fetches.push(getEventsInRange(accessToken, broadStart, broadEnd, tz, { maxResults: limit }));
+        fetches.push(getEventsInRange(accessToken, broadStart, broadEnd, tz));
       }
 
       const resultSets = await Promise.all(fetches);
