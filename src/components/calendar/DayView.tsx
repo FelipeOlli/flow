@@ -194,16 +194,21 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
   }, [isCurrentDay]);
 
   useEffect(() => {
-    if (!isCurrentDay || !scrollRef.current) return;
-    scrollRef.current.scrollTop = Math.max(0, nowY - 120);
+    if (displayMode !== "grid" || !isCurrentDay) return;
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = Math.max(0, nowY - 120);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [displayMode, isCurrentDay]);
 
   useEffect(() => {
-    if (!isCurrentDay || !listScrollRef.current || !listNowSepRef.current) return;
-    listScrollRef.current.scrollTop = Math.max(0, listNowSepRef.current.offsetTop - 80);
+    if (displayMode !== "list" || !isCurrentDay) return;
+    requestAnimationFrame(() => {
+      if (listScrollRef.current && listNowSepRef.current)
+        listScrollRef.current.scrollTop = Math.max(0, listNowSepRef.current.offsetTop - 80);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCurrentDay, tasks.length]);
+  }, [displayMode, isCurrentDay, tasks.length]);
 
   // Global pointer events for drag
   useEffect(() => {

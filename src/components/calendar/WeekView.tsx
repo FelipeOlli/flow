@@ -49,16 +49,21 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
   }, []);
 
   useEffect(() => {
-    if (!scrollRef.current) return;
-    scrollRef.current.scrollTop = Math.max(0, nowY - 100);
+    if (displayMode !== "grid") return;
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = Math.max(0, nowY - 100);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [displayMode]);
 
   useEffect(() => {
-    if (!listScrollRef.current || !listNowSepRef.current) return;
-    listScrollRef.current.scrollTop = Math.max(0, listNowSepRef.current.offsetTop - 80);
+    if (displayMode !== "list") return;
+    requestAnimationFrame(() => {
+      if (listScrollRef.current && listNowSepRef.current)
+        listScrollRef.current.scrollTop = Math.max(0, listNowSepRef.current.offsetTop - 80);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks.length]);
+  }, [displayMode, tasks.length]);
 
   function getLayoutForDay(day: Date) {
     const colKey = getDateKeyInTimeZone(day, tz);
