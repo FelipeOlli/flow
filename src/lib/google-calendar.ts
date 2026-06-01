@@ -11,6 +11,15 @@ const CALENDAR_COLOR_OVERRIDES: Record<string, string> = {
   "TI CF Contabilidade": "#1e3a5f",
 };
 
+export function normalizeForSearch(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function getClient(accessToken: string) {
   const auth = new google.auth.OAuth2();
   auth.setCredentials({ access_token: accessToken });

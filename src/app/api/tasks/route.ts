@@ -1,8 +1,8 @@
 import { auth } from "@/auth";
-import { getEventsForDay, getEventsInRange, createEvent } from "@/lib/google-calendar";
+import { getEventsForDay, getEventsInRange, createEvent, normalizeForSearch } from "@/lib/google-calendar";
 import { getValidAccessToken } from "@/lib/token-store";
 import { NextRequest, NextResponse } from "next/server";
-import { CreateTaskInput } from "@/types/task";
+import { CreateTaskInput, FlowTask } from "@/types/task";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -27,10 +27,36 @@ export async function GET(req: NextRequest) {
       startDate.setFullYear(startDate.getFullYear() - 5);
       const endDate = new Date(now);
       endDate.setFullYear(endDate.getFullYear() + 5);
-      tasks = await getEventsInRange(accessToken, startDate, endDate, tz, {
-        q: query,
-        maxResults: limit,
-      });
+
+      const normalizedQuery = normalizeForSearch(query);
+      const rawQuery = query.trim();
+      const queries = [rawQuery];
+      if (normalizedQuery !== rawQuery.toLowerCase()) queries.push(normalizedQuery);
+
+      const resultSets = await Promise.all(
+        queries.map((q) =>
+          getEventsInRange(accessToken, startDate, endDate, tz, { q, maxResults: limit })
+        )
+      );
+
+      const seen = new Map<string, FlowTask>();
+      for (const set of resultSets) {
+        for (const t of set) if (!seen.has(t.id)) seen.set(t.id, t);
+      }
+
+      const tokens = normalizedQuery.split(" ").filter(Boolean);
+      tasks = Array.from(seen.values())
+        .filter((t) => {
+          const haystack = normalizeForSearch(
+            [
+              t.title,
+              t.description ?? "",
+              ...(t.attendees?.map((a) => `${a.name ?? ""} ${a.email ?? ""}`) ?? []),
+            ].join(" ")
+          );
+          return tokens.every((tok) => haystack.includes(tok));
+        })
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
       tasks = tasks.slice(0, limit);
     } else if (startDateParam && endDateParam) {
       tasks = await getEventsInRange(accessToken, new Date(startDateParam), new Date(endDateParam), tz);
