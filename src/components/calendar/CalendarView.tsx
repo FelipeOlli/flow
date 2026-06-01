@@ -616,7 +616,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {/* Header */}
       <div className="flex-shrink-0 bg-[#202124] border-b border-[#3c4043] relative z-10">
         <div className="flex items-center justify-between gap-2 px-3 py-3">
-          <div className="grid grid-cols-[2rem_1fr_2rem] items-center gap-1 flex-1 min-w-0">
+          <div className="flex items-center">
             <button onClick={() => navigate("prev")}
               className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:bg-[#2a2b2e] transition-colors">
               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
@@ -624,7 +624,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
               </svg>
             </button>
 
-            <button onClick={() => setCurrentDate(new Date())} className="text-center px-1 min-w-0">
+            <button onClick={() => setCurrentDate(new Date())} className="w-56 text-center px-1">
               <p className="text-sm font-medium text-[#e8eaed] capitalize truncate">{dateLabel}</p>
             </button>
 
