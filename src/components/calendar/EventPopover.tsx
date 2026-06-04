@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarOption, FlowTask, UpdateTaskInput } from "@/types/task";
+import { computeDaysOpen, agingBadgeColor } from "@/lib/aging";
 
 export interface EventAnchorPoint {
   x: number;
@@ -245,6 +246,11 @@ export function EventPopover({
               <div className={`text-sm text-[#e8eaed] ${task.isCancelled ? "line-through text-[#9aa0a6]" : ""}`}>
                 <p className="capitalize">{dateLabel}</p>
                 <p>{timeLabel}</p>
+                {(() => {
+                  const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/Sao_Paulo";
+                  const d = computeDaysOpen(task, tz);
+                  return d >= 1 ? <p className={`mt-0.5 font-medium ${agingBadgeColor(d)}`}>{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p> : null;
+                })()}
               </div>
 
               <div className="space-y-1">

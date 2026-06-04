@@ -63,6 +63,17 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Average days to complete
+    let avgSumDays = 0;
+    let avgCount = 0;
+    for (const task of tasks) {
+      if (task.isComplete && task.createdAt && task.completedAt) {
+        const days = (new Date(task.completedAt).getTime() - new Date(task.createdAt).getTime()) / 86400000;
+        if (days >= 0) { avgSumDays += days; avgCount++; }
+      }
+    }
+    const avgDaysToComplete = avgCount > 0 ? Math.round((avgSumDays / avgCount) * 10) / 10 : null;
+
     // Totals
     const totalCompleted = Object.values(byDay).reduce((s, d) => s + d.completed, 0);
     const totalEvents = Object.values(byDay).reduce((s, d) => s + d.total, 0);
@@ -109,6 +120,7 @@ export async function GET(req: NextRequest) {
         },
         streak: { current: currentStreak, best: bestStreak },
         bestDay,
+        avgDaysToComplete,
       },
       { headers: { "Cache-Control": "no-store" } }
     );

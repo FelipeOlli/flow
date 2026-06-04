@@ -7,6 +7,7 @@ import { FlowTask } from "@/types/task";
 import { TaskBlock } from "@/components/tasks/TaskBlock";
 import { getEventSurfaceColor } from "@/lib/colors";
 import { EventAnchorPoint } from "./EventPopover";
+import { computeDaysOpen, agingBadgeColor } from "@/lib/aging";
 import {
   CALENDAR_DIMENSIONS,
   CURRENT_TIME_LINE_Z_INDEX,
@@ -19,6 +20,8 @@ import {
   timeToY,
   yToTime,
 } from "./calendarLayout";
+
+const CLIENT_TZ = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/Sao_Paulo";
 
 function AgendaView({ tasks, currentDate, onComplete, onEdit, onImportant, getAnchorFromElement }: {
   tasks: FlowTask[];
@@ -124,6 +127,7 @@ function AgendaView({ tasks, currentDate, onComplete, onEdit, onImportant, getAn
                         <p className={`text-xs text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>
                           {task.isAllDay ? "Dia inteiro" : `${format(new Date(task.startTime), "HH:mm")} - ${format(new Date(task.endTime), "HH:mm")}`}
                         </p>
+                        {(() => { const d = computeDaysOpen(task, CLIENT_TZ); return d >= 1 ? <p className={`text-xs mt-0.5 ${agingBadgeColor(d)}`}>{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p> : null; })()}
                       </div>
                       {onImportant && (
                         <button
@@ -152,11 +156,98 @@ function AgendaView({ tasks, currentDate, onComplete, onEdit, onImportant, getAn
   );
 }
 
+function PriorityView({ tasks, currentDate, onComplete, onEdit, onImportant, getAnchorFromElement }: {
+  tasks: FlowTask[];
+  currentDate: Date;
+  onComplete: (task: FlowTask) => void;
+  onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
+  onImportant?: (task: FlowTask) => void;
+  getAnchorFromElement: (el: HTMLElement) => EventAnchorPoint;
+}) {
+  const open = tasks
+    .filter((t) => !t.isComplete && !t.isCancelled)
+    .map((t) => ({ task: t, days: computeDaysOpen(t, CLIENT_TZ) }))
+    .sort((a, b) => b.days - a.days || new Date(a.task.startTime).getTime() - new Date(b.task.startTime).getTime());
+
+  return (
+    <div className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2 space-y-3">
+      <div className="rounded-lg border border-[#3c4043] bg-[#2a2b2e] px-3 py-2 flex items-center justify-between">
+        <p className="text-sm font-semibold text-[#e8eaed]">{open.length} tarefa(s) em aberto</p>
+        <span className="text-xs text-[#9aa0a6] capitalize">
+          {format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
+        </span>
+      </div>
+
+      {open.length === 0 && (
+        <p className="text-sm text-[#9aa0a6] text-center py-6">Nenhuma tarefa em aberto para este dia.</p>
+      )}
+
+      <div className="space-y-1.5">
+        {open.map(({ task, days }) => (
+          <div
+            key={task.id}
+            onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
+            className="rounded-lg border px-3 py-2 cursor-pointer"
+            style={{
+              backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus, task.isCancelled, task.isImportant),
+              borderColor: "rgba(12,14,16,0.56)",
+            }}
+          >
+            <div className="flex items-start gap-2">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onComplete(task); }}
+                className="mt-0.5 w-4 h-4 rounded-full border border-white/85 flex-shrink-0 flex items-center justify-center"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 text-sm font-semibold leading-tight text-[#e8eaed]">
+                  <span className="truncate">{task.title}</span>
+                  {task.attendees && task.attendees.length > 0 && (
+                    <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0 text-white" fill="currentColor">
+                      <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+                    </svg>
+                  )}
+                </div>
+                <p className="text-xs text-[#d2d6da] mt-0.5">
+                  {task.isAllDay ? "Dia inteiro" : `${format(new Date(task.startTime), "HH:mm")} - ${format(new Date(task.endTime), "HH:mm")}`}
+                </p>
+                {task.calendarName && (
+                  <p className="text-xs mt-0.5 truncate text-white/70">{task.calendarName}</p>
+                )}
+                {days >= 1 && (
+                  <p className={`text-xs font-semibold mt-0.5 ${agingBadgeColor(days)}`}>
+                    {days === 1 ? "1 dia em aberto" : `${days} dias em aberto`}
+                  </p>
+                )}
+              </div>
+              {onImportant && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onImportant(task); }}
+                  className={`flex-shrink-0 transition-colors ${task.isImportant ? "text-white" : "text-white/30 hover:text-white/60"}`}
+                  aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
+                >
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>
+                    {task.isImportant
+                      ? <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                      : <path d="M22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/>
+                    }
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface DayViewProps {
   tasks: FlowTask[];
   currentDate: Date;
   pendingIds: Set<string>;
-  displayMode?: "grid" | "list" | "calendar";
+  displayMode?: "grid" | "list" | "calendar" | "priority";
   onComplete: (task: FlowTask) => void;
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onDelete: (task: FlowTask) => void;
@@ -402,6 +493,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                     {task.calendarName && (
                       <p className="text-xs mt-0.5 truncate text-white/70">{task.calendarName}</p>
                     )}
+                    {(() => { const d = computeDaysOpen(task, CLIENT_TZ); return d >= 1 ? <p className={`text-xs mt-0.5 ${agingBadgeColor(d)}`}>{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p> : null; })()}
                   </div>
                   {onImportant && (
                     <button
@@ -431,6 +523,10 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
 
   if (displayMode === "calendar") {
     return <AgendaView tasks={tasks} currentDate={currentDate} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
+  }
+
+  if (displayMode === "priority") {
+    return <PriorityView tasks={tasks} currentDate={currentDate} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
   }
 
   return (

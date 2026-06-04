@@ -23,6 +23,8 @@ export interface FlowTask {
   recurrenceEndHint?: string;
   /** ISO 8601 — quando o evento foi criado no Google Calendar */
   createdAt?: string;
+  /** ISO 8601 — quando o evento foi marcado como concluído (via flowCompletedAt extended property) */
+  completedAt?: string;
 }
 
 export type AttendanceStatus = "needsAction" | "declined" | "tentative" | "accepted";

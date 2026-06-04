@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { FlowTask } from "@/types/task";
+import { computeDaysOpen, agingBadgeColor } from "@/lib/aging";
 
 interface TaskItemProps {
   task: FlowTask;
@@ -15,6 +16,8 @@ interface TaskItemProps {
 
 export function TaskItem({ task, onComplete, onEdit, onDelete, isPending, onImportant }: TaskItemProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/Sao_Paulo";
+  const daysOpen = computeDaysOpen(task, tz);
 
   function formatTime(iso: string) {
     try {
@@ -78,6 +81,11 @@ export function TaskItem({ task, onComplete, onEdit, onDelete, isPending, onImpo
           <p className={`text-xs mt-0.5 ${task.isComplete ? "text-gray-600" : "text-gray-500"}`}>
             {formatTime(task.startTime)}
             {task.endTime && ` — ${formatTime(task.endTime)}`}
+          </p>
+        )}
+        {daysOpen >= 1 && (
+          <p className={`text-xs mt-0.5 ${agingBadgeColor(daysOpen)}`}>
+            {daysOpen === 1 ? "1 dia em aberto" : `${daysOpen} dias em aberto`}
           </p>
         )}
         {task.description && (

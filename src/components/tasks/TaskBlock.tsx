@@ -4,6 +4,7 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { FlowTask } from "@/types/task";
 import { getEventSurfaceColor } from "@/lib/colors";
+import { computeDaysOpen, agingBadgeColor } from "@/lib/aging";
 
 interface TaskBlockProps {
   task: FlowTask;
@@ -41,6 +42,8 @@ export function TaskBlock({
     task.isImportant
   );
 
+  const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/Sao_Paulo";
+  const daysOpen = computeDaysOpen(task, tz);
   const roofMode = sameStartTotal > 1;
   const sameStartGapPx = 0;
   const sameStartTotalGapPx = Math.max(0, (sameStartTotal - 1) * sameStartGapPx);
@@ -96,6 +99,11 @@ export function TaskBlock({
               <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
             </svg>
           )}
+          {daysOpen >= 1 && (
+            <span className={`text-[9px] font-medium flex-shrink-0 leading-none ${agingBadgeColor(daysOpen)}`}>
+              {daysOpen}d
+            </span>
+          )}
         </div>
       ) : (
         <div className="flex items-start gap-1.5">
@@ -125,6 +133,11 @@ export function TaskBlock({
                 <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 flex-shrink-0 text-white" fill="currentColor">
                   <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
                 </svg>
+              )}
+              {daysOpen >= 1 && (
+                <span className={`text-[9px] font-medium flex-shrink-0 leading-none ${agingBadgeColor(daysOpen)}`}>
+                  {daysOpen}d
+                </span>
               )}
               {onImportant && (
                 <button

@@ -19,6 +19,7 @@ import {
   yToTime,
 } from "./calendarLayout";
 import { getDateKeyInTimeZone, getTaskGridDateKey } from "@/lib/timezone";
+import { computeDaysOpen, agingBadgeColor } from "@/lib/aging";
 
 interface ThreeDayViewProps {
   tasks: FlowTask[];
@@ -173,6 +174,7 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, displayMode = "gr
                             {format(new Date(task.startTime), "HH:mm")} - {format(new Date(task.endTime), "HH:mm")}
                           </p>
                           {task.calendarName && <p className="text-xs mt-0.5 truncate text-white/70">{task.calendarName}</p>}
+                          {(() => { const d = computeDaysOpen(task, tz); return d >= 1 ? <p className={`text-xs mt-0.5 ${agingBadgeColor(d)}`}>{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p> : null; })()}
                         </div>
                         {onImportant && (
                           <button

@@ -233,6 +233,98 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
+### 2026-06-04
+
+**O que foi feito:**
+
+1. **Métrica "Dias em aberto"** — Badge exibido em todos os cards de eventos não-concluídos com ≥1 dia desde a criação. Formato curto (`3d`) no Grade/denso; formato longo (`3 dias em aberto`) em Lista, Agenda e Popover. Cor escalonada: branco/60 (1–3 dias), amarelo `#F6BF26` (4–7 dias), vermelho `#ea4335` (>7 dias). Usa `event.created` (Google) como base — preservado durante migrações (PATCH, não recria).
+
+2. **Nova aba "Prioridade"** — 4º modo da view Dia (toggle Lista/Grade/Agenda/Prioridade). Lista todos os eventos não-concluídos do dia em ordem decrescente de dias em aberto. Cada card traz badge de aging destacado.
+
+3. **`flowCompletedAt` em extended properties** — Salvo ao marcar concluído (`markEventComplete`), limpo ao desmarcar (`markEventIncomplete`). Exposto como `completedAt` em `FlowTask`.
+
+4. **Dashboard — Tempo médio até concluir** — Novo 5º card no painel de desempenho (`sm:grid-cols-5`). Calcula média de `completedAt - createdAt` em dias (eventos que têm ambos os campos). Mostra `—` enquanto não há dados com `flowCompletedAt`.
+
+5. **`src/lib/aging.ts`** — Novo utilitário: `computeDaysOpen(task, tz)` e `agingBadgeColor(days)`.
+
+**Arquivos criados:**
+- `src/lib/aging.ts`
+
+**Arquivos modificados:**
+- `src/types/task.ts` — novo campo `completedAt`
+- `src/lib/google-calendar.ts` — `mapEvent`, `markEventComplete`, `markEventIncomplete`
+- `src/app/api/stats/route.ts` — cálculo de `avgDaysToComplete`
+- `src/components/dashboard/DashboardView.tsx` — novo card + tipo atualizado
+- `src/components/calendar/CalendarView.tsx` — toggle 4 modos (grid-cols-4)
+- `src/components/calendar/DayView.tsx` — `PriorityView`, badges em Lista e Agenda
+- `src/components/calendar/WeekView.tsx` — badge em modo Lista
+- `src/components/calendar/ThreeDayView.tsx` — badge em modo Lista
+- `src/components/calendar/EventPopover.tsx` — badge após horário
+- `src/components/tasks/TaskBlock.tsx` — badge (denso + normal)
+- `src/components/tasks/TaskItem.tsx` — badge
+
+**Decisões tomadas:**
+- `event.created` (Google, nativo) como fonte do "dias em aberto" — sem campo extra, imutável, preservado por PATCH de migração
+- `flowCompletedAt` vazio (não `null`) ao desmarcar — consistente com padrão de `flowOriginalColorId` no projeto
+- `avgDaysToComplete` conta apenas eventos que já tinham `flowCompletedAt` gravado (sem backfill) — correto, sem retroagir
+- Badge omitido para eventos concluídos, cancelados e com 0 dias em aberto (criado hoje)
+
+**Próximos passos:** nenhum pendente.
+
+---
+
+### 2026-06-01
+
+**O que foi feito:**
+
+1. **Busca insensível a maiúsculas, acentos e espaços** — Implementado `normalizeForSearch()` (NFD + strip diacríticos + lowercase + colapsa espaços). Busca envia duas queries paralelas ao Google (raw + sem acentos) e filtra localmente por tokens normalizados em título, descrição e convidados.
+
+2. **Fix: "dossie" não encontrava "Dossiê"** — Quando a query é ASCII puro, o `q` do Google não retorna eventos acentuados. Adicionado Fetch C paralelo sem `q` sobre ±2 anos (sem limite por calendário) para capturar matches acentuados.
+
+3. **Setas de navegação do header fixas** — Substituído flex variável por `flex items-center` + `w-56 text-center` no texto da data. As setas ficam sempre coladas ao texto independente do tamanho do label.
+
+4. **Auto-scroll para hora atual confiável** — Corrigido `useEffect` com deps vazias `[]` que falhava quando o modo ativo não estava no DOM no mount. Agora ambos os efeitos (grid e lista) dependem de `displayMode` + `requestAnimationFrame` para garantir DOM pronto antes do scroll. Corrigido em `DayView`, `WeekView` e `ThreeDayView`.
+
+**Arquivos modificados:**
+- `src/app/api/tasks/route.ts` — busca normalizada, fetch duplo/triplo paralelo
+- `src/lib/google-calendar.ts` — exporta `normalizeForSearch()`
+- `src/components/calendar/CalendarView.tsx` — header com setas fixas
+- `src/components/calendar/DayView.tsx` — auto-scroll com `displayMode` dep
+- `src/components/calendar/WeekView.tsx` — auto-scroll com `displayMode` dep
+- `src/components/calendar/ThreeDayView.tsx` — auto-scroll com `displayMode` dep
+
+**Decisões tomadas:**
+- Fetch C (sem `q`, ±2 anos) sem `maxResults` por calendário para não cortar eventos acentuados
+- `requestAnimationFrame` nos scrolls para garantir layout pintado antes de ler `offsetTop`
+- Texto da data com `w-56` fixo — suficiente para o label mais longo ("Hoje • Quarta-Feira, 31 De Dezembro")
+
+**Próximos passos:** nenhum pendente.
+
+---
+
+### 2026-05-26
+
+**O que foi feito:**
+
+1. **Auto-scroll para hora atual no modo Lista** — Ao abrir o app em modo Lista (Dia, Semana ou 3 Dias), a lista rola automaticamente até o separador "Agora HH:MM", posicionando o próximo evento imediatamente visível. Funciona em desktop e mobile.
+
+**Arquivos modificados:**
+- `src/components/calendar/DayView.tsx`
+- `src/components/calendar/WeekView.tsx`
+- `src/components/calendar/ThreeDayView.tsx`
+
+**Decisões tomadas:**
+- Adicionado `listScrollRef` (container) e `listNowSepRef` (separador) em cada view. `useEffect` com dependência em `tasks.length` garante que o scroll só ocorre após os eventos carregarem (fetch assíncrono).
+- `scrollTop = offsetTop - 80` para deixar 1–2 eventos passados visíveis acima do separador, seguindo o mesmo padrão do modo Grade (`-120`/`-100`).
+- Não usou `scrollIntoView` para evitar scroll no `<html>` ao invés do container correto.
+- Auto-scroll não repete a cada 30s (só na entrada) para não atrapalhar o usuário lendo eventos antigos.
+
+**Commit:** `068e152`
+
+**Próximos passos:** nenhum pendente.
+
+---
+
 ### 2026-04-18 (sessão 2)
 
 **O que foi feito:**

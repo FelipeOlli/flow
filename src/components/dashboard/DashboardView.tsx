@@ -14,6 +14,7 @@ type StatsData = {
   totals: { total: number; completed: number; rate: number };
   streak: { current: number; best: number };
   bestDay: { date: string; completed: number } | null;
+  avgDaysToComplete: number | null;
 };
 
 interface DashboardViewProps {
@@ -137,8 +138,8 @@ export function DashboardView({ onBack }: DashboardViewProps) {
           {/* Content */}
           {!loading && data && (
             <>
-              {/* Summary Cards — 2 cols on mobile, 4 on sm+ */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {/* Summary Cards — 2 cols on mobile, 5 on sm+ */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                 {/* Completed */}
                 <div className="rounded-xl border border-[#3c4043] bg-[#2a2b2e] p-3">
                   <p className="text-[11px] text-[#9aa0a6] mb-1.5">Concluídos</p>
@@ -176,6 +177,17 @@ export function DashboardView({ onBack }: DashboardViewProps) {
                     {data.bestDay?.completed ?? 0}
                   </p>
                   <p className="text-[11px] text-[#9aa0a6] mt-1.5">{bestDayLabel}</p>
+                </div>
+
+                {/* Avg days to complete */}
+                <div className="rounded-xl border border-[#3c4043] bg-[#2a2b2e] p-3">
+                  <p className="text-[11px] text-[#9aa0a6] mb-1.5">Tempo médio</p>
+                  <p className="text-3xl font-bold text-white leading-none">
+                    {data.avgDaysToComplete != null
+                      ? data.avgDaysToComplete.toLocaleString("pt-BR", { maximumFractionDigits: 1 })
+                      : "—"}
+                  </p>
+                  <p className="text-[11px] text-[#9aa0a6] mt-1.5">dias até concluir</p>
                 </div>
               </div>
 

@@ -75,6 +75,7 @@ function mapEvent(
     recurrenceSummary: recurrenceDisplay.summary || undefined,
     recurrenceEndHint: recurrenceDisplay.endHint,
     createdAt: event.created ?? undefined,
+    completedAt: event.extendedProperties?.private?.["flowCompletedAt"] || undefined,
   };
 }
 
@@ -303,6 +304,7 @@ export async function markEventComplete(
         private: {
           flowCompleted: "true",
           flowOriginalColorId: originalColorId,
+          flowCompletedAt: new Date().toISOString(),
         },
       },
     },
@@ -329,6 +331,7 @@ export async function markEventIncomplete(
         private: {
           flowCompleted: "false",
           flowOriginalColorId: "",
+          flowCompletedAt: "",
         },
       },
     },
