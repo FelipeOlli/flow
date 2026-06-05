@@ -51,18 +51,18 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
 
   useEffect(() => {
     if (displayMode !== "grid") return;
-    requestAnimationFrame(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       if (scrollRef.current) scrollRef.current.scrollTop = Math.max(0, nowY - 100);
-    });
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayMode]);
 
   useEffect(() => {
     if (displayMode !== "list") return;
-    requestAnimationFrame(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       if (listScrollRef.current && listNowSepRef.current)
         listScrollRef.current.scrollTop = Math.max(0, listNowSepRef.current.offsetTop - 80);
-    });
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayMode, tasks.length]);
 
