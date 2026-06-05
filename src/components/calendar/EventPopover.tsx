@@ -140,7 +140,7 @@ export function EventPopover({
     top: "50%",
     left: "50%",
     transform: "translate(-50%, -50%)",
-    width: "min(380px, calc(100vw - 24px))",
+    width: "min(480px, calc(100vw - 24px))",
   } as const;
 
   const dateLabel = task.startTime
@@ -275,7 +275,7 @@ export function EventPopover({
           </div>
         </div>
 
-        <div className="px-4 pb-4 space-y-3 max-h-[min(72vh,560px)] overflow-y-auto">
+        <div className="px-4 pb-4 space-y-3 max-h-[min(80vh,640px)] overflow-y-auto">
           {!editing ? (
             <>
               <div className={`text-sm text-[#e8eaed] ${task.isCancelled ? "line-through text-[#9aa0a6]" : ""}`}>
