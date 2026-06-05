@@ -72,13 +72,6 @@ export function TaskItem({ task, onComplete, onEdit, onDelete, isPending, onImpo
 
       {/* Content */}
       <div className="flex-1 min-w-0" onClick={onEdit}>
-        {catLetters.length > 0 && (
-          <div className="flex gap-1 mb-0.5">
-            {catLetters.map(({ letter, color }) => (
-              <span key={letter} className={`text-[10px] font-bold leading-none px-1 py-0.5 rounded bg-white/8 ${color}`}>{letter}</span>
-            ))}
-          </div>
-        )}
         <p className={`
           font-medium text-sm truncate transition-all
           ${task.isComplete ? "line-through text-gray-500" : "text-white"}
@@ -101,22 +94,29 @@ export function TaskItem({ task, onComplete, onEdit, onDelete, isPending, onImpo
         )}
       </div>
 
-      {/* Important button */}
-      {onImportant && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onImportant(); }}
-          className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full transition-all
-            ${task.isImportant ? "text-white" : "text-gray-600 hover:text-gray-400 hover:bg-gray-800"}`}
-          aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
-        >
-          <svg viewBox="0 0 24 24" className="w-4 h-4" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>
-            {task.isImportant
-              ? <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-              : <path d="M22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/>
-            }
-          </svg>
-        </button>
-      )}
+      {/* Right column: star + tag badge */}
+      <div className="flex-shrink-0 flex flex-col items-center gap-1">
+        {onImportant && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onImportant(); }}
+            className={`w-8 h-8 flex items-center justify-center rounded-full transition-all
+              ${task.isImportant ? "text-white" : "text-gray-600 hover:text-gray-400 hover:bg-gray-800"}`}
+            aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>
+              {task.isImportant
+                ? <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                : <path d="M22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/>
+              }
+            </svg>
+          </button>
+        )}
+        {catLetters.length > 0 && (
+          <span className={`text-[10px] font-bold leading-none px-1.5 py-0.5 rounded bg-white/8 ${catLetters[0].color}`}>
+            {catLetters[0].letter}
+          </span>
+        )}
+      </div>
 
       {/* Delete button */}
       <button

@@ -21,8 +21,7 @@ interface EventPopoverProps {
   onDelete: (task: FlowTask) => void;
   onToggleComplete: (task: FlowTask) => void;
   onToggleImportant?: (task: FlowTask) => void;
-  onToggleDelegable?: (task: FlowTask) => void;
-  onSetCategory?: (task: FlowTask, category: "operational" | "strategic" | null) => void;
+  onSetTag?: (task: FlowTask, tag: "O" | "E" | "D" | null) => void;
   onSetPillar?: (task: FlowTask, pillar: Pillar | null) => void;
 }
 
@@ -43,8 +42,7 @@ export function EventPopover({
   onDelete,
   onToggleComplete,
   onToggleImportant,
-  onToggleDelegable,
-  onSetCategory,
+  onSetTag,
   onSetPillar,
 }: EventPopoverProps) {
   const [editing, setEditing] = useState(false);
@@ -404,48 +402,30 @@ export function EventPopover({
                     {task.isImportant ? "Remover destaque" : "Marcar como importante"}
                   </button>
                 )}
-                {onSetCategory && (
-                  <>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => onSetCategory(task, task.category === "operational" ? null : "operational")}
-                      className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors disabled:opacity-50 ${
-                        task.category === "operational"
-                          ? "border-white/40 bg-white/10 text-white/60"
-                          : "border-[#5f6368] text-white/40 hover:bg-[#2a2b2e]"
-                      }`}
-                    >
-                      O
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => onSetCategory(task, task.category === "strategic" ? null : "strategic")}
-                      className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors disabled:opacity-50 ${
-                        task.category === "strategic"
-                          ? "border-[#a78bfa]/70 bg-[#a78bfa]/10 text-[#a78bfa]"
-                          : "border-[#5f6368] text-white/40 hover:bg-[#2a2b2e]"
-                      }`}
-                    >
-                      E
-                    </button>
-                  </>
-                )}
-                {onToggleDelegable && (
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => onToggleDelegable(task)}
-                    className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors disabled:opacity-50 ${
-                      task.isDelegable
-                        ? "border-[#4dd0e1]/70 bg-[#4dd0e1]/10 text-[#4dd0e1]"
-                        : "border-[#5f6368] text-white/40 hover:bg-[#2a2b2e]"
-                    }`}
-                  >
-                    D
-                  </button>
-                )}
+                {onSetTag && (() => {
+                  const activeTag = task.category === "operational" ? "O" : task.category === "strategic" ? "E" : task.isDelegable ? "D" : null;
+                  return (
+                    <div className="flex rounded-lg border border-[#5f6368] overflow-hidden">
+                      {(["O", "E", "D"] as const).map((tag) => {
+                        const isActive = activeTag === tag;
+                        const colors: Record<string, string> = { O: "text-white/70", E: "text-[#a78bfa]", D: "text-[#4dd0e1]" };
+                        const activeBg: Record<string, string> = { O: "bg-white/10", E: "bg-[#a78bfa]/15", D: "bg-[#4dd0e1]/15" };
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            disabled={pending}
+                            onClick={() => onSetTag(task, isActive ? null : tag)}
+                            className={`px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 border-r border-[#5f6368] last:border-r-0
+                              ${isActive ? `${activeBg[tag]} ${colors[tag]}` : "text-white/30 hover:bg-[#2a2b2e]"}`}
+                          >
+                            {tag}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
                 <button
                   type="button"
                   onClick={() => setEditing(true)}

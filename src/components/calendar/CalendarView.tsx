@@ -304,41 +304,27 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     }
   }
 
-  async function handleToggleDelegable(task: FlowTask) {
-    const newVal = !task.isDelegable;
-    setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isDelegable: newVal } : t));
+  async function handleSetTag(task: FlowTask, tag: "O" | "E" | "D" | null) {
+    const newCategory = tag === "O" ? "operational" : tag === "E" ? "strategic" : undefined;
+    const newDelegable = tag === "D";
+    setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, category: newCategory, isDelegable: newDelegable } : t));
     setPendingIds((p) => new Set(p).add(task.id));
+    const calendarId = task.calendarId ?? "primary";
     try {
-      const res = await fetch(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isDelegable: newVal, calendarId: task.calendarId ?? "primary" }),
-      });
-      if (res.status === 401) { router.replace("/sign-in"); return; }
-      if (!res.ok) throw new Error("Failed");
+      for (const body of [
+        { category: newCategory ?? null, calendarId },
+        { isDelegable: newDelegable, calendarId },
+      ]) {
+        const res = await fetch(`/api/tasks/${task.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.status === 401) { router.replace("/sign-in"); return; }
+        if (!res.ok) throw new Error("Failed");
+      }
     } catch {
-      setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isDelegable: task.isDelegable } : t));
-      setMigrateResult("Não foi possível salvar. Verifique o acesso ao calendário.");
-      scheduleMigrateResultClear(4_000);
-    } finally {
-      setPendingIds((p) => { const n = new Set(p); n.delete(task.id); return n; });
-    }
-  }
-
-  async function handleSetCategory(task: FlowTask, category: "operational" | "strategic" | null) {
-    const newCat = category;
-    setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, category: newCat ?? undefined } : t));
-    setPendingIds((p) => new Set(p).add(task.id));
-    try {
-      const res = await fetch(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category: newCat, calendarId: task.calendarId ?? "primary" }),
-      });
-      if (res.status === 401) { router.replace("/sign-in"); return; }
-      if (!res.ok) throw new Error("Failed");
-    } catch {
-      setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, category: task.category } : t));
+      setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, category: task.category, isDelegable: task.isDelegable } : t));
       setMigrateResult("Não foi possível salvar. Verifique o acesso ao calendário.");
       scheduleMigrateResultClear(4_000);
     } finally {
@@ -1118,8 +1104,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
             closeEventCard();
           }}
           onToggleImportant={handleImportant}
-          onToggleDelegable={handleToggleDelegable}
-          onSetCategory={handleSetCategory}
+          onSetTag={handleSetTag}
           onSetPillar={handleSetPillar}
         />
       )}
