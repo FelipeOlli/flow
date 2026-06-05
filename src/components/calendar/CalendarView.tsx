@@ -7,6 +7,7 @@ import { ptBR } from "date-fns/locale";
 import { signOut, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, Pillar } from "@/types/task";
+import { CALENDAR_PILLAR_OVERRIDES } from "@/lib/pillar-config";
 import { DayView } from "./DayView";
 import { ThreeDayView } from "./ThreeDayView";
 import { WeekView } from "./WeekView";
@@ -134,6 +135,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const migrationMenuRef = useRef<HTMLDivElement | null>(null);
   const migrationButtonRef = useRef<HTMLButtonElement | null>(null);
   const migrateResultClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoPillarPatchedRef = useRef<Set<string>>(new Set());
   const [autoMigrationStatus, setAutoMigrationStatus] = useState<{
     state: "idle" | "running" | "success" | "error";
     finishedAt?: string;
@@ -183,6 +185,24 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   }, [router, view, format(currentDate, "yyyy-MM-dd")]);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
+
+  // Auto-persiste o pilar para eventos de calendários mapeados que ainda não têm flowPillar salvo
+  useEffect(() => {
+    const toPatch = tasks.filter((t) => {
+      if (t.isComplete || autoPillarPatchedRef.current.has(t.id)) return false;
+      const expectedPillar = CALENDAR_PILLAR_OVERRIDES[t.calendarName ?? ""];
+      return expectedPillar && t.pillar === expectedPillar;
+    });
+    if (toPatch.length === 0) return;
+    toPatch.forEach((t) => autoPillarPatchedRef.current.add(t.id));
+    toPatch.forEach((t) => {
+      fetch(`/api/tasks/${t.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pillar: CALENDAR_PILLAR_OVERRIDES[t.calendarName ?? ""], calendarId: t.calendarId ?? "primary" }),
+      }).catch(() => {});
+    });
+  }, [tasks]);
 
   useEffect(() => {
     fetch("/api/google-status")

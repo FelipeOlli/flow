@@ -2,6 +2,7 @@ import { google, calendar_v3 } from "googleapis";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, AttendanceStatus, Pillar } from "@/types/task";
 import { getDateKeyInTimeZone, getUtcRangeForDateKey, shiftDateKey } from "./timezone";
 import { formatGoogleRecurrence } from "./recurrence-format";
+import { CALENDAR_PILLAR_OVERRIDES } from "./pillar-config";
 
 const COMPLETE_COLOR_ID = "2";
 const IMPORTANT_COLOR_ID = "5";
@@ -10,9 +11,6 @@ const IMPORTANT_COLOR_ID = "5";
 const CALENDAR_COLOR_OVERRIDES: Record<string, string> = {
   "TI CF Contabilidade": "#1e3a5f",
 };
-
-// Mapeamento calendário→pilar: preencher com nomes dos próprios calendários
-export const CALENDAR_PILLAR_OVERRIDES: Record<string, Pillar> = {};
 
 export function normalizeForSearch(text: string): string {
   return text
