@@ -16,7 +16,6 @@ import { EventPopover, EventAnchorPoint } from "./EventPopover";
 import { TaskForm } from "@/components/tasks/TaskForm";
 import { DashboardView } from "@/components/dashboard/DashboardView";
 import { WeeklyReviewView } from "@/components/dashboard/WeeklyReviewView";
-import { ProjectsView } from "@/components/projects/ProjectsView";
 
 type View = "day" | "3days" | "week" | "month";
 const LAYERS = {
@@ -103,7 +102,6 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [view, setView] = useState<View>("day");
   const [showDashboard, setShowDashboard] = useState(false);
   const [showWeeklyReview, setShowWeeklyReview] = useState(false);
-  const [showProjects, setShowProjects] = useState(false);
   const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list" | "calendar" | "priority">("list");
   const [multiDayDisplayMode, setMultiDayDisplayMode] = useState<"grid" | "list">("grid");
   const [currentDate, setCurrentDate] = useState(() =>
@@ -732,9 +730,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           <div className="flex items-center gap-1.5">
             {/* Calendário */}
             <button
-              onClick={() => { setShowDashboard(false); setShowProjects(false); setShowWeeklyReview(false); }}
+              onClick={() => { setShowDashboard(false); setShowWeeklyReview(false); }}
               className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
-                !showDashboard && !showProjects && !showWeeklyReview
+                !showDashboard && !showWeeklyReview
                   ? "bg-[#3c4043] text-[#e8eaed]"
                   : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
               }`}
@@ -751,9 +749,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
             {/* Dashboard */}
             <button
-              onClick={() => { setShowDashboard(true); setShowProjects(false); setShowWeeklyReview(false); }}
+              onClick={() => { setShowDashboard(true); setShowWeeklyReview(false); }}
               className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
-                showDashboard && !showProjects && !showWeeklyReview
+                showDashboard && !showWeeklyReview
                   ? "bg-[#3c4043] text-[#e8eaed]"
                   : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
               }`}
@@ -770,7 +768,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
               const isFriday = new Date().getDay() === 5;
               return (
                 <button
-                  onClick={() => { setShowWeeklyReview(true); setShowDashboard(false); setShowProjects(false); }}
+                  onClick={() => { setShowWeeklyReview(true); setShowDashboard(false); }}
                   className={`relative w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
                     showWeeklyReview
                       ? "bg-[#3c4043] text-[#e8eaed]"
@@ -788,24 +786,6 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                 </button>
               );
             })()}
-
-            {/* Projetos (Kanban) */}
-            <button
-              onClick={() => { setShowProjects(true); setShowDashboard(false); setShowWeeklyReview(false); }}
-              className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
-                showProjects
-                  ? "bg-[#3c4043] text-[#e8eaed]"
-                  : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
-              }`}
-              aria-label="Projetos"
-              title="Projetos"
-            >
-              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
-                <rect x="3" y="3" width="5" height="18" rx="1" />
-                <rect x="10" y="3" width="5" height="12" rx="1" />
-                <rect x="17" y="3" width="5" height="15" rx="1" />
-              </svg>
-            </button>
 
             {/* Migração (3 pontos) */}
             <div className="relative">
@@ -1012,7 +992,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           </div>
         </div>
 
-        {!showDashboard && !showProjects && !showWeeklyReview && (
+        {!showDashboard && !showWeeklyReview && (
           <>
             {/* View switcher */}
             <div className="flex gap-1 px-3 pb-2.5">
@@ -1064,51 +1044,48 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
         )}
       </div>
 
-      {/* Projetos (Kanban) */}
-      {showProjects && <ProjectsView onEdit={openEventCard} onComplete={handleComplete} />}
-
       {/* Dashboard */}
-      {showDashboard && !showProjects && !showWeeklyReview && <DashboardView onBack={() => setShowDashboard(false)} />}
+      {showDashboard && !showWeeklyReview && <DashboardView onBack={() => setShowDashboard(false)} />}
 
       {/* Revisão Semanal */}
       {showWeeklyReview && <WeeklyReviewView />}
 
       {/* Loading */}
-      {!showDashboard && !showProjects && !showWeeklyReview && loading && (
+      {!showDashboard && !showWeeklyReview && loading && (
         <div className="flex justify-center items-center py-8">
           <div className="w-5 h-5 border-2 border-[#8ab4f8]/30 border-t-[#8ab4f8] rounded-full animate-spin" />
         </div>
       )}
 
       {/* Views */}
-      {!showDashboard && !showProjects && !showWeeklyReview && !loading && view === "day" && (
+      {!showDashboard && !showWeeklyReview && !loading && view === "day" && (
         <DayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onMove={handleMove}
           onImportant={handleImportant}
           displayMode={dayDisplayMode} />
       )}
-      {!showDashboard && !showProjects && !showWeeklyReview && !loading && view === "3days" && (
+      {!showDashboard && !showWeeklyReview && !loading && view === "3days" && (
         <ThreeDayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
           onImportant={handleImportant}
           displayMode={multiDayDisplayMode} />
       )}
-      {!showDashboard && !showProjects && !showWeeklyReview && !loading && view === "week" && (
+      {!showDashboard && !showWeeklyReview && !loading && view === "week" && (
         <WeekView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
           onImportant={handleImportant}
           displayMode={multiDayDisplayMode} />
       )}
-      {!showDashboard && !showProjects && !showWeeklyReview && !loading && view === "month" && (
+      {!showDashboard && !showWeeklyReview && !loading && view === "month" && (
         <MonthView tasks={tasks} currentDate={currentDate} onDayClick={goToDate}
           onEventClick={openEventCard} onComplete={handleComplete} onImportant={handleImportant} />
       )}
 
       {/* FAB — hidden in dashboard/projects/review mode */}
-      {!showDashboard && !showProjects && !showWeeklyReview && (
+      {!showDashboard && !showWeeklyReview && (
         <button onClick={() => openCreateForm()}
           className={`fixed bottom-6 right-4 w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform backdrop-blur-md bg-[#8ab4f8]/30 border border-[#8ab4f8]/40 shadow-lg shadow-black/30 ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}>
           <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
