@@ -245,16 +245,34 @@ export function EventPopover({
               </button>
             )}
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-9 h-9 min-w-9 min-h-9 rounded-full border border-[#8ab4f8] text-[#8ab4f8] hover:bg-[#8ab4f8]/10 transition-colors flex items-center justify-center"
-            aria-label="Fechar"
-          >
-            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-1.5">
+            {!editing && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onToggleComplete(task)}
+                className={`w-9 h-9 min-w-9 min-h-9 rounded-full border flex items-center justify-center transition-all disabled:opacity-50
+                  ${task.isComplete
+                    ? "bg-emerald-500 border-emerald-500 text-white"
+                    : "border-[#5f6368] text-[#9aa0a6] hover:border-emerald-500 hover:text-emerald-400"}`}
+                aria-label={task.isComplete ? "Marcar como pendente" : "Marcar como concluído"}
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 min-w-9 min-h-9 rounded-full border border-[#8ab4f8] text-[#8ab4f8] hover:bg-[#8ab4f8]/10 transition-colors flex items-center justify-center"
+              aria-label="Fechar"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="px-4 pb-4 space-y-3 max-h-[min(72vh,560px)] overflow-y-auto">
@@ -392,28 +410,6 @@ export function EventPopover({
               </div>
 
               <div className="flex flex-wrap gap-2 pt-1">
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => onToggleComplete(task)}
-                  className="px-3 py-1.5 rounded-lg border border-[#5f6368] text-xs text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors disabled:opacity-50"
-                >
-                  {task.isComplete ? "Marcar pendente" : "Marcar concluido"}
-                </button>
-                {onToggleImportant && (
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => onToggleImportant(task)}
-                    className={`px-3 py-1.5 rounded-lg border text-xs transition-colors disabled:opacity-50 ${
-                      task.isImportant
-                        ? "border-[#F6BF26]/70 bg-[#F6BF26]/10 text-[#F6BF26]"
-                        : "border-[#5f6368] text-[#e8eaed] hover:bg-[#2a2b2e]"
-                    }`}
-                  >
-                    {task.isImportant ? "Remover destaque" : "Marcar como importante"}
-                  </button>
-                )}
                 {onSetTag && (() => {
                   const activeTag = task.category === "operational" ? "O" : task.category === "strategic" ? "E" : task.isDelegable ? "D" : null;
                   return (
