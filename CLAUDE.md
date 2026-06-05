@@ -233,7 +233,38 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
-### 2026-06-05
+### 2026-06-05 (sessão 2)
+
+**O que foi feito:**
+
+1. **Diálogo de exclusão de evento recorrente** — Ao excluir evento com `isRecurring === true`, modal com 3 opções radio: "Este evento", "Este e os eventos seguintes", "Todos os eventos". `deleteEvent` em `google-calendar.ts` estendido com `scope: "this" | "thisAndFollowing" | "all"`. `"thisAndFollowing"` trunca a RRULE da master com `UNTIL=originalStart−1s`. API DELETE aceita `?deleteScope=`. `handleDelete` em CalendarView propagado. Fix de z-index: dialog `z-[5000]` acima do backdrop do popover `z-[4000]`.
+
+2. **Ícone de recorrência nos cards** — SVG "repeat" Material Design (`text-white/70`) ao lado do ícone de convidados em todos os cards e listas: DayView (3 locais), WeekView, ThreeDayView, TaskBlock (compacto + normal).
+
+3. **Fix textarea de descrição** — Altura limitada a `max-h-40` (160px) com `overflow-y-auto`; antes crescia sem limite empurrando os botões para fora da tela.
+
+4. **Fix auto-scroll para hora atual** — Substituído single `requestAnimationFrame` por double-rAF em DayView, WeekView e ThreeDayView. Single rAF disparava antes do React commitar o separador "Agora" no DOM, causando falha no scroll em alguns dispositivos.
+
+5. **Cor do calendário DevPoint** — `CALENDAR_COLOR_OVERRIDES["DevPoint"] = "#18c4c4"`.
+
+**Arquivos modificados:**
+- `src/lib/google-calendar.ts` — `deleteEvent` com scope, `CALENDAR_COLOR_OVERRIDES` DevPoint
+- `src/app/api/tasks/[eventId]/route.ts` — `deleteScope` query param
+- `src/components/calendar/CalendarView.tsx` — `handleDelete` com scope
+- `src/components/calendar/EventPopover.tsx` — modal exclusão recorrente, z-index fix, textarea max-h
+- `src/components/calendar/DayView.tsx`, `WeekView.tsx`, `ThreeDayView.tsx` — ícone recorrência + double-rAF scroll
+- `src/components/tasks/TaskBlock.tsx` — ícone recorrência
+
+**Decisões tomadas:**
+- `"thisAndFollowing"` usa PATCH na master com `UNTIL=` (não deleta instâncias individualmente) — padrão da Google Calendar API
+- Double-rAF é o padrão para garantir layout calculado antes de ler `offsetTop`
+- Dialog do modal usa `z-[5000]` + `stopPropagation` para não conflitar com backdrop do popover
+
+**Próximos passos:** nenhum pendente.
+
+---
+
+### 2026-06-05 (sessão 1)
 
 **O que foi feito:**
 
@@ -245,28 +276,11 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 4. **4 Pilares (Fase 3)** — `TaskForm.tsx` com 4 botões segmentados (Trabalho/Saúde/Família/Espiritualidade) ao criar. `EventPopover` no modo edição com `<select>` de pilar. `stats/route.ts` agrega `weeklyPillars` (horas, %, `consecutiveZeroDays` por pilar na semana atual). `DashboardView` exibe card "Equilíbrio da semana" com 4 barras coloridas; borda vermelha quando `consecutiveZeroDays >= 5`.
 
-**Arquivos criados:**
-- `src/app/api/weekly-review/route.ts`
-- `src/components/dashboard/WeeklyReviewView.tsx`
+**Arquivos criados:** `src/app/api/weekly-review/route.ts`, `src/components/dashboard/WeeklyReviewView.tsx`
 
-**Arquivos modificados:**
-- `src/types/task.ts` — `Pillar`, `isDelegable`, `category`, `pillar`
-- `src/lib/google-calendar.ts` — mapEvent, novas mutations, `CALENDAR_PILLAR_OVERRIDES`
-- `src/lib/aging.ts` — `categoryLetters()`
-- `src/app/api/tasks/[eventId]/route.ts` — branches isDelegable, category, pillar
-- `src/app/api/stats/route.ts` — `repetitiveOperational`, `weeklyPillars`
-- `src/components/calendar/CalendarView.tsx` — handlers + toggle WeeklyReview + showWeeklyReview state
-- `src/components/calendar/EventPopover.tsx` — botões D/O/E + select pilar + badges
-- `src/components/tasks/TaskForm.tsx` — seletor de pilar
-- `src/components/tasks/TaskBlock.tsx`, `TaskItem.tsx` — badges D/O/E
-- `src/components/calendar/DayView.tsx`, `WeekView.tsx`, `ThreeDayView.tsx` — badges D/O/E nas listas
-- `src/components/dashboard/DashboardView.tsx` — `weeklyPillars` card + tipos
+**Arquivos modificados:** `src/types/task.ts`, `src/lib/google-calendar.ts`, `src/lib/aging.ts`, `src/app/api/tasks/[eventId]/route.ts`, `src/app/api/stats/route.ts`, `src/components/calendar/CalendarView.tsx`, `src/components/calendar/EventPopover.tsx`, `src/components/tasks/TaskForm.tsx`, `src/components/tasks/TaskBlock.tsx`, `TaskItem.tsx`, `src/components/calendar/DayView.tsx`, `WeekView.tsx`, `ThreeDayView.tsx`, `src/components/dashboard/DashboardView.tsx`
 
-**Decisões tomadas:**
-- D é independente de O/E (pode ser operacional + delegável ao mesmo tempo)
-- Sem alteração de `colorId` para D/O/E (só `isImportant` muda cor)
-- Mapeamento calendário→pilar hardcoded em `CALENDAR_PILLAR_OVERRIDES` (sem settings UI)
-- `consecutiveZeroDays` calculado sobre últimos 7 dias no timezone da requisição
+**Decisões tomadas:** D independente de O/E; sem `colorId` para D/O/E; `CALENDAR_PILLAR_OVERRIDES` hardcoded; `consecutiveZeroDays` sobre últimos 7 dias no tz da requisição.
 
 **Próximos passos:** nenhum pendente.
 
