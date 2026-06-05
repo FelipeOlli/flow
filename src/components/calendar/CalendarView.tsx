@@ -6,7 +6,7 @@ import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, end
 import { ptBR } from "date-fns/locale";
 import { signOut, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { FlowTask, CreateTaskInput, UpdateTaskInput } from "@/types/task";
+import { FlowTask, CreateTaskInput, UpdateTaskInput, Pillar } from "@/types/task";
 import { DayView } from "./DayView";
 import { ThreeDayView } from "./ThreeDayView";
 import { WeekView } from "./WeekView";
@@ -14,6 +14,7 @@ import { MonthView } from "./MonthView";
 import { EventPopover, EventAnchorPoint } from "./EventPopover";
 import { TaskForm } from "@/components/tasks/TaskForm";
 import { DashboardView } from "@/components/dashboard/DashboardView";
+import { WeeklyReviewView } from "@/components/dashboard/WeeklyReviewView";
 import { ProjectsView } from "@/components/projects/ProjectsView";
 
 type View = "day" | "3days" | "week" | "month";
@@ -100,6 +101,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const router = useRouter();
   const [view, setView] = useState<View>("day");
   const [showDashboard, setShowDashboard] = useState(false);
+  const [showWeeklyReview, setShowWeeklyReview] = useState(false);
   const [showProjects, setShowProjects] = useState(false);
   const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list" | "calendar" | "priority">("list");
   const [multiDayDisplayMode, setMultiDayDisplayMode] = useState<"grid" | "list">("grid");
@@ -295,6 +297,68 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       if (!res.ok) throw new Error("Failed to toggle important");
     } catch {
       setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isImportant: task.isImportant } : t));
+      setMigrateResult("Não foi possível salvar. Verifique o acesso ao calendário.");
+      scheduleMigrateResultClear(4_000);
+    } finally {
+      setPendingIds((p) => { const n = new Set(p); n.delete(task.id); return n; });
+    }
+  }
+
+  async function handleToggleDelegable(task: FlowTask) {
+    const newVal = !task.isDelegable;
+    setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isDelegable: newVal } : t));
+    setPendingIds((p) => new Set(p).add(task.id));
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isDelegable: newVal, calendarId: task.calendarId ?? "primary" }),
+      });
+      if (res.status === 401) { router.replace("/sign-in"); return; }
+      if (!res.ok) throw new Error("Failed");
+    } catch {
+      setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isDelegable: task.isDelegable } : t));
+      setMigrateResult("Não foi possível salvar. Verifique o acesso ao calendário.");
+      scheduleMigrateResultClear(4_000);
+    } finally {
+      setPendingIds((p) => { const n = new Set(p); n.delete(task.id); return n; });
+    }
+  }
+
+  async function handleSetCategory(task: FlowTask, category: "operational" | "strategic" | null) {
+    const newCat = category;
+    setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, category: newCat ?? undefined } : t));
+    setPendingIds((p) => new Set(p).add(task.id));
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: newCat, calendarId: task.calendarId ?? "primary" }),
+      });
+      if (res.status === 401) { router.replace("/sign-in"); return; }
+      if (!res.ok) throw new Error("Failed");
+    } catch {
+      setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, category: task.category } : t));
+      setMigrateResult("Não foi possível salvar. Verifique o acesso ao calendário.");
+      scheduleMigrateResultClear(4_000);
+    } finally {
+      setPendingIds((p) => { const n = new Set(p); n.delete(task.id); return n; });
+    }
+  }
+
+  async function handleSetPillar(task: FlowTask, pillar: Pillar | null) {
+    setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, pillar: pillar ?? undefined } : t));
+    setPendingIds((p) => new Set(p).add(task.id));
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pillar, calendarId: task.calendarId ?? "primary" }),
+      });
+      if (res.status === 401) { router.replace("/sign-in"); return; }
+      if (!res.ok) throw new Error("Failed");
+    } catch {
+      setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, pillar: task.pillar } : t));
       setMigrateResult("Não foi possível salvar. Verifique o acesso ao calendário.");
       scheduleMigrateResultClear(4_000);
     } finally {
@@ -639,9 +703,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           <div className="flex items-center gap-1.5">
             {/* Calendário */}
             <button
-              onClick={() => { setShowDashboard(false); setShowProjects(false); }}
+              onClick={() => { setShowDashboard(false); setShowProjects(false); setShowWeeklyReview(false); }}
               className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
-                !showDashboard && !showProjects
+                !showDashboard && !showProjects && !showWeeklyReview
                   ? "bg-[#3c4043] text-[#e8eaed]"
                   : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
               }`}
@@ -658,9 +722,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
             {/* Dashboard */}
             <button
-              onClick={() => { setShowDashboard(true); setShowProjects(false); }}
+              onClick={() => { setShowDashboard(true); setShowProjects(false); setShowWeeklyReview(false); }}
               className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
-                showDashboard && !showProjects
+                showDashboard && !showProjects && !showWeeklyReview
                   ? "bg-[#3c4043] text-[#e8eaed]"
                   : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
               }`}
@@ -672,9 +736,33 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
               </svg>
             </button>
 
+            {/* Revisão Semanal */}
+            {(() => {
+              const isFriday = new Date().getDay() === 5;
+              return (
+                <button
+                  onClick={() => { setShowWeeklyReview(true); setShowDashboard(false); setShowProjects(false); }}
+                  className={`relative w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+                    showWeeklyReview
+                      ? "bg-[#3c4043] text-[#e8eaed]"
+                      : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
+                  }`}
+                  aria-label="Revisão semanal"
+                  title="Revisão semanal"
+                >
+                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  {isFriday && !showWeeklyReview && (
+                    <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#a78bfa]" />
+                  )}
+                </button>
+              );
+            })()}
+
             {/* Projetos (Kanban) */}
             <button
-              onClick={() => { setShowProjects(true); setShowDashboard(false); }}
+              onClick={() => { setShowProjects(true); setShowDashboard(false); setShowWeeklyReview(false); }}
               className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
                 showProjects
                   ? "bg-[#3c4043] text-[#e8eaed]"
@@ -895,7 +983,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           </div>
         </div>
 
-        {!showDashboard && !showProjects && (
+        {!showDashboard && !showProjects && !showWeeklyReview && (
           <>
             {/* View switcher */}
             <div className="flex gap-1 px-3 pb-2.5">
@@ -951,44 +1039,47 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {showProjects && <ProjectsView onEdit={openEventCard} onComplete={handleComplete} />}
 
       {/* Dashboard */}
-      {showDashboard && !showProjects && <DashboardView onBack={() => setShowDashboard(false)} />}
+      {showDashboard && !showProjects && !showWeeklyReview && <DashboardView onBack={() => setShowDashboard(false)} />}
+
+      {/* Revisão Semanal */}
+      {showWeeklyReview && <WeeklyReviewView />}
 
       {/* Loading */}
-      {!showDashboard && !showProjects && loading && (
+      {!showDashboard && !showProjects && !showWeeklyReview && loading && (
         <div className="flex justify-center items-center py-8">
           <div className="w-5 h-5 border-2 border-[#8ab4f8]/30 border-t-[#8ab4f8] rounded-full animate-spin" />
         </div>
       )}
 
       {/* Views */}
-      {!showDashboard && !showProjects && !loading && view === "day" && (
+      {!showDashboard && !showProjects && !showWeeklyReview && !loading && view === "day" && (
         <DayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onMove={handleMove}
           onImportant={handleImportant}
           displayMode={dayDisplayMode} />
       )}
-      {!showDashboard && !showProjects && !loading && view === "3days" && (
+      {!showDashboard && !showProjects && !showWeeklyReview && !loading && view === "3days" && (
         <ThreeDayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
           onImportant={handleImportant}
           displayMode={multiDayDisplayMode} />
       )}
-      {!showDashboard && !showProjects && !loading && view === "week" && (
+      {!showDashboard && !showProjects && !showWeeklyReview && !loading && view === "week" && (
         <WeekView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
           onImportant={handleImportant}
           displayMode={multiDayDisplayMode} />
       )}
-      {!showDashboard && !showProjects && !loading && view === "month" && (
+      {!showDashboard && !showProjects && !showWeeklyReview && !loading && view === "month" && (
         <MonthView tasks={tasks} currentDate={currentDate} onDayClick={goToDate}
           onEventClick={openEventCard} onComplete={handleComplete} onImportant={handleImportant} />
       )}
 
-      {/* FAB — hidden in dashboard/projects mode */}
-      {!showDashboard && !showProjects && (
+      {/* FAB — hidden in dashboard/projects/review mode */}
+      {!showDashboard && !showProjects && !showWeeklyReview && (
         <button onClick={() => openCreateForm()}
           className={`fixed bottom-6 right-4 w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform backdrop-blur-md bg-[#8ab4f8]/30 border border-[#8ab4f8]/40 shadow-lg shadow-black/30 ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}>
           <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
@@ -1027,6 +1118,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
             closeEventCard();
           }}
           onToggleImportant={handleImportant}
+          onToggleDelegable={handleToggleDelegable}
+          onSetCategory={handleSetCategory}
+          onSetPillar={handleSetPillar}
         />
       )}
     </div>

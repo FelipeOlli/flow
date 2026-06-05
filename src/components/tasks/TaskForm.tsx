@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
-import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption } from "@/types/task";
+import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, Pillar } from "@/types/task";
 
 interface TaskFormProps {
   task?: FlowTask | null;
@@ -69,6 +69,7 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
     "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "weekdays"
   >("weekly");
   const [isImportant, setIsImportant] = useState(false);
+  const [pillar, setPillar] = useState<Pillar | null>(null);
   const [attendeeInput, setAttendeeInput] = useState("");
   const [attendees, setAttendees] = useState<string[]>([]);
 
@@ -167,6 +168,7 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
         const rrule = buildRRule();
         if (rrule.length) (payload as CreateTaskInput).recurrence = rrule;
         if (isImportant) (payload as CreateTaskInput).isImportant = true;
+        if (pillar) (payload as CreateTaskInput).pillar = pillar;
         if (attendees.length) (payload as CreateTaskInput).attendees = attendees;
       }
       await onSave(payload);
@@ -321,6 +323,35 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
                   </svg>
                   Importante
                 </button>
+              </div>
+            )}
+
+            {/* Pilar — só na criação */}
+            {!isEditing && (
+              <div>
+                <label className="text-xs text-[#9aa0a6] mb-1.5 block">Pilar</label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {([
+                    { value: "trabalho" as Pillar, label: "💼 Trabalho", color: "#4285f4" },
+                    { value: "saude" as Pillar, label: "🩺 Saúde", color: "#34a853" },
+                    { value: "familia" as Pillar, label: "👨‍👩‍👧 Família", color: "#f6bf26" },
+                    { value: "espiritualidade" as Pillar, label: "✨ Espirit.", color: "#a78bfa" },
+                  ] as { value: Pillar; label: string; color: string }[]).map(({ value, label, color }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setPillar((v) => v === value ? null : value)}
+                      className={`py-2 rounded-xl text-[10px] font-medium transition-colors border ${
+                        pillar === value
+                          ? "text-white"
+                          : "bg-[#2a2b2e] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"
+                      }`}
+                      style={pillar === value ? { backgroundColor: `${color}25`, borderColor: `${color}80`, color } : undefined}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 

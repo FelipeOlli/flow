@@ -1,5 +1,5 @@
 import { google, calendar_v3 } from "googleapis";
-import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, AttendanceStatus } from "@/types/task";
+import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, AttendanceStatus, Pillar } from "@/types/task";
 import { getDateKeyInTimeZone, getUtcRangeForDateKey, shiftDateKey } from "./timezone";
 import { formatGoogleRecurrence } from "./recurrence-format";
 
@@ -10,6 +10,9 @@ const IMPORTANT_COLOR_ID = "5";
 const CALENDAR_COLOR_OVERRIDES: Record<string, string> = {
   "TI CF Contabilidade": "#1e3a5f",
 };
+
+// Mapeamento calendário→pilar: preencher com nomes dos próprios calendários
+export const CALENDAR_PILLAR_OVERRIDES: Record<string, Pillar> = {};
 
 export function normalizeForSearch(text: string): string {
   return text
@@ -61,6 +64,9 @@ function mapEvent(
       return event.colorId === COMPLETE_COLOR_ID; // backward compat
     })(),
     isImportant: event.extendedProperties?.private?.["flowImportant"] === "true",
+    isDelegable: event.extendedProperties?.private?.["flowDelegable"] === "true",
+    category: (event.extendedProperties?.private?.["flowCategory"] as "operational" | "strategic" | undefined) || undefined,
+    pillar: ((event.extendedProperties?.private?.["flowPillar"] || CALENDAR_PILLAR_OVERRIDES[calendarName]) as Pillar | undefined) || undefined,
     colorId: event.colorId ?? undefined,
     description: event.description ?? undefined,
     isAllDay: !event.start?.dateTime,
@@ -245,6 +251,16 @@ export async function createEvent(
     };
   }
 
+  const extraPrivate: Record<string, string> = {};
+  if (input.isDelegable) extraPrivate.flowDelegable = "true";
+  if (input.category) extraPrivate.flowCategory = input.category;
+  if (input.pillar) extraPrivate.flowPillar = input.pillar;
+  if (Object.keys(extraPrivate).length > 0) {
+    requestBody.extendedProperties = {
+      private: { ...(requestBody.extendedProperties?.private ?? {}), ...extraPrivate },
+    };
+  }
+
   if (input.attendees?.length) {
     requestBody.attendees = input.attendees.map((email) => ({ email }));
   }
@@ -384,6 +400,72 @@ export async function markEventUnimportant(
           flowOriginalImportantColorId: "",
         },
       },
+    },
+  });
+  return mapEvent(data, calendarId);
+}
+
+export async function markEventDelegable(
+  accessToken: string,
+  eventId: string,
+  calendarId = "primary"
+): Promise<FlowTask> {
+  const calendar = getClient(accessToken);
+  const { data } = await calendar.events.patch({
+    calendarId,
+    eventId,
+    requestBody: {
+      extendedProperties: { private: { flowDelegable: "true" } },
+    },
+  });
+  return mapEvent(data, calendarId);
+}
+
+export async function markEventUndelegable(
+  accessToken: string,
+  eventId: string,
+  calendarId = "primary"
+): Promise<FlowTask> {
+  const calendar = getClient(accessToken);
+  const { data } = await calendar.events.patch({
+    calendarId,
+    eventId,
+    requestBody: {
+      extendedProperties: { private: { flowDelegable: "false" } },
+    },
+  });
+  return mapEvent(data, calendarId);
+}
+
+export async function setEventCategory(
+  accessToken: string,
+  eventId: string,
+  calendarId = "primary",
+  category: "operational" | "strategic" | null
+): Promise<FlowTask> {
+  const calendar = getClient(accessToken);
+  const { data } = await calendar.events.patch({
+    calendarId,
+    eventId,
+    requestBody: {
+      extendedProperties: { private: { flowCategory: category ?? "" } },
+    },
+  });
+  return mapEvent(data, calendarId);
+}
+
+export async function setEventPillar(
+  accessToken: string,
+  eventId: string,
+  calendarId = "primary",
+  pillar: Pillar | null
+): Promise<FlowTask> {
+  const calendar = getClient(accessToken);
+  const { data } = await calendar.events.patch({
+    calendarId,
+    eventId,
+    requestBody: {
+      extendedProperties: { private: { flowPillar: pillar ?? "" } },
     },
   });
   return mapEvent(data, calendarId);

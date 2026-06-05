@@ -19,7 +19,7 @@ import {
   yToTime,
 } from "./calendarLayout";
 import { getDateKeyInTimeZone, getTaskGridDateKey } from "@/lib/timezone";
-import { computeDaysOpen, agingBadgeColor } from "@/lib/aging";
+import { computeDaysOpen, agingBadgeColor, categoryLetters } from "@/lib/aging";
 
 interface WeekViewProps {
   tasks: FlowTask[];
@@ -176,6 +176,7 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
                           </p>
                           {task.calendarName && <p className="text-xs mt-0.5 truncate text-white/70">{task.calendarName}</p>}
                           {(() => { const d = computeDaysOpen(task, tz); return d >= 1 ? <p className={`text-xs mt-0.5 ${agingBadgeColor(d)}`}>{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p> : null; })()}
+                          {(() => { const cats = categoryLetters(task); return cats.length > 0 ? <p className="flex gap-1 mt-0.5">{cats.map(({letter,color}) => <span key={letter} className={`text-[10px] font-semibold ${color}`}>{letter}</span>)}</p> : null; })()}
                         </div>
                         {onImportant && (
                           <button

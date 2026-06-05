@@ -5,6 +5,10 @@ import {
   markEventIncomplete,
   markEventImportant,
   markEventUnimportant,
+  markEventDelegable,
+  markEventUndelegable,
+  setEventCategory,
+  setEventPillar,
   deleteEvent,
   moveEventToCalendar,
   updateEventRsvp,
@@ -42,6 +46,14 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
       task = await markEventImportant(accessToken, eventId, calendarId);
     } else if (body.isImportant === false) {
       task = await markEventUnimportant(accessToken, eventId, calendarId);
+    } else if (body.isDelegable === true) {
+      task = await markEventDelegable(accessToken, eventId, calendarId);
+    } else if (body.isDelegable === false) {
+      task = await markEventUndelegable(accessToken, eventId, calendarId);
+    } else if (body.category !== undefined) {
+      task = await setEventCategory(accessToken, eventId, calendarId, body.category);
+    } else if (body.pillar !== undefined) {
+      task = await setEventPillar(accessToken, eventId, calendarId, body.pillar);
     } else {
       const hasUpdateFields =
         body.title !== undefined ||

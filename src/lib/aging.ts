@@ -1,6 +1,15 @@
 import { FlowTask } from "@/types/task";
 import { getDateKeyInTimeZone, diffDateKeysInDays } from "./timezone";
 
+export function categoryLetters(task: FlowTask): { letter: string; color: string }[] {
+  if (task.isComplete) return [];
+  const result: { letter: string; color: string }[] = [];
+  if (task.category === "operational") result.push({ letter: "O", color: "text-white/50" });
+  if (task.category === "strategic") result.push({ letter: "E", color: "text-[#a78bfa]" });
+  if (task.isDelegable) result.push({ letter: "D", color: "text-[#4dd0e1]" });
+  return result;
+}
+
 export function computeDaysOpen(task: FlowTask, tz: string): number {
   if (task.isComplete) return 0;
   // Eventos recorrentes: cada instância nasce na sua data de início — usar startTime

@@ -1,3 +1,5 @@
+export type Pillar = "trabalho" | "saude" | "familia" | "espiritualidade";
+
 export interface FlowTask {
   id: string;
   title: string;
@@ -5,6 +7,9 @@ export interface FlowTask {
   endTime: string;
   isComplete: boolean;
   isImportant?: boolean;
+  isDelegable?: boolean;
+  category?: "operational" | "strategic";
+  pillar?: Pillar;
   colorId?: string;
   description?: string;
   isAllDay: boolean;
@@ -49,6 +54,9 @@ export interface CreateTaskInput {
   /** RRULE array, ex.: ["RRULE:FREQ=WEEKLY;BYDAY=MO"] */
   recurrence?: string[];
   isImportant?: boolean;
+  isDelegable?: boolean;
+  category?: "operational" | "strategic";
+  pillar?: Pillar;
   /** Lista de e-mails dos convidados */
   attendees?: string[];
 }
@@ -60,6 +68,9 @@ export interface UpdateTaskInput {
   description?: string;
   isComplete?: boolean;
   isImportant?: boolean;
+  isDelegable?: boolean;
+  category?: "operational" | "strategic" | null;
+  pillar?: Pillar | null;
   calendarId?: string;
   targetCalendarId?: string;
   attendanceStatus?: Exclude<AttendanceStatus, "needsAction">;

@@ -7,6 +7,9 @@ import { ptBR } from "date-fns/locale";
 type DayStats = { total: number; completed: number };
 type MonthStats = { month: number; label: string; total: number; completed: number };
 
+type PillarStats = { pillar: string; hours: number; pct: number; consecutiveZeroDays: number };
+type RepetitiveOp = { normalizedTitle: string; title: string; weeks: number };
+
 type StatsData = {
   year: number;
   byDay: Record<string, DayStats>;
@@ -15,6 +18,8 @@ type StatsData = {
   streak: { current: number; best: number };
   bestDay: { date: string; completed: number } | null;
   avgDaysToComplete: number | null;
+  repetitiveOperational?: RepetitiveOp[];
+  weeklyPillars?: PillarStats[];
 };
 
 interface DashboardViewProps {
@@ -190,6 +195,45 @@ export function DashboardView({ onBack }: DashboardViewProps) {
                   <p className="text-[11px] text-[#9aa0a6] mt-1.5">dias até concluir</p>
                 </div>
               </div>
+
+              {/* Equilíbrio da semana */}
+              {data.weeklyPillars && data.weeklyPillars.some((p) => p.hours > 0) && (
+                <div className="rounded-xl border border-[#3c4043] bg-[#2a2b2e] p-3">
+                  <p className="text-xs font-medium text-[#9aa0a6] mb-3">Equilíbrio da semana</p>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {data.weeklyPillars.map((p) => {
+                      const alert = p.consecutiveZeroDays >= 5;
+                      const pillarColors: Record<string, string> = {
+                        trabalho: "#4285f4",
+                        saude: "#34a853",
+                        familia: "#f6bf26",
+                        espiritualidade: "#a78bfa",
+                      };
+                      const pillarLabels: Record<string, string> = {
+                        trabalho: "💼 Trabalho",
+                        saude: "🩺 Saúde",
+                        familia: "👨‍👩‍👧 Família",
+                        espiritualidade: "✨ Espirit.",
+                      };
+                      const color = pillarColors[p.pillar] ?? "#9aa0a6";
+                      return (
+                        <div
+                          key={p.pillar}
+                          className={`rounded-lg p-2.5 border ${alert ? "border-[#ea4335]/60 bg-[#ea4335]/5" : "border-[#3c4043] bg-[#202124]"}`}
+                          title={alert ? `Sem atividade há ${p.consecutiveZeroDays} dias` : undefined}
+                        >
+                          <p className="text-[11px] text-[#9aa0a6] mb-1">{pillarLabels[p.pillar] ?? p.pillar}</p>
+                          <p className="text-lg font-bold text-white leading-none">{p.hours}h</p>
+                          <div className="mt-1.5 h-1 rounded-full bg-[#3c4043] overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${p.pct}%`, backgroundColor: color }} />
+                          </div>
+                          <p className="text-[10px] text-[#9aa0a6] mt-1">{p.pct}%{alert ? ` · ${p.consecutiveZeroDays}d sem ativ.` : ""}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Heatmap */}
               <div className="rounded-xl border border-[#3c4043] bg-[#2a2b2e] p-3">

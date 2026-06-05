@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarOption, FlowTask, UpdateTaskInput } from "@/types/task";
-import { computeDaysOpen, agingBadgeColor } from "@/lib/aging";
+import { computeDaysOpen, agingBadgeColor, categoryLetters } from "@/lib/aging";
+import { Pillar } from "@/types/task";
 
 export interface EventAnchorPoint {
   x: number;
@@ -20,6 +21,9 @@ interface EventPopoverProps {
   onDelete: (task: FlowTask) => void;
   onToggleComplete: (task: FlowTask) => void;
   onToggleImportant?: (task: FlowTask) => void;
+  onToggleDelegable?: (task: FlowTask) => void;
+  onSetCategory?: (task: FlowTask, category: "operational" | "strategic" | null) => void;
+  onSetPillar?: (task: FlowTask, pillar: Pillar | null) => void;
 }
 
 const QUICK_DURATIONS = [
@@ -39,6 +43,9 @@ export function EventPopover({
   onDelete,
   onToggleComplete,
   onToggleImportant,
+  onToggleDelegable,
+  onSetCategory,
+  onSetPillar,
 }: EventPopoverProps) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
@@ -249,7 +256,19 @@ export function EventPopover({
                 {(() => {
                   const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/Sao_Paulo";
                   const d = computeDaysOpen(task, tz);
-                  return d >= 1 ? <p className={`mt-0.5 font-medium ${agingBadgeColor(d)}`}>{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p> : null;
+                  const cats = categoryLetters(task);
+                  return (
+                    <>
+                      {d >= 1 && <p className={`mt-0.5 font-medium ${agingBadgeColor(d)}`}>{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p>}
+                      {cats.length > 0 && (
+                        <p className="flex gap-1.5 mt-0.5">
+                          {cats.map(({ letter, color }) => (
+                            <span key={letter} className={`text-[11px] font-semibold ${color}`}>{letter}</span>
+                          ))}
+                        </p>
+                      )}
+                    </>
+                  );
                 })()}
               </div>
 
@@ -385,6 +404,48 @@ export function EventPopover({
                     {task.isImportant ? "Remover destaque" : "Marcar como importante"}
                   </button>
                 )}
+                {onSetCategory && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => onSetCategory(task, task.category === "operational" ? null : "operational")}
+                      className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors disabled:opacity-50 ${
+                        task.category === "operational"
+                          ? "border-white/40 bg-white/10 text-white/60"
+                          : "border-[#5f6368] text-white/40 hover:bg-[#2a2b2e]"
+                      }`}
+                    >
+                      O
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => onSetCategory(task, task.category === "strategic" ? null : "strategic")}
+                      className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors disabled:opacity-50 ${
+                        task.category === "strategic"
+                          ? "border-[#a78bfa]/70 bg-[#a78bfa]/10 text-[#a78bfa]"
+                          : "border-[#5f6368] text-white/40 hover:bg-[#2a2b2e]"
+                      }`}
+                    >
+                      E
+                    </button>
+                  </>
+                )}
+                {onToggleDelegable && (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => onToggleDelegable(task)}
+                    className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors disabled:opacity-50 ${
+                      task.isDelegable
+                        ? "border-[#4dd0e1]/70 bg-[#4dd0e1]/10 text-[#4dd0e1]"
+                        : "border-[#5f6368] text-white/40 hover:bg-[#2a2b2e]"
+                    }`}
+                  >
+                    D
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setEditing(true)}
@@ -436,6 +497,22 @@ export function EventPopover({
                   <p className="text-[11px] text-[#f28b82] mt-1">{calendarLoadError}</p>
                 )}
               </div>
+              {onSetPillar && (
+                <div>
+                  <label className="text-xs text-[#9aa0a6] mb-1.5 block">Pilar</label>
+                  <select
+                    value={task.pillar ?? ""}
+                    onChange={(e) => onSetPillar(task, (e.target.value as Pillar) || null)}
+                    className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
+                  >
+                    <option value="">— Sem pilar —</option>
+                    <option value="trabalho">💼 Trabalho</option>
+                    <option value="saude">🩺 Saúde</option>
+                    <option value="familia">👨‍👩‍👧 Família</option>
+                    <option value="espiritualidade">✨ Espiritualidade</option>
+                  </select>
+                </div>
+              )}
               {!task.isAllDay && (
                 <>
                   <div>

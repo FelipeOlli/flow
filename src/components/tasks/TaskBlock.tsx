@@ -4,7 +4,7 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { FlowTask } from "@/types/task";
 import { getEventSurfaceColor } from "@/lib/colors";
-import { computeDaysOpen, agingBadgeColor } from "@/lib/aging";
+import { computeDaysOpen, agingBadgeColor, categoryLetters } from "@/lib/aging";
 
 interface TaskBlockProps {
   task: FlowTask;
@@ -44,6 +44,7 @@ export function TaskBlock({
 
   const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/Sao_Paulo";
   const daysOpen = computeDaysOpen(task, tz);
+  const catLetters = categoryLetters(task);
   const roofMode = sameStartTotal > 1;
   const sameStartGapPx = 0;
   const sameStartTotalGapPx = Math.max(0, (sameStartTotal - 1) * sameStartGapPx);
@@ -104,6 +105,9 @@ export function TaskBlock({
               {daysOpen}d
             </span>
           )}
+          {catLetters.map(({ letter, color }) => (
+            <span key={letter} className={`text-[9px] font-semibold flex-shrink-0 leading-none ${color}`}>{letter}</span>
+          ))}
         </div>
       ) : (
         <div className="flex items-start gap-1.5">
@@ -139,6 +143,9 @@ export function TaskBlock({
                   {daysOpen}d
                 </span>
               )}
+              {catLetters.map(({ letter, color }) => (
+                <span key={letter} className={`text-[9px] font-semibold flex-shrink-0 leading-none ${color}`}>{letter}</span>
+              ))}
               {onImportant && (
                 <button
                   type="button"

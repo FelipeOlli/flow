@@ -1,7 +1,8 @@
 import { auth } from "@/auth";
-import { getEventsInRange } from "@/lib/google-calendar";
+import { getEventsInRange, normalizeForSearch } from "@/lib/google-calendar";
 import { getValidAccessToken } from "@/lib/token-store";
 import { getDateKeyInTimeZone } from "@/lib/timezone";
+import { Pillar } from "@/types/task";
 import { NextRequest, NextResponse } from "next/server";
 
 const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -63,6 +64,81 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Repetitive operational tasks — group by normalized title, count distinct ISO weeks
+    const opWeekMap = new Map<string, { title: string; weeks: Set<string> }>();
+    for (const task of tasks) {
+      if (task.category !== "operational" || task.isCancelled) continue;
+      if (!task.startTime) continue;
+      const key = normalizeForSearch(task.title);
+      const weekNum = (() => {
+        const d = new Date(task.startTime);
+        const jan4 = new Date(d.getFullYear(), 0, 4);
+        const dayOfYear = Math.round((d.getTime() - new Date(d.getFullYear(), 0, 1).getTime()) / 86400000);
+        const weekOfYear = Math.floor((dayOfYear + new Date(d.getFullYear(), 0, 1).getDay()) / 7);
+        return `${d.getFullYear()}-W${String(weekOfYear).padStart(2, "0")}`;
+      })();
+      const existing = opWeekMap.get(key);
+      if (existing) {
+        existing.weeks.add(weekNum);
+      } else {
+        opWeekMap.set(key, { title: task.title, weeks: new Set([weekNum]) });
+      }
+    }
+    const repetitiveOperational = Array.from(opWeekMap.entries())
+      .filter(([, v]) => v.weeks.size >= 3)
+      .map(([normalizedTitle, v]) => ({ normalizedTitle, title: v.title, weeks: v.weeks.size }))
+      .sort((a, b) => b.weeks - a.weeks);
+
+    // Pilares da semana atual
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() + mondayOffset);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    const PILLARS: Pillar[] = ["trabalho", "saude", "familia", "espiritualidade"];
+    const pillarHours: Record<Pillar, number> = { trabalho: 0, saude: 0, familia: 0, espiritualidade: 0 };
+    const pillarDays: Record<Pillar, Set<string>> = { trabalho: new Set(), saude: new Set(), familia: new Set(), espiritualidade: new Set() };
+
+    for (const task of tasks) {
+      if (!task.pillar || task.isCancelled) continue;
+      const start = new Date(task.startTime);
+      if (start < weekStart || start > weekEnd) continue;
+      const end = task.endTime ? new Date(task.endTime) : null;
+      const hours = end ? (end.getTime() - start.getTime()) / 3600000 : 1;
+      pillarHours[task.pillar] += Math.max(0, hours);
+      pillarDays[task.pillar].add(task.startTime.slice(0, 10));
+    }
+
+    const totalPillarHours = PILLARS.reduce((s, p) => s + pillarHours[p], 0);
+
+    // Dias consecutivos sem atividade por pilar (últimos 7 dias)
+    const last7: string[] = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      return getDateKeyInTimeZone(d, tz);
+    }).reverse();
+
+    const consecutiveZeroDays = (p: Pillar): number => {
+      let count = 0;
+      for (let i = last7.length - 1; i >= 0; i--) {
+        if (pillarDays[p].has(last7[i])) break;
+        count++;
+      }
+      return count;
+    };
+
+    const weeklyPillars = PILLARS.map((p) => ({
+      pillar: p,
+      hours: Math.round(pillarHours[p] * 10) / 10,
+      pct: totalPillarHours > 0 ? Math.round((pillarHours[p] / totalPillarHours) * 100) : 0,
+      consecutiveZeroDays: consecutiveZeroDays(p),
+    }));
+
     // Average days to complete
     let avgSumDays = 0;
     let avgCount = 0;
@@ -121,6 +197,8 @@ export async function GET(req: NextRequest) {
         streak: { current: currentStreak, best: bestStreak },
         bestDay,
         avgDaysToComplete,
+        repetitiveOperational,
+        weeklyPillars,
       },
       { headers: { "Cache-Control": "no-store" } }
     );

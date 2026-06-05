@@ -7,7 +7,7 @@ import { FlowTask } from "@/types/task";
 import { TaskBlock } from "@/components/tasks/TaskBlock";
 import { getEventSurfaceColor } from "@/lib/colors";
 import { EventAnchorPoint } from "./EventPopover";
-import { computeDaysOpen, agingBadgeColor } from "@/lib/aging";
+import { computeDaysOpen, agingBadgeColor, categoryLetters } from "@/lib/aging";
 import {
   CALENDAR_DIMENSIONS,
   CURRENT_TIME_LINE_Z_INDEX,
@@ -128,6 +128,7 @@ function AgendaView({ tasks, currentDate, onComplete, onEdit, onImportant, getAn
                           {task.isAllDay ? "Dia inteiro" : `${format(new Date(task.startTime), "HH:mm")} - ${format(new Date(task.endTime), "HH:mm")}`}
                         </p>
                         {(() => { const d = computeDaysOpen(task, CLIENT_TZ); return d >= 1 ? <p className={`text-xs mt-0.5 ${agingBadgeColor(d)}`}>{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p> : null; })()}
+                        {(() => { const cats = categoryLetters(task); return cats.length > 0 ? <p className="flex gap-1 mt-0.5">{cats.map(({letter,color}) => <span key={letter} className={`text-[10px] font-semibold ${color}`}>{letter}</span>)}</p> : null; })()}
                       </div>
                       {onImportant && (
                         <button
@@ -219,6 +220,7 @@ function PriorityView({ tasks, currentDate, onComplete, onEdit, onImportant, get
                     {days === 1 ? "1 dia em aberto" : `${days} dias em aberto`}
                   </p>
                 )}
+                {(() => { const cats = categoryLetters(task); return cats.length > 0 ? <p className="flex gap-1 mt-0.5">{cats.map(({letter,color}) => <span key={letter} className={`text-[10px] font-semibold ${color}`}>{letter}</span>)}</p> : null; })()}
               </div>
               {onImportant && (
                 <button
@@ -494,6 +496,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                       <p className="text-xs mt-0.5 truncate text-white/70">{task.calendarName}</p>
                     )}
                     {(() => { const d = computeDaysOpen(task, CLIENT_TZ); return d >= 1 ? <p className={`text-xs mt-0.5 ${agingBadgeColor(d)}`}>{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p> : null; })()}
+                    {(() => { const cats = categoryLetters(task); return cats.length > 0 ? <p className="flex gap-1 mt-0.5">{cats.map(({letter,color}) => <span key={letter} className={`text-[10px] font-semibold ${color}`}>{letter}</span>)}</p> : null; })()}
                   </div>
                   {onImportant && (
                     <button

@@ -233,6 +233,45 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
+### 2026-06-05
+
+**O que foi feito:**
+
+1. **Tags D/O/E (Fase 1)** — Novos campos `isDelegable`, `category` (`"operational"` | `"strategic"`) e `pillar` em `FlowTask` / `UpdateTaskInput` / `CreateTaskInput`. Funções de mutação: `markEventDelegable/Undelegable`, `setEventCategory`, `setEventPillar` via `extendedProperties.private` (`flowDelegable`, `flowCategory`, `flowPillar`). `EventPopover` ganhou botões O/E/D na linha de ações. Badges com letras D/O/E (O=branco/50, E=roxo #a78bfa, D=cyan #4dd0e1) em todos os cards de evento nas views. `CALENDAR_PILLAR_OVERRIDES` em `google-calendar.ts` para mapear calendário→pilar.
+
+2. **Revisão Semanal (Fase 2)** — Novo ícone 📋 no header (com ponto roxo na sexta-feira). Novo endpoint `GET /api/weekly-review` — busca últimos 7 dias, retorna delegáveis agrupados por título normalizado + razão estratégico/operacional. `WeeklyReviewView.tsx`: lista de delegáveis com badge "N× esta semana" + donut SVG E vs O com alerta de <30% estratégico.
+
+3. **Operacional Repetitivo (Fase 4)** — `stats/route.ts` detecta tarefas `category="operational"` que aparecem em ≥3 semanas ISO distintas → `repetitiveOperational` no payload. `StatsData` atualizado com o campo.
+
+4. **4 Pilares (Fase 3)** — `TaskForm.tsx` com 4 botões segmentados (Trabalho/Saúde/Família/Espiritualidade) ao criar. `EventPopover` no modo edição com `<select>` de pilar. `stats/route.ts` agrega `weeklyPillars` (horas, %, `consecutiveZeroDays` por pilar na semana atual). `DashboardView` exibe card "Equilíbrio da semana" com 4 barras coloridas; borda vermelha quando `consecutiveZeroDays >= 5`.
+
+**Arquivos criados:**
+- `src/app/api/weekly-review/route.ts`
+- `src/components/dashboard/WeeklyReviewView.tsx`
+
+**Arquivos modificados:**
+- `src/types/task.ts` — `Pillar`, `isDelegable`, `category`, `pillar`
+- `src/lib/google-calendar.ts` — mapEvent, novas mutations, `CALENDAR_PILLAR_OVERRIDES`
+- `src/lib/aging.ts` — `categoryLetters()`
+- `src/app/api/tasks/[eventId]/route.ts` — branches isDelegable, category, pillar
+- `src/app/api/stats/route.ts` — `repetitiveOperational`, `weeklyPillars`
+- `src/components/calendar/CalendarView.tsx` — handlers + toggle WeeklyReview + showWeeklyReview state
+- `src/components/calendar/EventPopover.tsx` — botões D/O/E + select pilar + badges
+- `src/components/tasks/TaskForm.tsx` — seletor de pilar
+- `src/components/tasks/TaskBlock.tsx`, `TaskItem.tsx` — badges D/O/E
+- `src/components/calendar/DayView.tsx`, `WeekView.tsx`, `ThreeDayView.tsx` — badges D/O/E nas listas
+- `src/components/dashboard/DashboardView.tsx` — `weeklyPillars` card + tipos
+
+**Decisões tomadas:**
+- D é independente de O/E (pode ser operacional + delegável ao mesmo tempo)
+- Sem alteração de `colorId` para D/O/E (só `isImportant` muda cor)
+- Mapeamento calendário→pilar hardcoded em `CALENDAR_PILLAR_OVERRIDES` (sem settings UI)
+- `consecutiveZeroDays` calculado sobre últimos 7 dias no timezone da requisição
+
+**Próximos passos:** nenhum pendente.
+
+---
+
 ### 2026-06-04
 
 **O que foi feito:**
