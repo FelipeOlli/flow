@@ -103,7 +103,7 @@ export function EventPopover({
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, [description]);
+  }, [description, editing]);
 
   useEffect(() => {
     let active = true;
@@ -591,8 +591,8 @@ export function EventPopover({
                 ref={descriptionRef}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                rows={2}
-                className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] resize-none overflow-hidden"
+                rows={1}
+                className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] resize-none overflow-hidden min-h-[2.5rem]"
                 placeholder="Descrição"
               />
               {error && <p className="text-xs text-[#f28b82]">{error}</p>}
