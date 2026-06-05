@@ -715,7 +715,7 @@ export function EventPopover({
 
       {/* Diálogo de exclusão de evento recorrente */}
       {showRecurringDeleteDialog && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
           <div
             className="absolute inset-0 bg-black/60"
             onClick={() => setShowRecurringDeleteDialog(false)}
