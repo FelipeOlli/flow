@@ -72,6 +72,13 @@ export function TaskItem({ task, onComplete, onEdit, onDelete, isPending, onImpo
 
       {/* Content */}
       <div className="flex-1 min-w-0" onClick={onEdit}>
+        {catLetters.length > 0 && (
+          <div className="flex gap-1 mb-0.5">
+            {catLetters.map(({ letter, color }) => (
+              <span key={letter} className={`text-[10px] font-bold leading-none px-1 py-0.5 rounded bg-white/8 ${color}`}>{letter}</span>
+            ))}
+          </div>
+        )}
         <p className={`
           font-medium text-sm truncate transition-all
           ${task.isComplete ? "line-through text-gray-500" : "text-white"}
@@ -87,13 +94,6 @@ export function TaskItem({ task, onComplete, onEdit, onDelete, isPending, onImpo
         {daysOpen >= 1 && (
           <p className={`text-xs mt-0.5 ${agingBadgeColor(daysOpen)}`}>
             {daysOpen === 1 ? "1 dia em aberto" : `${daysOpen} dias em aberto`}
-          </p>
-        )}
-        {catLetters.length > 0 && (
-          <p className="flex gap-1 mt-0.5">
-            {catLetters.map(({ letter, color }) => (
-              <span key={letter} className={`text-[10px] font-semibold ${color}`}>{letter}</span>
-            ))}
           </p>
         )}
         {task.description && (

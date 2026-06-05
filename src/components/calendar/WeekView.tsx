@@ -163,6 +163,7 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
                           {task.isComplete && <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                         </button>
                         <div className="min-w-0 flex-1">
+                          {(() => { const cats = categoryLetters(task); return cats.length > 0 ? <div className="flex gap-1 mb-0.5">{cats.map(({letter,color}) => <span key={letter} className={`text-[9px] font-bold leading-none px-1 py-0.5 rounded bg-black/20 ${color}`}>{letter}</span>)}</div> : null; })()}
                           <div className={`flex items-center gap-1.5 text-base font-semibold leading-tight text-[#e8eaed] ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>
                             <span className="truncate">{task.title}</span>
                             {task.attendees && task.attendees.length > 0 && (
@@ -176,7 +177,6 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
                           </p>
                           {task.calendarName && <p className="text-xs mt-0.5 truncate text-white/70">{task.calendarName}</p>}
                           {(() => { const d = computeDaysOpen(task, tz); return d >= 1 ? <p className={`text-xs mt-0.5 ${agingBadgeColor(d)}`}>{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p> : null; })()}
-                          {(() => { const cats = categoryLetters(task); return cats.length > 0 ? <p className="flex gap-1 mt-0.5">{cats.map(({letter,color}) => <span key={letter} className={`text-[10px] font-semibold ${color}`}>{letter}</span>)}</p> : null; })()}
                         </div>
                         {onImportant && (
                           <button

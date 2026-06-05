@@ -88,6 +88,14 @@ export function TaskBlock({
       onPointerDown={onTaskPointerDown}
       onClick={(e) => { e.stopPropagation(); onEdit(e); }}
     >
+      {/* Badges D/O/E no topo do card */}
+      {catLetters.length > 0 && (
+        <div className="absolute top-0.5 right-0.5 flex gap-0.5 z-10">
+          {catLetters.map(({ letter, color }) => (
+            <span key={letter} className={`text-[8px] font-bold leading-none px-0.5 rounded-[2px] bg-black/30 ${color}`}>{letter}</span>
+          ))}
+        </div>
+      )}
       {dense ? (
         <div className="flex items-center gap-1 w-full overflow-hidden">
           <p className={`flex-1 truncate leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]
@@ -105,9 +113,6 @@ export function TaskBlock({
               {daysOpen}d
             </span>
           )}
-          {catLetters.map(({ letter, color }) => (
-            <span key={letter} className={`text-[9px] font-semibold flex-shrink-0 leading-none ${color}`}>{letter}</span>
-          ))}
         </div>
       ) : (
         <div className="flex items-start gap-1.5">
@@ -143,9 +148,6 @@ export function TaskBlock({
                   {daysOpen}d
                 </span>
               )}
-              {catLetters.map(({ letter, color }) => (
-                <span key={letter} className={`text-[9px] font-semibold flex-shrink-0 leading-none ${color}`}>{letter}</span>
-              ))}
               {onImportant && (
                 <button
                   type="button"
