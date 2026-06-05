@@ -59,7 +59,8 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
         body.title !== undefined ||
         body.startTime !== undefined ||
         body.endTime !== undefined ||
-        body.description !== undefined;
+        body.description !== undefined ||
+        body.attendees !== undefined;
 
       if (targetCalendarId !== calendarId) {
         const moved = await moveEventToCalendar(

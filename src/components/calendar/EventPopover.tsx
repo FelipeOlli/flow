@@ -57,6 +57,10 @@ export function EventPopover({
     task.category === "operational" ? "O" : task.category === "strategic" ? "E" : task.isDelegable ? "D" : null
   );
   const [editPillar, setEditPillar] = useState<Pillar | null>(task.pillar ?? null);
+  const [editAttendees, setEditAttendees] = useState<string[]>(
+    (task.attendees ?? []).map((a) => a.email ?? "").filter(Boolean)
+  );
+  const [attendeeInput, setAttendeeInput] = useState("");
   const [calendars, setCalendars] = useState<CalendarOption[]>([]);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [calendarLoadError, setCalendarLoadError] = useState("");
@@ -93,6 +97,8 @@ export function EventPopover({
     setEditIsImportant(task.isImportant ?? false);
     setEditTag(task.category === "operational" ? "O" : task.category === "strategic" ? "E" : task.isDelegable ? "D" : null);
     setEditPillar(task.pillar ?? null);
+    setEditAttendees((task.attendees ?? []).map((a) => a.email ?? "").filter(Boolean));
+    setAttendeeInput("");
     setEditing(false);
     setError("");
     setFeedback("");
@@ -196,6 +202,7 @@ export function EventPopover({
         isDelegable: editTag === "D",
         category: editTag === "O" ? "operational" : editTag === "E" ? "strategic" : null,
         pillar: editPillar,
+        attendees: editAttendees,
       };
       if (!task.isAllDay) {
         updates.startTime = new Date(startTime).toISOString();
@@ -619,6 +626,60 @@ export function EventPopover({
                 className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] resize-none overflow-hidden min-h-[2.5rem]"
                 placeholder="Descrição"
               />
+              {/* Convidados */}
+              <div>
+                <label className="text-xs text-[#9aa0a6] mb-1.5 block">Convidados</label>
+                {editAttendees.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {editAttendees.map((email) => (
+                      <span key={email} className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#3c4043] text-xs text-[#e8eaed]">
+                        {email}
+                        <button
+                          type="button"
+                          onClick={() => setEditAttendees((prev) => prev.filter((e) => e !== email))}
+                          className="text-[#9aa0a6] hover:text-[#f28b82] transition-colors ml-0.5"
+                        >
+                          <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M18 6L6 18M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    placeholder="email@exemplo.com"
+                    value={attendeeInput}
+                    onChange={(e) => setAttendeeInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        const email = attendeeInput.trim().toLowerCase();
+                        if (email && !editAttendees.includes(email)) {
+                          setEditAttendees((prev) => [...prev, email]);
+                        }
+                        setAttendeeInput("");
+                      }
+                    }}
+                    className="flex-1 bg-[#2a2b2e] text-[#e8eaed] placeholder-[#9aa0a6] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const email = attendeeInput.trim().toLowerCase();
+                      if (email && !editAttendees.includes(email)) {
+                        setEditAttendees((prev) => [...prev, email]);
+                      }
+                      setAttendeeInput("");
+                    }}
+                    className="px-3 py-2 rounded-xl bg-[#3c4043] text-xs text-[#e8eaed] hover:bg-[#4c4f53] transition-colors"
+                  >
+                    Adicionar
+                  </button>
+                </div>
+              </div>
               {error && <p className="text-xs text-[#f28b82]">{error}</p>}
               {feedback && <p className="text-xs text-emerald-400">{feedback}</p>}
               <div className="flex gap-2">

@@ -74,6 +74,7 @@ export interface UpdateTaskInput {
   calendarId?: string;
   targetCalendarId?: string;
   attendanceStatus?: Exclude<AttendanceStatus, "needsAction">;
+  attendees?: string[];
 }
 
 export interface CalendarOption {

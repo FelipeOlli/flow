@@ -295,6 +295,7 @@ export async function updateEvent(
   if (updates.description !== undefined) requestBody.description = updates.description;
   if (updates.startTime !== undefined) requestBody.start = { dateTime: updates.startTime, timeZone };
   if (updates.endTime !== undefined) requestBody.end = { dateTime: updates.endTime, timeZone };
+  if (updates.attendees !== undefined) requestBody.attendees = updates.attendees.map((email) => ({ email }));
   const { data } = await calendar.events.patch({ calendarId, eventId, requestBody });
   return mapEvent(data, calendarId);
 }
