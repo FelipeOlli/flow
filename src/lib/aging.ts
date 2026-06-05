@@ -2,10 +2,14 @@ import { FlowTask } from "@/types/task";
 import { getDateKeyInTimeZone, diffDateKeysInDays } from "./timezone";
 
 export function computeDaysOpen(task: FlowTask, tz: string): number {
-  if (!task.createdAt || task.isComplete) return 0;
-  const createdKey = getDateKeyInTimeZone(new Date(task.createdAt), tz);
+  if (task.isComplete) return 0;
+  // Eventos recorrentes: cada instância nasce na sua data de início — usar startTime
+  // Eventos únicos: usar createdAt (data de criação no Google Calendar)
+  const baseIso = task.isRecurring ? task.startTime : task.createdAt;
+  if (!baseIso) return 0;
+  const baseKey = getDateKeyInTimeZone(new Date(baseIso), tz);
   const todayKey = getDateKeyInTimeZone(new Date(), tz);
-  return Math.max(0, diffDateKeysInDays(createdKey, todayKey));
+  return Math.max(0, diffDateKeysInDays(baseKey, todayKey));
 }
 
 export function agingBadgeColor(days: number): string {
