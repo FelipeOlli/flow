@@ -488,10 +488,59 @@ export async function moveEventToCalendar(
 export async function deleteEvent(
   accessToken: string,
   eventId: string,
-  calendarId = "primary"
+  calendarId = "primary",
+  scope: "this" | "thisAndFollowing" | "all" = "this"
 ): Promise<void> {
   const calendar = getClient(accessToken);
-  await calendar.events.delete({ calendarId, eventId });
+
+  if (scope === "this") {
+    await calendar.events.delete({ calendarId, eventId });
+    return;
+  }
+
+  const { data: instance } = await calendar.events.get({ calendarId, eventId });
+  const masterId = instance.recurringEventId ?? eventId;
+
+  if (scope === "all") {
+    await calendar.events.delete({ calendarId, eventId: masterId });
+    return;
+  }
+
+  // thisAndFollowing: truncate the series at originalStartTime - 1s
+  const { data: master } = await calendar.events.get({ calendarId, eventId: masterId });
+  const originalStart = instance.originalStartTime?.dateTime ?? instance.originalStartTime?.date ?? instance.start?.dateTime ?? instance.start?.date;
+  if (!originalStart) {
+    await calendar.events.delete({ calendarId, eventId });
+    return;
+  }
+
+  const cutoffMs = new Date(originalStart).getTime() - 1000;
+  const cutoffDate = new Date(cutoffMs);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const untilUtc =
+    `${cutoffDate.getUTCFullYear()}${pad(cutoffDate.getUTCMonth() + 1)}${pad(cutoffDate.getUTCDate())}` +
+    `T${pad(cutoffDate.getUTCHours())}${pad(cutoffDate.getUTCMinutes())}${pad(cutoffDate.getUTCSeconds())}Z`;
+
+  const masterStart = master.start?.dateTime ?? master.start?.date ?? "";
+  if (masterStart && new Date(originalStart) <= new Date(masterStart)) {
+    // Cutting at or before the first occurrence — delete entire series
+    await calendar.events.delete({ calendarId, eventId: masterId });
+    return;
+  }
+
+  const recurrence = (master.recurrence ?? []).map((line) => {
+    if (line.startsWith("RRULE:")) {
+      return "RRULE:" + line
+        .slice(6)
+        .split(";")
+        .filter((p) => !p.startsWith("UNTIL=") && !p.startsWith("COUNT="))
+        .concat(`UNTIL=${untilUtc}`)
+        .join(";");
+    }
+    return line;
+  });
+
+  await calendar.events.patch({ calendarId, eventId: masterId, requestBody: { recurrence } });
 }
 
 export async function getEventById(

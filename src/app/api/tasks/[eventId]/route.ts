@@ -114,9 +114,13 @@ export async function DELETE(req: NextRequest, context: { params: Params }) {
 
   const { eventId } = await context.params;
   const calendarId = req.nextUrl.searchParams.get("calendarId") ?? "primary";
+  const scopeParam = req.nextUrl.searchParams.get("deleteScope") ?? "this";
+  const scope = (["this", "thisAndFollowing", "all"].includes(scopeParam)
+    ? scopeParam
+    : "this") as "this" | "thisAndFollowing" | "all";
 
   try {
-    await deleteEvent(accessToken, eventId, calendarId);
+    await deleteEvent(accessToken, eventId, calendarId, scope);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     console.error("[API tasks DELETE]", err);

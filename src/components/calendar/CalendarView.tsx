@@ -389,11 +389,11 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     await fetchTasks();
   }
 
-  async function handleDelete(task: FlowTask) {
+  async function handleDelete(task: FlowTask, scope: "this" | "thisAndFollowing" | "all" = "this") {
     closeEventCard();
     setTasks((prev) => prev.filter((t) => t.id !== task.id));
     const calId = encodeURIComponent(task.calendarId ?? "primary");
-    await fetch(`/api/tasks/${task.id}?calendarId=${calId}`, { method: "DELETE" });
+    await fetch(`/api/tasks/${task.id}?calendarId=${calId}&deleteScope=${scope}`, { method: "DELETE" });
     await fetchTasks();
   }
 
