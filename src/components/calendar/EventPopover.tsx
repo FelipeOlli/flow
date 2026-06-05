@@ -110,7 +110,8 @@ export function EventPopover({
     const el = descriptionRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
+    const maxH = 160;
+    el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
   }, [description, editing]);
 
   useEffect(() => {
@@ -632,7 +633,7 @@ export function EventPopover({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={1}
-                className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] resize-none overflow-hidden min-h-[2.5rem]"
+                className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] resize-none overflow-y-auto min-h-[2.5rem] max-h-40"
                 placeholder="Descrição"
               />
               {/* Convidados */}
