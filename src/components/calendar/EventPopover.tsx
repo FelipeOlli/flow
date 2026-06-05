@@ -52,6 +52,11 @@ export function EventPopover({
   const [startTime, setStartTime] = useState(toLocalDatetime(task.startTime));
   const [endTime, setEndTime] = useState(toLocalDatetime(task.endTime));
   const [calendarId, setCalendarId] = useState(task.calendarId ?? "primary");
+  const [editIsImportant, setEditIsImportant] = useState(task.isImportant ?? false);
+  const [editTag, setEditTag] = useState<"O" | "E" | "D" | null>(
+    task.category === "operational" ? "O" : task.category === "strategic" ? "E" : task.isDelegable ? "D" : null
+  );
+  const [editPillar, setEditPillar] = useState<Pillar | null>(task.pillar ?? null);
   const [calendars, setCalendars] = useState<CalendarOption[]>([]);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [calendarLoadError, setCalendarLoadError] = useState("");
@@ -85,6 +90,9 @@ export function EventPopover({
     setStartTime(toLocalDatetime(task.startTime));
     setEndTime(toLocalDatetime(task.endTime));
     setCalendarId(task.calendarId ?? "primary");
+    setEditIsImportant(task.isImportant ?? false);
+    setEditTag(task.category === "operational" ? "O" : task.category === "strategic" ? "E" : task.isDelegable ? "D" : null);
+    setEditPillar(task.pillar ?? null);
     setEditing(false);
     setError("");
     setFeedback("");
@@ -184,6 +192,10 @@ export function EventPopover({
         title: title.trim(),
         description: description.trim() || undefined,
         calendarId: task.calendarId ?? "primary",
+        isImportant: editIsImportant,
+        isDelegable: editTag === "D",
+        category: editTag === "O" ? "operational" : editTag === "E" ? "strategic" : null,
+        pillar: editPillar,
       };
       if (!task.isAllDay) {
         updates.startTime = new Date(startTime).toISOString();
@@ -477,22 +489,65 @@ export function EventPopover({
                   <p className="text-[11px] text-[#f28b82] mt-1">{calendarLoadError}</p>
                 )}
               </div>
-              {onSetPillar && (
-                <div>
-                  <label className="text-xs text-[#9aa0a6] mb-1.5 block">Pilar</label>
-                  <select
-                    value={task.pillar ?? ""}
-                    onChange={(e) => onSetPillar(task, (e.target.value as Pillar) || null)}
-                    className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
-                  >
-                    <option value="">— Sem pilar —</option>
-                    <option value="trabalho">💼 Trabalho</option>
-                    <option value="saude">🩺 Saúde</option>
-                    <option value="familia">👨‍👩‍👧 Família</option>
-                    <option value="espiritualidade">✨ Espiritualidade</option>
-                  </select>
+              {/* Importante + O/E/D */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditIsImportant((v) => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors border flex-1
+                    ${editIsImportant
+                      ? "bg-[#F6BF26]/20 border-[#F6BF26]/50 text-[#F6BF26]"
+                      : "bg-[#2a2b2e] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"}`}
+                >
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill={editIsImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                  Importante
+                </button>
+                <div className="flex rounded-xl border border-[#3c4043] overflow-hidden">
+                  {(["O", "E", "D"] as const).map((tag) => {
+                    const isActive = editTag === tag;
+                    const colors: Record<string, string> = { O: "text-white/70", E: "text-[#a78bfa]", D: "text-[#4dd0e1]" };
+                    const activeBg: Record<string, string> = { O: "bg-white/10", E: "bg-[#a78bfa]/15", D: "bg-[#4dd0e1]/15" };
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setEditTag((v) => v === tag ? null : tag)}
+                        className={`px-3 py-2 text-xs font-semibold transition-colors border-r border-[#3c4043] last:border-r-0
+                          ${isActive ? `${activeBg[tag]} ${colors[tag]}` : "bg-[#2a2b2e] text-white/30 hover:text-[#e8eaed]"}`}
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+
+              {/* Pilar */}
+              <div>
+                <label className="text-xs text-[#9aa0a6] mb-1.5 block">Pilar</label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {([
+                    { value: "trabalho" as Pillar, label: "💼 Trabalho", color: "#4285f4" },
+                    { value: "saude" as Pillar, label: "🩺 Saúde", color: "#34a853" },
+                    { value: "familia" as Pillar, label: "👨‍👩‍👧 Família", color: "#f6bf26" },
+                    { value: "espiritualidade" as Pillar, label: "✨ Espirit.", color: "#a78bfa" },
+                  ] as { value: Pillar; label: string; color: string }[]).map(({ value, label, color }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setEditPillar((v) => v === value ? null : value)}
+                      className={`py-2 rounded-xl text-[10px] font-medium transition-colors border ${
+                        editPillar === value ? "text-white" : "bg-[#2a2b2e] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"
+                      }`}
+                      style={editPillar === value ? { backgroundColor: `${color}25`, borderColor: `${color}80`, color } : undefined}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {!task.isAllDay && (
                 <>
                   <div>

@@ -424,12 +424,35 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   }
 
   async function handleInlineEdit(task: FlowTask, updates: UpdateTaskInput) {
-    const res = await fetch(`/api/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...updates, calendarId: task.calendarId ?? "primary" }),
-    });
-    if (!res.ok) throw new Error("Failed to update event");
+    const calendarId = updates.targetCalendarId ?? updates.calendarId ?? task.calendarId ?? "primary";
+    const { isImportant, isDelegable, category, pillar, ...baseUpdates } = updates;
+
+    const patch = async (body: Record<string, unknown>) => {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, calendarId }),
+      });
+      if (!res.ok) throw new Error("Failed to update event");
+    };
+
+    await patch(baseUpdates);
+
+    if (isImportant !== undefined && isImportant !== task.isImportant) {
+      await patch({ isImportant });
+    }
+    if (isDelegable !== undefined || category !== undefined) {
+      const tagChanged =
+        isDelegable !== task.isDelegable || category !== (task.category ?? null);
+      if (tagChanged) {
+        if (isDelegable !== undefined) await patch({ isDelegable });
+        if (category !== undefined) await patch({ category });
+      }
+    }
+    if (pillar !== undefined && pillar !== (task.pillar ?? null)) {
+      await patch({ pillar });
+    }
+
     await fetchTasks();
   }
 
