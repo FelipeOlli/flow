@@ -69,6 +69,7 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
     "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "weekdays"
   >("weekly");
   const [isImportant, setIsImportant] = useState(false);
+  const [tag, setTag] = useState<"O" | "E" | "D" | null>(null);
   const [pillar, setPillar] = useState<Pillar | null>(null);
   const [attendeeInput, setAttendeeInput] = useState("");
   const [attendees, setAttendees] = useState<string[]>([]);
@@ -168,6 +169,9 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
         const rrule = buildRRule();
         if (rrule.length) (payload as CreateTaskInput).recurrence = rrule;
         if (isImportant) (payload as CreateTaskInput).isImportant = true;
+        if (tag === "O") (payload as CreateTaskInput).category = "operational";
+        if (tag === "E") (payload as CreateTaskInput).category = "strategic";
+        if (tag === "D") (payload as CreateTaskInput).isDelegable = true;
         if (pillar) (payload as CreateTaskInput).pillar = pillar;
         if (attendees.length) (payload as CreateTaskInput).attendees = attendees;
       }
@@ -182,8 +186,8 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-[3900] backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-0 z-[4000] flex items-center justify-center p-3 sm:p-6">
-        <div className="w-full max-w-3xl bg-[#202124] rounded-2xl border border-[#3c4043] shadow-2xl shadow-black/40 p-4 sm:p-6 max-h-[92vh] overflow-y-auto">
+      <div className="fixed inset-0 z-[4000] flex items-center justify-center p-2 sm:p-6">
+        <div className="w-full max-w-3xl bg-[#202124] rounded-2xl border border-[#3c4043] shadow-2xl shadow-black/40 p-3 sm:p-6 max-h-[92vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-2xl font-normal text-[#e8eaed]">
               {isEditing ? "Editar evento" : "Novo evento"}
@@ -233,12 +237,12 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
               <div className="min-w-0">
                 <label className="text-xs text-[#9aa0a6] mb-1.5 block">Início</label>
                 <input type="datetime-local" value={startTime} onChange={(e) => handleStartChange(e.target.value)}
-                  className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043]" />
+                  className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-2 sm:px-3 py-3 text-[11px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043] appearance-none" />
               </div>
               <div className="min-w-0">
                 <label className="text-xs text-[#9aa0a6] mb-1.5 block">Fim</label>
                 <input type="datetime-local" value={endTime} min={startTime} onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043]" />
+                  className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-2 sm:px-3 py-3 text-[11px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043] appearance-none" />
               </div>
             </div>
             <textarea
@@ -323,6 +327,36 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
                   </svg>
                   Importante
                 </button>
+              </div>
+            )}
+
+            {/* Categoria O/E/D — só na criação */}
+            {!isEditing && (
+              <div>
+                <label className="text-xs text-[#9aa0a6] mb-1.5 block">Categoria</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(["O", "E", "D"] as const).map((t) => {
+                    const labels = { O: "Operacional", E: "Estratégico", D: "Delegável" };
+                    const text = { O: "text-white/70", E: "text-[#a78bfa]", D: "text-[#4dd0e1]" };
+                    const bg = { O: "bg-white/10", E: "bg-[#a78bfa]/15", D: "bg-[#4dd0e1]/15" };
+                    const border = { O: "border-white/40", E: "border-[#a78bfa]/60", D: "border-[#4dd0e1]/60" };
+                    const active = tag === t;
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTag((v) => (v === t ? null : t))}
+                        className={`py-2 rounded-xl text-xs font-medium transition-colors border ${
+                          active
+                            ? `${bg[t]} ${border[t]} ${text[t]}`
+                            : "bg-[#2a2b2e] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"
+                        }`}
+                      >
+                        {t} — {labels[t]}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
