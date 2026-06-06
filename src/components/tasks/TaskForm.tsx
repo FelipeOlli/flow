@@ -69,6 +69,8 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
     "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "weekdays"
   >("weekly");
   const [isImportant, setIsImportant] = useState(false);
+  const [category, setCategory] = useState<"operational" | "strategic" | null>(null);
+  const [isDelegable, setIsDelegable] = useState(false);
   const [pillar, setPillar] = useState<Pillar | null>(null);
   const [attendeeInput, setAttendeeInput] = useState("");
   const [attendees, setAttendees] = useState<string[]>([]);
@@ -168,6 +170,8 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
         const rrule = buildRRule();
         if (rrule.length) (payload as CreateTaskInput).recurrence = rrule;
         if (isImportant) (payload as CreateTaskInput).isImportant = true;
+        if (category) (payload as CreateTaskInput).category = category;
+        if (isDelegable) (payload as CreateTaskInput).isDelegable = true;
         if (pillar) (payload as CreateTaskInput).pillar = pillar;
         if (attendees.length) (payload as CreateTaskInput).attendees = attendees;
       }
@@ -305,9 +309,9 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
               </div>
             )}
 
-            {/* Importante + Convidados — só na criação */}
+            {/* Importante + O/E/D — só na criação */}
             {!isEditing && (
-              <div className="flex gap-3">
+              <div className="flex gap-2 flex-wrap">
                 {/* Toggle Importante */}
                 <button
                   type="button"
@@ -322,6 +326,45 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
                     <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                   </svg>
                   Importante
+                </button>
+
+                {/* Operacional */}
+                <button
+                  type="button"
+                  onClick={() => setCategory((v) => v === "operational" ? null : "operational")}
+                  title={category === "operational" ? "Remover operacional" : "Marcar como operacional"}
+                  className={`px-3 py-2.5 rounded-xl text-xs font-medium transition-colors border
+                    ${category === "operational"
+                      ? "bg-white/10 border-white/40 text-white"
+                      : "bg-[#2a2b2e] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"}`}
+                >
+                  O
+                </button>
+
+                {/* Estratégico */}
+                <button
+                  type="button"
+                  onClick={() => setCategory((v) => v === "strategic" ? null : "strategic")}
+                  title={category === "strategic" ? "Remover estratégico" : "Marcar como estratégico"}
+                  className={`px-3 py-2.5 rounded-xl text-xs font-medium transition-colors border
+                    ${category === "strategic"
+                      ? "bg-[#a78bfa]/15 border-[#a78bfa]/50 text-[#a78bfa]"
+                      : "bg-[#2a2b2e] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"}`}
+                >
+                  E
+                </button>
+
+                {/* Delegável */}
+                <button
+                  type="button"
+                  onClick={() => setIsDelegable((v) => !v)}
+                  title={isDelegable ? "Remover delegação" : "Marcar como delegável"}
+                  className={`px-3 py-2.5 rounded-xl text-xs font-medium transition-colors border
+                    ${isDelegable
+                      ? "bg-[#4dd0e1]/15 border-[#4dd0e1]/50 text-[#4dd0e1]"
+                      : "bg-[#2a2b2e] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"}`}
+                >
+                  D
                 </button>
               </div>
             )}
