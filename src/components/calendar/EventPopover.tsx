@@ -69,6 +69,24 @@ export function EventPopover({
   const [feedback, setFeedback] = useState("");
   const [showRecurringDeleteDialog, setShowRecurringDeleteDialog] = useState(false);
   const [recurringScope, setRecurringScope] = useState<"this" | "thisAndFollowing" | "all">("this");
+  const [editRecurring, setEditRecurring] = useState(false);
+  const [editRecurrenceType, setEditRecurrenceType] = useState<
+    "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "weekdays"
+  >("weekly");
+
+  const BYDAY_MAP = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+  function buildRRule(): string[] {
+    if (!editRecurring) return [];
+    const dayCode = BYDAY_MAP[new Date(startTime).getDay()];
+    switch (editRecurrenceType) {
+      case "daily":    return ["RRULE:FREQ=DAILY"];
+      case "weekly":   return [`RRULE:FREQ=WEEKLY;BYDAY=${dayCode}`];
+      case "biweekly": return [`RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=${dayCode}`];
+      case "monthly":  return ["RRULE:FREQ=MONTHLY"];
+      case "yearly":   return ["RRULE:FREQ=YEARLY"];
+      case "weekdays": return ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"];
+    }
+  }
 
   const currentDurationMins = Math.round(
     (new Date(endTime).getTime() - new Date(startTime).getTime()) / 60000
@@ -104,13 +122,15 @@ export function EventPopover({
     setEditing(false);
     setError("");
     setFeedback("");
+    setEditRecurring(false);
+    setEditRecurrenceType("weekly");
   }, [task]);
 
   useEffect(() => {
     const el = descriptionRef.current;
     if (!el) return;
     el.style.height = "auto";
-    const maxH = 160;
+    const maxH = typeof window !== "undefined" ? Math.round(window.innerHeight * 0.6) : 400;
     el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
   }, [description, editing]);
 
@@ -207,6 +227,10 @@ export function EventPopover({
         pillar: editPillar,
         attendees: editAttendees,
       };
+      if (!task.isRecurring && editRecurring) {
+        const rrule = buildRRule();
+        if (rrule.length) updates.recurrence = rrule;
+      }
       if (!task.isAllDay) {
         updates.startTime = new Date(startTime).toISOString();
         updates.endTime = new Date(endTime).toISOString();
@@ -633,9 +657,52 @@ export function EventPopover({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={1}
-                className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] resize-none overflow-y-auto min-h-[2.5rem] max-h-40"
+                className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] resize-y overflow-y-auto min-h-[2.5rem] max-h-[60vh]"
                 placeholder="Descrição"
               />
+              {/* Repetir — apenas para eventos não-recorrentes com horário */}
+              {!task.isRecurring && !task.isAllDay && (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setEditRecurring((v) => !v)}
+                      className="flex items-center gap-2"
+                    >
+                      <div className={`w-10 rounded-full relative transition-colors`} style={{ height: 22, backgroundColor: editRecurring ? "#8ab4f8" : "#3c4043" }}>
+                        <div className="absolute rounded-full bg-white shadow transition-transform" style={{ width: 18, height: 18, top: 2, left: 2, transform: editRecurring ? "translateX(18px)" : "translateX(0)" }} />
+                      </div>
+                      <span className={`text-xs ${editRecurring ? "text-[#e8eaed]" : "text-[#9aa0a6]"}`}>
+                        {editRecurring ? "Evento recorrente" : "Repetir"}
+                      </span>
+                    </button>
+                  </div>
+                  {editRecurring && (
+                    <div className="mt-2 grid grid-cols-3 gap-1.5">
+                      {([
+                        { value: "daily",    label: "Diária" },
+                        { value: "weekdays", label: "Dias úteis" },
+                        { value: "weekly",   label: "Semanal" },
+                        { value: "biweekly", label: "Quinzenal" },
+                        { value: "monthly",  label: "Mensal" },
+                        { value: "yearly",   label: "Anual" },
+                      ] as { value: typeof editRecurrenceType; label: string }[]).map(({ value, label }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setEditRecurrenceType(value)}
+                          className={`py-2 rounded-xl text-xs font-medium transition-colors border
+                            ${editRecurrenceType === value
+                              ? "bg-[#8ab4f8]/15 border-[#8ab4f8]/60 text-[#8ab4f8]"
+                              : "bg-[#2a2b2e] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {/* Convidados */}
               <div>
                 <label className="text-xs text-[#9aa0a6] mb-1.5 block">Convidados</label>

@@ -75,6 +75,7 @@ export interface UpdateTaskInput {
   targetCalendarId?: string;
   attendanceStatus?: Exclude<AttendanceStatus, "needsAction">;
   attendees?: string[];
+  recurrence?: string[];
 }
 
 export interface CalendarOption {
