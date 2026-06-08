@@ -304,14 +304,25 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayMode, isCurrentDay]);
 
+  const listScrolledKeyRef = useRef<string>("");
   useEffect(() => {
     if (displayMode !== "list" || !isCurrentDay) return;
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (listScrollRef.current && listNowSepRef.current)
-        listScrollRef.current.scrollTop = Math.max(0, listNowSepRef.current.offsetTop - 80);
-    }));
+    const key = `${displayMode}|${currentDate.toISOString().slice(0, 10)}`;
+    const scroll = () => {
+      const sep = listNowSepRef.current;
+      if (!sep) return false;
+      sep.scrollIntoView({ block: "start", behavior: "auto" });
+      listScrolledKeyRef.current = key;
+      return true;
+    };
+    if (listScrolledKeyRef.current !== key || tasks.length > 0) {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        scroll();
+        setTimeout(scroll, 250);
+      }));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayMode, isCurrentDay, tasks.length]);
+  }, [displayMode, isCurrentDay, currentDate, tasks.length]);
 
   // Global pointer events for drag
   useEffect(() => {
@@ -396,7 +407,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
       : -1;
     const separatorInsertIndex = nowSeparatorIndex === -1 ? orderedTimedTasks.length : nowSeparatorIndex;
     const renderNowSeparator = (key: string) => (
-      <div ref={listNowSepRef} key={key} className="flex items-center gap-2 px-1 py-1">
+      <div ref={listNowSepRef} key={key} style={{ scrollMarginTop: "80px" }} className="flex items-center gap-2 px-1 py-1">
         <div className="h-[2px] w-3 rounded bg-[#ea4335]" />
         <p className="text-[11px] font-medium text-[#ea4335]">
           Agora {format(new Date(), "HH:mm")}
