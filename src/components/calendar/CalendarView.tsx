@@ -287,24 +287,36 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     setEventAnchor(null);
   }
 
-  async function handleComplete(task: FlowTask) {
+  async function handleComplete(task: FlowTask, scope?: "this" | "thisAndFollowing" | "all") {
     const newComplete = !task.isComplete;
-    setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isComplete: newComplete } : t));
+    const effectiveScope = scope ?? "this";
+    // Optimistic update apenas para scope "this"; outros escopos afetam a série inteira — refetch após
+    if (effectiveScope === "this") {
+      setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isComplete: newComplete } : t));
+    }
     setPendingIds((p) => new Set(p).add(task.id));
     try {
+      const body: Record<string, unknown> = {
+        isComplete: newComplete,
+        calendarId: task.calendarId ?? "primary",
+      };
+      if (newComplete && effectiveScope !== "this") body.completeScope = effectiveScope;
       const res = await fetch(`/api/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isComplete: newComplete, calendarId: task.calendarId ?? "primary" }),
+        body: JSON.stringify(body),
       });
       if (res.status === 401) {
         router.replace("/sign-in");
         return;
       }
       if (!res.ok) throw new Error("Failed to toggle completion");
+      if (effectiveScope !== "this") await fetchTasks({ background: true });
     } catch {
       // Revert optimistic state when the server rejects the update.
-      setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isComplete: task.isComplete } : t));
+      if (effectiveScope === "this") {
+        setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isComplete: task.isComplete } : t));
+      }
       setMigrateResult("Não foi possível salvar. Verifique o acesso ao calendário.");
       scheduleMigrateResultClear(4_000);
     } finally {
@@ -1242,9 +1254,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           onClose={closeEventCard}
           onSaveEdit={handleInlineEdit}
           onDelete={handleDelete}
-          onToggleComplete={async (task) => {
-            await handleComplete(task);
-            closeEventCard();
+          onToggleComplete={async (task, scope) => {
+            await handleComplete(task, scope);
+            if (!scope || scope === "this") closeEventCard();
           }}
           onToggleImportant={handleImportant}
           onSetTag={handleSetTag}

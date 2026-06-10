@@ -19,7 +19,7 @@ interface EventPopoverProps {
   onClose: () => void;
   onSaveEdit: (task: FlowTask, updates: UpdateTaskInput) => Promise<void>;
   onDelete: (task: FlowTask, scope?: "this" | "thisAndFollowing" | "all") => void;
-  onToggleComplete: (task: FlowTask) => void;
+  onToggleComplete: (task: FlowTask, scope?: "this" | "thisAndFollowing" | "all") => void;
   onToggleImportant?: (task: FlowTask) => void;
   onSetTag?: (task: FlowTask, tag: "O" | "E" | "D" | null) => void;
   onSetPillar?: (task: FlowTask, pillar: Pillar | null) => void;
@@ -69,6 +69,8 @@ export function EventPopover({
   const [feedback, setFeedback] = useState("");
   const [showRecurringDeleteDialog, setShowRecurringDeleteDialog] = useState(false);
   const [recurringScope, setRecurringScope] = useState<"this" | "thisAndFollowing" | "all">("this");
+  const [showRecurringCompleteDialog, setShowRecurringCompleteDialog] = useState(false);
+  const [completeScope, setCompleteScope] = useState<"this" | "thisAndFollowing" | "all">("this");
   const [editRecurring, setEditRecurring] = useState(false);
   const [editRecurrenceType, setEditRecurrenceType] = useState<
     "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "weekdays"
@@ -287,7 +289,14 @@ export function EventPopover({
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => onToggleComplete(task)}
+                onClick={() => {
+                  if (task.isRecurring && !task.isComplete) {
+                    setCompleteScope("this");
+                    setShowRecurringCompleteDialog(true);
+                  } else {
+                    onToggleComplete(task);
+                  }
+                }}
                 className={`w-9 h-9 min-w-9 min-h-9 rounded-full border flex items-center justify-center transition-all disabled:opacity-50
                   ${task.isComplete
                     ? "bg-emerald-500 border-emerald-500 text-white"
@@ -780,6 +789,59 @@ export function EventPopover({
           )}
         </div>
       </div>
+
+      {/* Diálogo de conclusão de evento recorrente */}
+      {showRecurringCompleteDialog && (
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShowRecurringCompleteDialog(false)}
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[#3c4043] bg-[#2a2b2e] p-5 shadow-2xl">
+            <h3 className="text-sm font-semibold text-[#e8eaed] mb-4">Concluir evento recorrente</h3>
+            <div className="space-y-3 mb-5">
+              {(
+                [
+                  { value: "this", label: "Este evento" },
+                  { value: "thisAndFollowing", label: "Este e os eventos seguintes" },
+                  { value: "all", label: "Todos os eventos" },
+                ] as const
+              ).map(({ value, label }) => (
+                <label key={value} className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="completeScope"
+                    value={value}
+                    checked={completeScope === value}
+                    onChange={() => setCompleteScope(value)}
+                    className="accent-[#a78bfa] w-4 h-4"
+                  />
+                  <span className="text-sm text-[#e8eaed]">{label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowRecurringCompleteDialog(false)}
+                className="flex-1 px-3 py-2 rounded-lg border border-[#5f6368] text-xs text-[#e8eaed] hover:bg-[#3c4043] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRecurringCompleteDialog(false);
+                  onToggleComplete(task, completeScope);
+                }}
+                className="flex-1 px-3 py-2 rounded-lg bg-emerald-500 text-white text-xs font-semibold hover:brightness-95 transition-colors"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Diálogo de exclusão de evento recorrente */}
       {showRecurringDeleteDialog && (

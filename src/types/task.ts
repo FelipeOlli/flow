@@ -76,6 +76,7 @@ export interface UpdateTaskInput {
   attendanceStatus?: Exclude<AttendanceStatus, "needsAction">;
   attendees?: string[];
   recurrence?: string[];
+  completeScope?: "this" | "thisAndFollowing" | "all";
 }
 
 export interface CalendarOption {

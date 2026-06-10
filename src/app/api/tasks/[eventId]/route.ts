@@ -39,7 +39,8 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
 
     let task;
     if (body.isComplete === true) {
-      task = await markEventComplete(accessToken, eventId, calendarId);
+      const completeScope = body.completeScope ?? "this";
+      task = await markEventComplete(accessToken, eventId, calendarId, completeScope);
     } else if (body.isComplete === false) {
       task = await markEventIncomplete(accessToken, eventId, calendarId);
     } else if (body.isImportant === true) {

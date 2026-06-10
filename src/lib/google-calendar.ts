@@ -305,9 +305,103 @@ export async function updateEvent(
 export async function markEventComplete(
   accessToken: string,
   eventId: string,
-  calendarId = "primary"
+  calendarId = "primary",
+  scope: "this" | "thisAndFollowing" | "all" = "this"
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
+
+  if (scope === "thisAndFollowing") {
+    const { data: instance } = await calendar.events.get({ calendarId, eventId });
+    const masterId = instance.recurringEventId ?? eventId;
+    const originalStart =
+      instance.originalStartTime?.dateTime ??
+      instance.originalStartTime?.date ??
+      instance.start?.dateTime ??
+      instance.start?.date;
+
+    if (originalStart) {
+      const { data: master } = await calendar.events.get({ calendarId, eventId: masterId });
+      const masterStart = master.start?.dateTime ?? master.start?.date ?? "";
+      const isFirstOrBefore = masterStart && new Date(originalStart) <= new Date(masterStart);
+
+      if (!isFirstOrBefore) {
+        // Truncar RRULE: UNTIL = originalStart (inclusive — esta instância continua existindo)
+        const untilDate = new Date(originalStart);
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const untilUtc =
+          `${untilDate.getUTCFullYear()}${pad(untilDate.getUTCMonth() + 1)}${pad(untilDate.getUTCDate())}` +
+          `T${pad(untilDate.getUTCHours())}${pad(untilDate.getUTCMinutes())}${pad(untilDate.getUTCSeconds())}Z`;
+
+        const recurrence = (master.recurrence ?? []).map((line) => {
+          if (line.startsWith("RRULE:")) {
+            return "RRULE:" + line
+              .slice(6)
+              .split(";")
+              .filter((p) => !p.startsWith("UNTIL=") && !p.startsWith("COUNT="))
+              .concat(`UNTIL=${untilUtc}`)
+              .join(";");
+          }
+          return line;
+        });
+        await calendar.events.patch({ calendarId, eventId: masterId, requestBody: { recurrence } });
+      }
+    }
+    // Marcar esta instância como concluída
+  }
+
+  if (scope === "all") {
+    const { data: instance } = await calendar.events.get({ calendarId, eventId });
+    const masterId = instance.recurringEventId ?? eventId;
+    const originalStart =
+      instance.originalStartTime?.dateTime ??
+      instance.originalStartTime?.date ??
+      instance.start?.dateTime ??
+      instance.start?.date;
+
+    // Truncar RRULE no master com UNTIL = originalStart - 1s (esta instância é a última)
+    // e marcar o master como concluído (todas as instâncias herdam via extendedProperties)
+    const { data: master } = await calendar.events.get({ calendarId, eventId: masterId });
+    const masterOriginalColorId =
+      master.colorId && master.colorId !== COMPLETE_COLOR_ID ? master.colorId : "";
+
+    let recurrence = master.recurrence;
+    if (originalStart) {
+      const cutoffMs = new Date(originalStart).getTime() - 1000;
+      const cutoffDate = new Date(cutoffMs);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const untilUtc =
+        `${cutoffDate.getUTCFullYear()}${pad(cutoffDate.getUTCMonth() + 1)}${pad(cutoffDate.getUTCDate())}` +
+        `T${pad(cutoffDate.getUTCHours())}${pad(cutoffDate.getUTCMinutes())}${pad(cutoffDate.getUTCSeconds())}Z`;
+
+      recurrence = (master.recurrence ?? []).map((line) => {
+        if (line.startsWith("RRULE:")) {
+          return "RRULE:" + line
+            .slice(6)
+            .split(";")
+            .filter((p) => !p.startsWith("UNTIL=") && !p.startsWith("COUNT="))
+            .concat(`UNTIL=${untilUtc}`)
+            .join(";");
+        }
+        return line;
+      });
+    }
+
+    const masterPatch: Record<string, unknown> = {
+      colorId: COMPLETE_COLOR_ID,
+      extendedProperties: {
+        private: {
+          flowCompleted: "true",
+          flowOriginalColorId: masterOriginalColorId,
+          flowCompletedAt: new Date().toISOString(),
+        },
+      },
+    };
+    if (recurrence) masterPatch.recurrence = recurrence;
+    const { data } = await calendar.events.patch({ calendarId, eventId: masterId, requestBody: masterPatch });
+    return mapEvent(data, calendarId);
+  }
+
+  // scope === "this" (ou pós-truncate de "thisAndFollowing"): marcar instância
   const { data: current } = await calendar.events.get({ calendarId, eventId });
   // Salva a cor original apenas se não for já a cor de "completo"
   const originalColorId =
