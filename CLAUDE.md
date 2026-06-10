@@ -133,9 +133,17 @@ flow/
 
 ### Build & Deploy
 - **`output: "standalone"`** no next.config.mjs: Necessário para Docker.
-- **`serverExternalPackages: ["node-cron"]`**: node-cron não pode ser bundled pelo webpack, deve rodar no Node nativo.
+- **`serverExternalPackages: ["node-cron", "web-push"]`**: Ambos não podem ser bundled pelo webpack.
 - **`experimentalInstrumentationHook: true`**: Habilita `instrumentation.ts` que inicializa o cron no startup.
 - **EasyPanel**: Deploy via Dockerfile. Volume `/app/data` deve ser montado como persistente. Secrets injetados como variáveis de ambiente — nunca baked no build.
+- **VAPID keys**: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` — necessárias para Web Push. A chave pública é servida via `/api/push/vapid` (runtime), **não** via `NEXT_PUBLIC_` (que exigiria rebuild). NÃO usar `NEXT_PUBLIC_VAPID_PUBLIC_KEY` para este fim.
+
+### Web Push (notificações)
+- **Service Worker**: `public/sw.js` — recebe push, exibe notificação nativa, abre `/today` no click.
+- **Subscriptions em arquivo**: `/app/data/.push-subscriptions.json` — mesmo padrão do token-store. Sem banco de dados.
+- **Deduplicação por arquivo**: `/app/data/.notified-today.json` — `{ date: "YYYY-MM-DD", ids: string[] }`. Limpa automaticamente ao virar o dia.
+- **Cron de notificações**: a cada minuto, filtra eventos com início entre `now+9min` e `now+11min`, exclui `isComplete`, `isCancelled`, `declined`. Erro 410/404 do push provider remove a subscription automaticamente.
+- **Chave pública em runtime**: `push-client.ts` faz `GET /api/push/vapid` para obter a chave — não depende de build-time env vars.
 
 ### UI
 - **Dark theme fixo**: Toda a UI usa paleta Google Material Dark (`#202124`, `#2a2b2e`, `#3c4043`, `#e8eaed`, `#9aa0a6`).
@@ -232,6 +240,81 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 ---
 
 ## 6. Última Sessão
+
+### 2026-06-09
+
+**O que foi feito:**
+
+1. **Fix campo de data no EventPopover (mobile)** — Campos "Início" e "Fim" estavam cortados/vazando em mobile por ficarem lado a lado (`grid-cols-2`). Solução em 3 commits: (1) empilhar em mobile com `grid-cols-1 sm:grid-cols-2`; (2) `overflow-x-hidden` no container + `min-w-0` nos inputs; (3) `appearance-none` + `text-[11px]` — mesma receita do `TaskForm` que já funcionava.
+
+2. **Notificações Web Push via PWA** — Sistema completo de notificações nativas:
+   - `public/sw.js`: Service Worker que recebe push e exibe notificação; click abre `/today`
+   - `src/lib/push-store.ts`: armazena subscriptions em `/app/data/.push-subscriptions.json`
+   - `src/lib/push-client.ts`: `registerPush()`, `unregisterPush()`, `getPushStatus()` — busca VAPID key do servidor via `/api/push/vapid` (não env var de build)
+   - `src/lib/notifier.ts`: `sendDueNotifications()` — filtra eventos 9-11 min antes, deduplica via `/app/data/.notified-today.json`
+   - `src/lib/cron.ts`: job a cada minuto chamando `sendDueNotifications()`
+   - APIs: `/api/push/vapid`, `/api/push/subscribe`, `/api/push/unsubscribe`, `/api/push/test`
+   - `CalendarView.tsx`: botão de sino no header com modal (ativar / testar / desativar)
+   - `next.config.mjs`: `web-push` adicionado a `serverExternalPackages`
+
+3. **Fix crítico VAPID key** — `NEXT_PUBLIC_` env vars são baked no bundle no build time; em Docker/EasyPanel isso impedia o funcionamento. Corrigido para buscar a chave via `/api/push/vapid` em runtime.
+
+**Arquivos criados:**
+- `public/sw.js`, `src/lib/push-store.ts`, `src/lib/push-client.ts`, `src/lib/notifier.ts`
+- `src/app/api/push/vapid/route.ts`, `subscribe/route.ts`, `unsubscribe/route.ts`, `test/route.ts`
+
+**Arquivos modificados:**
+- `src/lib/cron.ts`, `src/components/calendar/CalendarView.tsx`, `src/components/calendar/EventPopover.tsx`, `next.config.mjs`
+
+**Decisões tomadas:**
+- Subscriptions em arquivo JSON (sem banco) — consistente com o restante do projeto
+- Deduplicação local (arquivo) ao invés de PATCH no Google Calendar — evita quota de API
+- VAPID key servida via endpoint REST, não `NEXT_PUBLIC_` — funciona sem rebuild
+
+**Próximos passos:** Após redeploy no Easypanel com as VAPID vars, testar ativação no Chrome e no iPhone (Safari → Adicionar à Tela de Início antes de ativar).
+
+---
+
+### 2026-06-08 (sessão 2)
+
+**O que foi feito:**
+
+1. **Fix auto-scroll "Agora" no modo Lista** — Substituída lógica manual `offsetTop - 80` por `scrollIntoView({ block: "start" })` com `scrollMarginTop: 80px` no separador vermelho. O browser calcula a posição após layout finalizado, eliminando a race condition com fontes/badges que causava scroll abaixo da âncora. Retry em 250ms como segurança. Ref de chave por `(mode, date)` evita re-scroll após edições. Aplicado em DayView, WeekView e ThreeDayView.
+
+**Arquivos modificados:**
+- `src/components/calendar/DayView.tsx` — novo `useEffect` + `scrollMarginTop` no separador
+- `src/components/calendar/WeekView.tsx` — idem
+- `src/components/calendar/ThreeDayView.tsx` — idem
+
+**Decisões tomadas:**
+- `scrollIntoView` + `scrollMarginTop` (APIs nativas) preferidos sobre cálculo manual de `offsetTop` — mais resilientes a layout shifts e variações de altura de card entre dispositivos
+- Retry único em 250ms: cobre carga tardia de fonte sem ficar repolicando indefinidamente
+
+**Próximos passos:** nenhum pendente.
+
+---
+
+### 2026-06-08 (sessão 1)
+
+**O que foi feito:**
+
+1. **Recorrência ao editar evento** — Bloco "Repetir" (toggle + 6 opções: Diária, Dias úteis, Semanal, Quinzenal, Mensal, Anual) adicionado ao modo edição do `EventPopover`. Aparece apenas para eventos não-recorrentes com horário definido (`!task.isRecurring && !task.isAllDay`). Ao salvar, envia `recurrence: ["RRULE:…"]` via `UpdateTaskInput` → `updateEvent` → `events.patch`, convertendo o evento em série. Para eventos já recorrentes, mantém apenas o modo leitura do resumo.
+
+2. **Textarea de descrição redimensionável** — Trocado `resize-none` por `resize-y` e `max-h-40` (160px) por `max-h-[60vh]` no textarea de descrição do `EventPopover`. Auto-grow atualizado de `maxH = 160` para `Math.round(window.innerHeight * 0.6)`.
+
+**Arquivos modificados:**
+- `src/types/task.ts` — `recurrence?: string[]` em `UpdateTaskInput`
+- `src/lib/google-calendar.ts` — `updateEvent` propaga `recurrence` para o PATCH
+- `src/components/calendar/EventPopover.tsx` — estados `editRecurring`/`editRecurrenceType`, `buildRRule()`, UI do toggle, propagação no save, textarea redimensionável
+
+**Decisões tomadas:**
+- Recorrência na edição limitada a eventos não-recorrentes: adicionar/alterar RRULE em série existente exigiria diálogo "este/seguintes/todos" — deixado para versão futura
+- Eventos all-day excluídos do toggle: RRULE com `date` (não `dateTime`) tem comportamento diferente e não está no escopo
+- `resize-y` nativo preferido sobre botão "expandir" customizado — mais simples e familiar
+
+**Próximos passos:** nenhum pendente.
+
+---
 
 ### 2026-06-05 (sessão 2)
 
@@ -440,99 +523,8 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ---
 
-### 2026-04-17
-
-**O que foi feito:**
-
-1. **Feature: flag "Importante" com estrela dourada** — Novo campo `isImportant?: boolean` em `FlowTask` e `UpdateTaskInput`. Clicar na estrela marca/desmarca o evento como importante. Quando marcado, o evento fica com fundo dourado (#F6BF26, Google Banana). O estado persiste via `extendedProperties.private.flowImportant` no Google Calendar.
-
-2. **Persistência via Google Calendar extended properties** — `markEventImportant()`: salva colorId="5" e `flowImportant: "true"`, preservando colorId original em `flowOriginalImportantColorId`. `markEventUnimportant()`: restaura colorId original.
-
-3. **Cor dourada na `getEventSurfaceColor()`** — Adicionado 5º parâmetro `isImportant` (opcional, backward-compatible). Prioridade: `cancelled > declined > isComplete > isImportant > calendarColor`.
-
-4. **API PATCH estendida** — `/api/tasks/[eventId]` agora aceita `isImportant: boolean` e chama `markEventImportant/Unimportant`. Branch separado dos outros campos.
-
-5. **UI otimista em CalendarView** — `handleImportant()` espelha `handleComplete()`: toggle local imediato, PATCH assíncrono, revert+toast em caso de erro.
-
-6. **Ícone de estrela em todas as views**:
-   - `TaskBlock`: compact/full mode (outline/filled, w-2.5 ou w-3). Dense mode: sem estrela.
-   - `DayView`: lista (timed), agenda/calendar mode
-   - `WeekView`, `ThreeDayView`: lista (timed)
-   - `MonthView`: indicador visual dourado no chip (botão clicável quando importante)
-   - `EventPopover`: estrela no título + botão "Marcar como importante" nas ações
-
-**Arquivos modificados:**
-- `src/types/task.ts`
-- `src/lib/google-calendar.ts`
-- `src/lib/colors.ts`
-- `src/app/api/tasks/[eventId]/route.ts`
-- `src/components/calendar/CalendarView.tsx`
-- `src/components/tasks/TaskBlock.tsx`
-- `src/components/tasks/TaskItem.tsx`
-- `src/components/calendar/DayView.tsx`
-- `src/components/calendar/WeekView.tsx`
-- `src/components/calendar/ThreeDayView.tsx`
-- `src/components/calendar/MonthView.tsx`
-- `src/components/calendar/EventPopover.tsx`
-
-**Decisões tomadas:**
-- `colorId: "5"` (Google Banana) para estado importante — mesmo mecanismo do colorId "2" para completo
-- Dense mode no TaskBlock: sem estrela (espaço crítico)
-- Conflito complete+important resolvido naturalmente: completar evento dourado salva "5" em `flowOriginalColorId`, ao desmarcar volta ao dourado
-- `isImportant` como 5º parâmetro opcional em `getEventSurfaceColor()` — backward-compatible
-- MonthView: chip mostra estrela dourada apenas quando importante (botão clicável para desmarcar), sem estrela outline por falta de espaço
-
-**Problema de deploy:** As mudanças ficaram apenas como arquivos modificados localmente — o commit/push inicial não foi executado pelo assistente. Foi necessário fazer `git add` + `git commit` + `git push` manualmente na sessão para o código chegar ao EasyPanel. Commit final: `e3a8af7`.
-
-**Lição:** Ao final de sessões de implementação, sempre verificar com `git status` se as mudanças foram de fato commitadas antes de encerrar.
-
-**Próximos passos:** nenhum pendente.
-
----
-
-### 2026-04-13
-
-**O que foi feito:**
-
-1. **Fix: migração não via eventos de todos os calendários** — `getEventsForDateKey` chamado sem `writableOnly: true` na migração, permitindo ver calendários compartilhados (ex: `ti@cfcontabilidade.com`).
-
-2. **Fix: timezone Docker** — `getTimeZoneOffsetMs()` em `timezone.ts` retornava hour=24 para meia-noite em runtimes Alpine, causando offset errado de 1 dia. Corrigido com `% 24`.
-
-3. **Fix: Cache API** — `Cache-Control: no-store` adicionado ao GET `/api/tasks` para evitar dados stale após migração.
-
-4. **Fix: UI otimista pós-migração** — eventos da data de origem são removidos imediatamente do estado local após migração bem-sucedida. Refresh diferido extendido para 2500ms.
-
-5. **Fix: toast de erro ao marcar completo** — catch block de `handleComplete` em `CalendarView.tsx` agora exibe toast usando o sistema `migrateResult` existente.
-
-6. **Feature: ícone de convidados** — ícone de pessoas (SVG inline, Material Design) exibido ao lado do título em todas as views (grid compacto, denso, lista dia/semana/3dias) e no `EventPopover` ao lado do título. Cor branca. Só aparece quando `task.attendees && task.attendees.length > 0`.
-
-7. **Feature: view "Agenda"** — terceiro modo de exibição na view Dia (toggle: Lista / Grade / Agenda). Agrupa eventos por calendário com cabeçalho colorido, contagem e seta de colapso/expansão por seção. Cada seção pode ser retraída/expandida individualmente.
-
-**Arquivos modificados:**
-- `src/lib/migration.ts` — removido `writableOnly`
-- `src/lib/timezone.ts` — fix `% 24` no hour
-- `src/app/api/tasks/route.ts` — `Cache-Control: no-store`
-- `src/components/calendar/CalendarView.tsx` — otimismo pós-migração, toast de erro, novo modo "Agenda" no toggle, `dayDisplayMode` type atualizado
-- `src/components/calendar/DayView.tsx` — componente `AgendaView` (colapso/expansão), prop type atualizado
-- `src/components/calendar/WeekView.tsx` — ícone de convidados
-- `src/components/calendar/ThreeDayView.tsx` — ícone de convidados
-- `src/components/calendar/EventPopover.tsx` — ícone de convidados no título
-- `src/components/tasks/TaskBlock.tsx` — ícone de convidados (todos os modos: dense, compact, full)
-- `src/lib/google-calendar.ts` — log de diagnóstico adicionado
-
-**Decisões tomadas:**
-- `minAccessRole: "reader"` (não `"writer"`) na migração para enxergar todos os calendários
-- Ícone de convidados sempre branco (`text-white`) para consistência com o tema escuro
-- View "Agenda" extrai `calendarId` como chave de agrupamento, com fallback `"primary"`
-- `AgendaView` extraído como componente separado dentro de `DayView.tsx` para ter seu próprio estado de colapso (`useState<Set<string>>`)
-- Estado de colapso inicializa vazio (todas seções expandidas por padrão)
-
-**Próximos passos sugeridos pelo usuário:** nenhum pendente explicitamente — sessão encerrada com commit e push.
-
----
-
 ## 7. Histórico de Sessões Anteriores
 
-*(Sessões anteriores a 2026-04-13 condensadas — projeto criado e evolui neste período)*
-
+- **2026-04-17** — Flag "Importante" com estrela dourada (`colorId: "5"`, `flowImportant` em extendedProperties), ícone de estrela em todas as views, UI otimista. Fix deploy: commit manual necessário.
+- **2026-04-13** — Fix migração com calendários compartilhados (`reader`), fix timezone Alpine (`% 24`), Cache-Control no-store, ícone de convidados em todas as views, view "Agenda" no DayView (agrupada por calendário com colapso).
 - **Até 2026-04-12** — Criação do projeto, auth por usuário/senha substituindo Google OAuth login, views de calendário (dia/semana/3dias/mês), grade e lista, busca, migração automática e manual de eventos, drag & drop, RSVP, recurrence display, toggle grade/lista por view, FAB, auto-expand de descrições, filtros de busca case/accent insensitive.
