@@ -629,7 +629,7 @@ export function EventPopover({
                       ))}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
                       <label className="text-xs text-[#9aa0a6] mb-1.5 block">Início</label>
                       <input
