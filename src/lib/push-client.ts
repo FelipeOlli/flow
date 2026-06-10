@@ -1,19 +1,29 @@
 export type PushStatus = "granted" | "denied" | "default" | "unsupported";
 
-
 export function getPushStatus(): PushStatus {
   if (typeof window === "undefined") return "unsupported";
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "unsupported";
   return (Notification.permission as PushStatus) ?? "default";
 }
 
+async function fetchVapidPublicKey(): Promise<string | null> {
+  try {
+    const res = await fetch("/api/push/vapid");
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data.publicKey === "string" ? data.publicKey : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function registerPush(): Promise<boolean> {
   if (typeof window === "undefined") return false;
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
 
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const publicKey = await fetchVapidPublicKey();
   if (!publicKey) {
-    console.error("[PUSH] NEXT_PUBLIC_VAPID_PUBLIC_KEY não definida");
+    console.error("[PUSH] Não foi possível obter VAPID public key do servidor");
     return false;
   }
 
