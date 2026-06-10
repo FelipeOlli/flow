@@ -636,7 +636,7 @@ export function EventPopover({
                         type="datetime-local"
                         value={startTime}
                         onChange={(e) => handleStartChange(e.target.value)}
-                        className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
+                        className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-2 py-2 text-[11px] sm:text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] appearance-none"
                       />
                     </div>
                     <div className="min-w-0">
@@ -646,7 +646,7 @@ export function EventPopover({
                         value={endTime}
                         min={startTime}
                         onChange={(e) => setEndTime(e.target.value)}
-                        className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
+                        className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-2 py-2 text-[11px] sm:text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] appearance-none"
                       />
                     </div>
                   </div>
