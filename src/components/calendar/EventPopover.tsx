@@ -312,7 +312,7 @@ export function EventPopover({
           </div>
         </div>
 
-        <div className="px-4 pb-4 space-y-3 max-h-[min(80vh,640px)] overflow-y-auto">
+        <div className="px-4 pb-4 space-y-3 max-h-[min(80vh,640px)] overflow-y-auto overflow-x-hidden">
           {!editing ? (
             <>
               <div className={`text-sm text-[#e8eaed] ${task.isCancelled ? "line-through text-[#9aa0a6]" : ""}`}>
@@ -630,23 +630,23 @@ export function EventPopover({
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
+                    <div className="min-w-0">
                       <label className="text-xs text-[#9aa0a6] mb-1.5 block">Início</label>
                       <input
                         type="datetime-local"
                         value={startTime}
                         onChange={(e) => handleStartChange(e.target.value)}
-                        className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
+                        className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
                       />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <label className="text-xs text-[#9aa0a6] mb-1.5 block">Fim</label>
                       <input
                         type="datetime-local"
                         value={endTime}
                         min={startTime}
                         onChange={(e) => setEndTime(e.target.value)}
-                        className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
+                        className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
                       />
                     </div>
                   </div>
