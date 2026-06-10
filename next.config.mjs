@@ -5,7 +5,7 @@ const nextConfig = {
   experimental: {
     instrumentationHook: true,
   },
-  serverExternalPackages: ["node-cron"],
+  serverExternalPackages: ["node-cron", "web-push"],
 };
 
 export default nextConfig;

@@ -16,6 +16,7 @@ import { EventPopover, EventAnchorPoint } from "./EventPopover";
 import { TaskForm } from "@/components/tasks/TaskForm";
 import { DashboardView } from "@/components/dashboard/DashboardView";
 import { WeeklyReviewView } from "@/components/dashboard/WeeklyReviewView";
+import { getPushStatus, registerPush, unregisterPush, getActiveSubscription, type PushStatus } from "@/lib/push-client";
 
 type View = "day" | "3days" | "week" | "month";
 const LAYERS = {
@@ -141,6 +142,11 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     error?: string;
     diagnostics?: { targetDateKey?: string };
   } | null>(null);
+  const [pushStatus, setPushStatus] = useState<PushStatus>("default");
+  const [pushActive, setPushActive] = useState(false);
+  const [pushModalOpen, setPushModalOpen] = useState(false);
+  const pushButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [pushModalPos, setPushModalPos] = useState<{ top: number; right: number } | null>(null);
 
   function scheduleMigrateResultClear(ms: number) {
     if (migrateResultClearRef.current) clearTimeout(migrateResultClearRef.current);
@@ -207,6 +213,14 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       .then((r) => r.json())
       .then((data) => setGoogleConnected(data.connected === true))
       .catch(() => setGoogleConnected(false));
+  }, []);
+
+  useEffect(() => {
+    const status = getPushStatus();
+    setPushStatus(status);
+    if (status === "granted") {
+      getActiveSubscription().then((sub) => setPushActive(!!sub));
+    }
   }, []);
 
   useEffect(() => {
@@ -787,6 +801,36 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
               );
             })()}
 
+            {/* Notificações Push */}
+            <button
+              ref={pushButtonRef}
+              type="button"
+              onClick={() => {
+                if (pushButtonRef.current) {
+                  const rect = pushButtonRef.current.getBoundingClientRect();
+                  setPushModalPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+                }
+                setPushModalOpen((prev) => !prev);
+              }}
+              className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+                pushActive
+                  ? "text-[#8ab4f8] bg-[#8ab4f8]/10"
+                  : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
+              }`}
+              aria-label="Notificações"
+              title="Notificações push"
+            >
+              {pushActive ? (
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                  <path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 002 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5S10.5 3.17 10.5 4v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+              )}
+            </button>
+
             {/* Migração (3 pontos) */}
             <div className="relative">
               <button
@@ -895,6 +939,85 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                 document.body
               )}
             </div>
+
+            {/* Modal de Notificações Push */}
+            {pushModalOpen && pushModalPos && typeof document !== "undefined" && createPortal(
+              <>
+                <div className="fixed inset-0 z-[4500]" onClick={() => setPushModalOpen(false)} />
+                <div
+                  className="fixed z-[4600] w-64 bg-[#2a2b2e] border border-[#3c4043] rounded-xl shadow-2xl p-4 space-y-3 text-sm"
+                  style={{ top: pushModalPos.top, right: pushModalPos.right }}
+                >
+                  <p className="text-xs font-medium text-[#e8eaed]">Notificações Push</p>
+                  {pushStatus === "unsupported" && (
+                    <p className="text-[11px] text-[#9aa0a6] leading-snug">
+                      Seu navegador não suporta notificações push. Use Chrome ou Safari (iOS 16.4+ com app na tela inicial).
+                    </p>
+                  )}
+                  {pushStatus === "denied" && (
+                    <p className="text-[11px] text-[#9aa0a6] leading-snug">
+                      Notificações bloqueadas. Reative nas configurações do navegador e recarregue a página.
+                    </p>
+                  )}
+                  {(pushStatus === "default" || (pushStatus === "granted" && !pushActive)) && (
+                    <>
+                      <p className="text-[11px] text-[#9aa0a6] leading-snug">
+                        Receba alertas 10 minutos antes de cada evento, mesmo com o app em background.
+                      </p>
+                      <p className="text-[11px] text-[#9aa0a6] leading-snug">
+                        📱 iPhone: abra no Safari → Compartilhar → &quot;Adicionar à Tela de Início&quot; antes de ativar.
+                      </p>
+                      <button
+                        onClick={async () => {
+                          const ok = await registerPush();
+                          if (ok) {
+                            setPushActive(true);
+                            setPushStatus("granted");
+                            setPushModalOpen(false);
+                            setMigrateResult("Notificações ativadas!");
+                          } else {
+                            setMigrateResult("Não foi possível ativar as notificações. Verifique as permissões do navegador.");
+                          }
+                        }}
+                        className="w-full py-2 rounded-lg bg-[#8ab4f8] text-[#202124] text-xs font-medium hover:bg-[#93bbf8] transition-colors"
+                      >
+                        Ativar notificações
+                      </button>
+                    </>
+                  )}
+                  {pushStatus === "granted" && pushActive && (
+                    <>
+                      <p className="text-[11px] text-[#9aa0a6] leading-snug">
+                        Notificações ativas neste dispositivo. Você receberá alertas 10 min antes de cada evento.
+                      </p>
+                      <button
+                        onClick={async () => {
+                          const res = await fetch("/api/push/test", { method: "POST" });
+                          const data = await res.json();
+                          setPushModalOpen(false);
+                          setMigrateResult(res.ok ? `Notificação de teste enviada para ${data.sent} dispositivo(s)!` : "Erro ao enviar teste.");
+                        }}
+                        className="w-full py-2 rounded-lg border border-[#3c4043] text-[#e8eaed] text-xs font-medium hover:bg-[#3c4043] transition-colors"
+                      >
+                        Enviar notificação de teste
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await unregisterPush();
+                          setPushActive(false);
+                          setPushModalOpen(false);
+                          setMigrateResult("Notificações desativadas neste dispositivo.");
+                        }}
+                        className="w-full py-2 rounded-lg border border-[#f28b82]/40 text-[#f28b82] text-xs font-medium hover:bg-[#f28b82]/10 transition-colors"
+                      >
+                        Desativar notificações
+                      </button>
+                    </>
+                  )}
+                </div>
+              </>,
+              document.body
+            )}
 
             <button onClick={() => signOut({ callbackUrl: "/sign-in" })}
               className="w-8 h-8 flex items-center justify-center text-[#9aa0a6] hover:text-[#e8eaed] transition-colors">
