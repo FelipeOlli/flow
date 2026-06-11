@@ -323,7 +323,7 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
           <div className="w-11 flex-shrink-0 relative">
             {HOURS.map((h) => (
               <div key={h} className="absolute right-1.5" style={{ top: `${(h - CALENDAR_DIMENSIONS.DAY_START) * CALENDAR_DIMENSIONS.HOUR_PX - 7}px` }}>
-                <span className="text-[10px] text-[#9aa0a6] tabular-nums select-none">
+                <span className={`tabular-nums select-none ${h === 12 ? "text-[10px] text-[#e8eaed] font-semibold" : "text-[10px] text-[#9aa0a6]"}`}>
                   {formatHourLabel(h)}
                 </span>
               </div>
@@ -345,7 +345,7 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
               >
                 {/* Hour lines */}
                 {HOURS.map((h) => (
-                  <div key={h} className="absolute left-0 right-0 border-t border-[#3c4043] pointer-events-none"
+                  <div key={h} className={`absolute left-0 right-0 pointer-events-none border-t ${h === 12 ? "border-[#5f6368]" : "border-[#3c4043]"}`}
                     style={{ top: `${(h - CALENDAR_DIMENSIONS.DAY_START) * CALENDAR_DIMENSIONS.HOUR_PX}px` }} />
                 ))}
 

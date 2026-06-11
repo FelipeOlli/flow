@@ -610,10 +610,10 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
           {HOURS.map((h) => (
             <div key={h} className="absolute left-0 right-0 pointer-events-none"
               style={{ top: `${(h - CALENDAR_DIMENSIONS.DAY_START) * CALENDAR_DIMENSIONS.HOUR_PX}px` }}>
-              <span className="absolute -left-10 -top-2.5 text-[11px] text-[#9aa0a6] w-8 text-right tabular-nums select-none">
+              <span className={`absolute -left-10 -top-2.5 w-8 text-right tabular-nums select-none ${h === 12 ? "text-[11px] text-[#e8eaed] font-semibold" : "text-[11px] text-[#9aa0a6]"}`}>
                 {formatHourLabel(h)}
               </span>
-              <div className="w-full h-px bg-[#3c4043]" />
+              <div className={`w-full ${h === 12 ? "h-px bg-[#5f6368]" : "h-px bg-[#3c4043]"}`} />
             </div>
           ))}
 
