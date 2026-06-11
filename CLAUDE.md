@@ -241,6 +241,28 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
+### 2026-06-11 (sessão 3)
+
+**O que foi feito:**
+
+1. **Scope dialog para RSVP em recorrentes** — Sim/Talvez/Não em evento recorrente agora abre dialog "Este evento / Este e os seguintes / Todos os eventos". `updateEventRsvp` em `google-calendar.ts` aceita `scope: "this" | "all"`, reutilizando `resolveEventId` para encontrar a master. "Todos os eventos" faz PATCH na master — todas as instâncias herdam o status.
+
+2. **Divisão visual 12h na Lista (modo plano)** — Separador `——— 12:00 ———` inserido antes do primeiro evento a partir das 12h no modo Lista do DayView.
+
+**Arquivos modificados:**
+- `src/lib/google-calendar.ts` — `updateEventRsvp` com scope
+- `src/app/api/tasks/[eventId]/route.ts` — `rsvpScope` passado para `updateEventRsvp`
+- `src/components/calendar/EventPopover.tsx` — dialog de scope para RSVP
+- `src/components/calendar/DayView.tsx` — separador 12h na Lista
+
+**Decisões tomadas:**
+- "Este e os seguintes" para RSVP trata como "Este evento" no backend — truncar série para status de presença seria desproporcional
+- `resolveEventId` (helper existente) reutilizado para encontrar masterId sem duplicar código
+
+**Próximos passos:** nenhum pendente.
+
+---
+
 ### 2026-06-11 (sessão 2)
 
 **O que foi feito:**
