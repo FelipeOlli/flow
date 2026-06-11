@@ -60,18 +60,45 @@ Retorne um JSON com os campos abaixo. Todos os campos são opcionais exceto titl
 {
   "title": "string — título do evento",
   "startTime": "string — ISO 8601 com offset do fuso ${tz}, ex: 2026-06-11T14:00:00-03:00",
-  "endTime": "string — ISO 8601 com offset do fuso ${tz}, padrão = startTime + 1 hora se não informado",
-  "calendarId": "string ou null — id da agenda acima que melhor combina; null se ambíguo",
+  "endTime": "string — ISO 8601 com offset do fuso ${tz}, calcule com base na duração abaixo",
+  "calendarId": "string ou null — id da agenda que melhor combina com o nome dito (veja regras abaixo); null se ambíguo",
   "description": "string ou null — detalhes extras mencionados",
   "isImportant": "boolean — true se mencionar 'importante', 'urgente', 'prioridade'",
   "isAllDay": "boolean — true se mencionar 'o dia todo', 'dia inteiro', sem horário específico",
-  "pillar": "null | 'trabalho' | 'saude' | 'familia' | 'espiritualidade' — inferir pelo contexto",
-  "category": "null | 'operational' | 'strategic' — operational = tarefas rotineiras; strategic = reuniões, planejamento",
+  "pillar": "null | 'trabalho' | 'saude' | 'familia' | 'espiritualidade' — inferir pelo contexto (veja exemplos abaixo)",
+  "category": "null | 'operational' | 'strategic' — inferir pelo tipo (veja exemplos abaixo)",
   "isDelegable": "boolean — true se mencionar 'delegar', 'pedir para', 'mandar alguém'",
   "recurrenceType": "null | 'daily' | 'weekdays' | 'weekly' | 'biweekly' | 'monthly' | 'yearly'"
 }
 
-Regras de data:
+DURAÇÃO ESTIMADA (use quando o usuário não informar duração explícita):
+- Ligação / ligar para / call → 15 min
+- Reunião / standup / alinhamento / check-in → 30 min
+- Consulta médica / dentista / exame / terapia → 1 h
+- Treino / academia / corrida / exercício → 1 h
+- Almoço / café / jantar → 1 h
+- Responder / revisar / conferir / cadastrar / organizar → 30 min
+- Bloco de foco / deep work / codificar / estudar → 2 h
+- Aula / curso / workshop / treinamento → 1h30
+- Default (qualquer outro) → 1 h
+
+MATCH DE AGENDA (calendarId):
+- Compare o nome dito com os nomes das agendas ignorando maiúsculas, acentos e artigos.
+- Prioridade: palavra inteira > prefixo > substring.
+- Ex: "agendar no DevPoint" → agenda com nome "DevPoint"; "colocar no pessoal" → agenda cujo nome contenha "pessoal".
+- Se nenhum nome for dito ou houver ambiguidade, retorne null.
+
+PILAR — exemplos de inferência:
+- trabalho: reunião, cliente, projeto, código, planejamento, proposta, nota fiscal, contrato, apresentação
+- saude: médico, dentista, treino, terapia, exame, farmácia, academia, corrida, psicólogo
+- familia: aniversário, escola dos filhos, jantar familiar, viagem com família, buscar/levar filho
+- espiritualidade: igreja, meditação, oração, retiro, leitura espiritual, culto, missa
+
+CATEGORIA — exemplos:
+- operational: responder e-mails, cadastrar nota fiscal, organizar, conferir, ligar para fulano, rotina
+- strategic: reunião 1:1, planejamento, tomada de decisão, criação de produto, alinhamento estratégico
+
+REGRAS DE DATA:
 - "amanhã" = próximo dia
 - "próxima [dia]" = o [dia] da semana que vem (nunca o da semana atual)
 - "semana que vem" = mesma hora, +7 dias

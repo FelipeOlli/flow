@@ -117,6 +117,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [editingTask, setEditingTask] = useState<FlowTask | null>(null);
   const [formDefaults, setFormDefaults] = useState<Partial<ParsedEvent> & { startTime?: string; endTime?: string }>({});
   const [showVoiceCapture, setShowVoiceCapture] = useState(false);
+  const [voiceStopSignal, setVoiceStopSignal] = useState(0);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordingActiveRef = useRef(false);
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState<string | null>(null);
   const [manualSourceDate, setManualSourceDate] = useState("");
@@ -1232,15 +1235,37 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {/* FAB — hidden in dashboard/projects/review mode */}
       {!showDashboard && !showWeeklyReview && (
         <>
-          {/* FAB voz IA */}
+          {/* FAB voz IA — hold to record */}
           <button
-            onClick={() => setShowVoiceCapture(true)}
-            title="Criar evento por voz"
-            className={`fixed bottom-6 right-[4.75rem] w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform backdrop-blur-md bg-[#a78bfa]/30 border border-[#a78bfa]/40 shadow-lg shadow-black/30 ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}
+            title="Segurar para gravar evento por IA"
+            className={`fixed bottom-[5.5rem] right-4 w-14 h-14 rounded-full flex items-center justify-center transition-transform backdrop-blur-md bg-[#a78bfa]/30 border border-[#a78bfa]/40 shadow-lg shadow-black/30 select-none touch-none ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}
+            style={{ WebkitUserSelect: "none" }}
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              recordingActiveRef.current = false;
+              holdTimerRef.current = setTimeout(() => {
+                recordingActiveRef.current = true;
+                setShowVoiceCapture(true);
+              }, 400);
+            }}
+            onPointerUp={() => {
+              if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+              if (recordingActiveRef.current) {
+                recordingActiveRef.current = false;
+                setVoiceStopSignal((s) => s + 1);
+              }
+            }}
+            onPointerCancel={() => {
+              if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+              if (recordingActiveRef.current) {
+                recordingActiveRef.current = false;
+                setVoiceStopSignal((s) => s + 1);
+              }
+            }}
           >
+            {/* Sparkle AI icon */}
             <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="currentColor">
-              <path d="M12 1a4 4 0 014 4v7a4 4 0 01-8 0V5a4 4 0 014-4zm-6.5 9.5A6.5 6.5 0 0012 17a6.5 6.5 0 006.5-6.5h1.5A8 8 0 0112 18.5a8 8 0 01-8-7.5h1.5z"/>
-              <path d="M11 20h2v3h-2z"/>
+              <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3zM19 13.5l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6z" />
             </svg>
           </button>
           {/* FAB criar evento */}
@@ -1266,7 +1291,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {showVoiceCapture && (
         <VoiceCaptureModal
           onResult={handleVoiceResult}
-          onClose={() => setShowVoiceCapture(false)}
+          onClose={() => { setShowVoiceCapture(false); recordingActiveRef.current = false; }}
+          stopSignal={voiceStopSignal}
         />
       )}
 

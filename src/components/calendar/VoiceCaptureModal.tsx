@@ -9,9 +9,10 @@ type CaptureState = "recording" | "processing" | "error";
 interface VoiceCaptureModalProps {
   onResult: (parsed: ParsedEvent, transcript: string) => void;
   onClose: () => void;
+  stopSignal: number;
 }
 
-export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps) {
+export function VoiceCaptureModal({ onResult, onClose, stopSignal }: VoiceCaptureModalProps) {
   const [state, setState] = useState<CaptureState>("recording");
   const [seconds, setSeconds] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
@@ -21,6 +22,8 @@ export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps)
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stateRef = useRef<CaptureState>("recording");
 
   useEffect(() => {
     setMounted(true);
@@ -28,8 +31,16 @@ export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps)
     return () => {
       stopStream();
       if (timerRef.current) clearInterval(timerRef.current);
+      if (autoStopRef.current) clearTimeout(autoStopRef.current);
     };
   }, []);
+
+  // Stop when parent releases the button
+  useEffect(() => {
+    if (stopSignal > 0 && stateRef.current === "recording") {
+      stopRecording();
+    }
+  }, [stopSignal]);
 
   function stopStream() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -41,7 +52,6 @@ export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps)
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      // Prefer webm/opus; Safari falls back to mp4
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/webm")
@@ -65,15 +75,23 @@ export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps)
       recorder.start(250);
 
       timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+
+      // Auto-stop at 60s to avoid huge uploads
+      autoStopRef.current = setTimeout(() => {
+        if (stateRef.current === "recording") stopRecording();
+      }, 60_000);
     } catch {
       setState("error");
+      stateRef.current = "error";
       setErrorMsg("Não foi possível acessar o microfone. Verifique as permissões.");
     }
   }
 
   function stopRecording() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (autoStopRef.current) { clearTimeout(autoStopRef.current); autoStopRef.current = null; }
     setState("processing");
+    stateRef.current = "processing";
     mediaRecorderRef.current?.stop();
   }
 
@@ -85,13 +103,12 @@ export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps)
       const res = await fetch("/api/voice-event", { method: "POST", body: formData });
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error ?? "Erro desconhecido");
-      }
+      if (!res.ok) throw new Error(data.error ?? "Erro desconhecido");
 
       onResult(data.parsed, data.transcript);
     } catch (err) {
       setState("error");
+      stateRef.current = "error";
       setErrorMsg(err instanceof Error ? err.message : "Erro ao processar o áudio.");
     }
   }
@@ -101,37 +118,31 @@ export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps)
     setErrorMsg("");
     chunksRef.current = [];
     setState("recording");
+    stateRef.current = "recording";
     startRecording();
   }
 
-  const formatSeconds = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
+  const formatSeconds = (s: number) =>
+    `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
   const modal = (
-    <div
-      className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm"
-      onClick={state === "recording" ? stopRecording : undefined}
-    >
-      <div
-        className="flex flex-col items-center gap-6 select-none"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
+      <div className="flex flex-col items-center gap-6 select-none">
         {state === "recording" && (
           <>
-            {/* Pulsing mic */}
             <div className="relative flex items-center justify-center">
               <div className="absolute w-32 h-32 rounded-full bg-[#a78bfa]/20 animate-ping" style={{ animationDuration: "1.4s" }} />
               <div className="absolute w-24 h-24 rounded-full bg-[#a78bfa]/30 animate-pulse" />
               <div className="relative w-20 h-20 rounded-full bg-[#a78bfa]/40 border border-[#a78bfa]/60 flex items-center justify-center">
+                {/* Sparkle icon */}
                 <svg viewBox="0 0 24 24" className="w-9 h-9 text-white" fill="currentColor">
-                  <path d="M12 1a4 4 0 014 4v7a4 4 0 01-8 0V5a4 4 0 014-4zm-6.5 9.5A6.5 6.5 0 0012 17a6.5 6.5 0 006.5-6.5h1.5A8 8 0 0112 18.5a8 8 0 01-8-7.5h1.5z"/>
-                  <path d="M11 20h2v3h-2z"/>
+                  <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3zM19 13.5l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6z" />
                 </svg>
               </div>
             </div>
-
             <div className="text-center">
               <p className="text-white text-lg font-medium tabular-nums">{formatSeconds(seconds)}</p>
-              <p className="text-white/60 text-sm mt-1">Toque na tela para parar</p>
+              <p className="text-white/60 text-sm mt-1">Solte para enviar</p>
             </div>
           </>
         )}
@@ -176,7 +187,6 @@ export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps)
         )}
       </div>
 
-      {/* Cancel button when recording */}
       {state === "recording" && (
         <button
           onClick={(e) => { e.stopPropagation(); onClose(); }}
