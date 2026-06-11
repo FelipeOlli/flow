@@ -327,7 +327,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     }
   }
 
-  async function handleImportant(task: FlowTask) {
+  async function handleImportant(task: FlowTask, scope: "this" | "all" = "this") {
     const newImportant = !task.isImportant;
     setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isImportant: newImportant } : t));
     setPendingIds((p) => new Set(p).add(task.id));
@@ -335,7 +335,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       const res = await fetch(`/api/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isImportant: newImportant, calendarId: task.calendarId ?? "primary" }),
+        body: JSON.stringify({ isImportant: newImportant, calendarId: task.calendarId ?? "primary", scope }),
       });
       if (res.status === 401) {
         router.replace("/sign-in");
@@ -351,7 +351,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     }
   }
 
-  async function handleSetTag(task: FlowTask, tag: "O" | "E" | "D" | null) {
+  async function handleSetTag(task: FlowTask, tag: "O" | "E" | "D" | null, scope: "this" | "all" = "this") {
     const newCategory = tag === "O" ? "operational" : tag === "E" ? "strategic" : undefined;
     const newDelegable = tag === "D";
     setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, category: newCategory, isDelegable: newDelegable } : t));
@@ -359,8 +359,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     const calendarId = task.calendarId ?? "primary";
     try {
       for (const body of [
-        { category: newCategory ?? null, calendarId },
-        { isDelegable: newDelegable, calendarId },
+        { category: newCategory ?? null, calendarId, scope },
+        { isDelegable: newDelegable, calendarId, scope },
       ]) {
         const res = await fetch(`/api/tasks/${task.id}`, {
           method: "PATCH",
@@ -379,14 +379,14 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     }
   }
 
-  async function handleSetPillar(task: FlowTask, pillar: Pillar | null) {
+  async function handleSetPillar(task: FlowTask, pillar: Pillar | null, scope: "this" | "all" = "this") {
     setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, pillar: pillar ?? undefined } : t));
     setPendingIds((p) => new Set(p).add(task.id));
     try {
       const res = await fetch(`/api/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pillar, calendarId: task.calendarId ?? "primary" }),
+        body: JSON.stringify({ pillar, calendarId: task.calendarId ?? "primary", scope }),
       });
       if (res.status === 401) { router.replace("/sign-in"); return; }
       if (!res.ok) throw new Error("Failed");

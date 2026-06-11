@@ -77,6 +77,7 @@ export interface UpdateTaskInput {
   attendees?: string[];
   recurrence?: string[];
   completeScope?: "this" | "thisAndFollowing" | "all";
+  scope?: "this" | "thisAndFollowing" | "all";
 }
 
 export interface CalendarOption {

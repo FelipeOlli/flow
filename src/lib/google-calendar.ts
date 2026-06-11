@@ -288,18 +288,121 @@ export async function updateEvent(
   eventId: string,
   updates: UpdateTaskInput,
   timeZone: string,
-  calendarId = "primary"
+  calendarId = "primary",
+  scope: "this" | "thisAndFollowing" | "all" = "this"
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
-  const requestBody: calendar_v3.Schema$Event = {};
-  if (updates.title !== undefined) requestBody.summary = updates.title;
-  if (updates.description !== undefined) requestBody.description = updates.description;
-  if (updates.startTime !== undefined) requestBody.start = { dateTime: updates.startTime, timeZone };
-  if (updates.endTime !== undefined) requestBody.end = { dateTime: updates.endTime, timeZone };
-  if (updates.attendees !== undefined) requestBody.attendees = updates.attendees.map((email) => ({ email }));
-  if (updates.recurrence !== undefined) requestBody.recurrence = updates.recurrence;
-  const { data } = await calendar.events.patch({ calendarId, eventId, requestBody });
-  return mapEvent(data, calendarId);
+
+  function buildRequestBody(startISO?: string, endISO?: string): calendar_v3.Schema$Event {
+    const body: calendar_v3.Schema$Event = {};
+    if (updates.title !== undefined) body.summary = updates.title;
+    if (updates.description !== undefined) body.description = updates.description;
+    if (startISO !== undefined) body.start = { dateTime: startISO, timeZone };
+    if (endISO !== undefined) body.end = { dateTime: endISO, timeZone };
+    if (updates.attendees !== undefined) body.attendees = updates.attendees.map((email) => ({ email }));
+    if (updates.recurrence !== undefined) body.recurrence = updates.recurrence;
+    return body;
+  }
+
+  if (scope === "this") {
+    const requestBody = buildRequestBody(updates.startTime, updates.endTime);
+    const { data } = await calendar.events.patch({ calendarId, eventId, requestBody });
+    return mapEvent(data, calendarId);
+  }
+
+  const { data: instance } = await calendar.events.get({ calendarId, eventId });
+  const masterId = instance.recurringEventId ?? eventId;
+
+  if (scope === "all") {
+    const requestBody = buildRequestBody(updates.startTime, updates.endTime);
+    const { data } = await calendar.events.patch({ calendarId, eventId: masterId, requestBody });
+    return mapEvent(data, calendarId);
+  }
+
+  // thisAndFollowing
+  const { data: master } = await calendar.events.get({ calendarId, eventId: masterId });
+  const originalStart =
+    instance.originalStartTime?.dateTime ??
+    instance.originalStartTime?.date ??
+    instance.start?.dateTime ??
+    instance.start?.date;
+
+  if (!originalStart) {
+    const requestBody = buildRequestBody(updates.startTime, updates.endTime);
+    const { data } = await calendar.events.patch({ calendarId, eventId, requestBody });
+    return mapEvent(data, calendarId);
+  }
+
+  const masterStart = master.start?.dateTime ?? master.start?.date ?? "";
+  if (masterStart && new Date(originalStart) <= new Date(masterStart)) {
+    // editing from the first occurrence — just patch master
+    const requestBody = buildRequestBody(updates.startTime, updates.endTime);
+    const { data } = await calendar.events.patch({ calendarId, eventId: masterId, requestBody });
+    return mapEvent(data, calendarId);
+  }
+
+  // Truncate master RRULE at originalStart - 1s
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const cutoffMs = new Date(originalStart).getTime() - 1000;
+  const cutoffDate = new Date(cutoffMs);
+  const untilUtc =
+    `${cutoffDate.getUTCFullYear()}${pad(cutoffDate.getUTCMonth() + 1)}${pad(cutoffDate.getUTCDate())}` +
+    `T${pad(cutoffDate.getUTCHours())}${pad(cutoffDate.getUTCMinutes())}${pad(cutoffDate.getUTCSeconds())}Z`;
+
+  const truncatedRecurrence = (master.recurrence ?? []).map((line) => {
+    if (line.startsWith("RRULE:")) {
+      return "RRULE:" + line
+        .slice(6)
+        .split(";")
+        .filter((p) => !p.startsWith("UNTIL=") && !p.startsWith("COUNT="))
+        .concat(`UNTIL=${untilUtc}`)
+        .join(";");
+    }
+    return line;
+  });
+  await calendar.events.patch({ calendarId, eventId: masterId, requestBody: { recurrence: truncatedRecurrence } });
+
+  // Original RRULE without UNTIL/COUNT — for the new series
+  const originalRRule = (master.recurrence ?? []).map((line) => {
+    if (line.startsWith("RRULE:")) {
+      return "RRULE:" + line
+        .slice(6)
+        .split(";")
+        .filter((p) => !p.startsWith("UNTIL=") && !p.startsWith("COUNT="))
+        .join(";");
+    }
+    return line;
+  });
+
+  // Duration from original series
+  const masterStartMs = new Date(master.start?.dateTime ?? master.start?.date ?? originalStart).getTime();
+  const masterEndMs = new Date(master.end?.dateTime ?? master.end?.date ?? originalStart).getTime();
+  const durationMs = masterEndMs - masterStartMs;
+
+  const newStart = updates.startTime ?? instance.start?.dateTime ?? originalStart;
+  const newEnd = updates.endTime ?? (() => {
+    const d = new Date(new Date(newStart).getTime() + durationMs);
+    return d.toISOString();
+  })();
+
+  const newEventBody: calendar_v3.Schema$Event = {
+    summary: updates.title !== undefined ? updates.title : (master.summary ?? ""),
+    start: { dateTime: newStart, timeZone },
+    end: { dateTime: newEnd, timeZone },
+    recurrence: originalRRule,
+    attendees: updates.attendees !== undefined
+      ? updates.attendees.map((email) => ({ email }))
+      : (master.attendees ?? undefined),
+    extendedProperties: master.extendedProperties,
+  };
+  if (updates.description !== undefined) {
+    newEventBody.description = updates.description;
+  } else if (master.description) {
+    newEventBody.description = master.description;
+  }
+
+  const { data: newEvent } = await calendar.events.insert({ calendarId, requestBody: newEventBody });
+  return mapEvent(newEvent, calendarId);
 }
 
 export async function markEventComplete(
@@ -450,18 +553,31 @@ export async function markEventIncomplete(
   return mapEvent(data, calendarId);
 }
 
+async function resolveEventId(
+  calendar: ReturnType<typeof getClient>,
+  eventId: string,
+  calendarId: string,
+  scope: "this" | "all"
+): Promise<string> {
+  if (scope === "this") return eventId;
+  const { data: instance } = await calendar.events.get({ calendarId, eventId });
+  return instance.recurringEventId ?? eventId;
+}
+
 export async function markEventImportant(
   accessToken: string,
   eventId: string,
-  calendarId = "primary"
+  calendarId = "primary",
+  scope: "this" | "all" = "this"
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
-  const { data: current } = await calendar.events.get({ calendarId, eventId });
+  const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
+  const { data: current } = await calendar.events.get({ calendarId, eventId: targetId });
   const originalColorId =
     current.colorId && current.colorId !== IMPORTANT_COLOR_ID ? current.colorId : "";
   const { data } = await calendar.events.patch({
     calendarId,
-    eventId,
+    eventId: targetId,
     requestBody: {
       colorId: IMPORTANT_COLOR_ID,
       extendedProperties: {
@@ -478,15 +594,17 @@ export async function markEventImportant(
 export async function markEventUnimportant(
   accessToken: string,
   eventId: string,
-  calendarId = "primary"
+  calendarId = "primary",
+  scope: "this" | "all" = "this"
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
-  const { data: current } = await calendar.events.get({ calendarId, eventId });
+  const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
+  const { data: current } = await calendar.events.get({ calendarId, eventId: targetId });
   const restoredColorId =
     current.extendedProperties?.private?.["flowOriginalImportantColorId"] || null;
   const { data } = await calendar.events.patch({
     calendarId,
-    eventId,
+    eventId: targetId,
     requestBody: {
       colorId: restoredColorId,
       extendedProperties: {
@@ -503,12 +621,14 @@ export async function markEventUnimportant(
 export async function markEventDelegable(
   accessToken: string,
   eventId: string,
-  calendarId = "primary"
+  calendarId = "primary",
+  scope: "this" | "all" = "this"
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
+  const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
   const { data } = await calendar.events.patch({
     calendarId,
-    eventId,
+    eventId: targetId,
     requestBody: {
       extendedProperties: { private: { flowDelegable: "true" } },
     },
@@ -519,12 +639,14 @@ export async function markEventDelegable(
 export async function markEventUndelegable(
   accessToken: string,
   eventId: string,
-  calendarId = "primary"
+  calendarId = "primary",
+  scope: "this" | "all" = "this"
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
+  const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
   const { data } = await calendar.events.patch({
     calendarId,
-    eventId,
+    eventId: targetId,
     requestBody: {
       extendedProperties: { private: { flowDelegable: "false" } },
     },
@@ -536,12 +658,14 @@ export async function setEventCategory(
   accessToken: string,
   eventId: string,
   calendarId = "primary",
-  category: "operational" | "strategic" | null
+  category: "operational" | "strategic" | null,
+  scope: "this" | "all" = "this"
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
+  const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
   const { data } = await calendar.events.patch({
     calendarId,
-    eventId,
+    eventId: targetId,
     requestBody: {
       extendedProperties: { private: { flowCategory: category ?? "" } },
     },
@@ -553,12 +677,14 @@ export async function setEventPillar(
   accessToken: string,
   eventId: string,
   calendarId = "primary",
-  pillar: Pillar | null
+  pillar: Pillar | null,
+  scope: "this" | "all" = "this"
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
+  const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
   const { data } = await calendar.events.patch({
     calendarId,
-    eventId,
+    eventId: targetId,
     requestBody: {
       extendedProperties: { private: { flowPillar: pillar ?? "" } },
     },

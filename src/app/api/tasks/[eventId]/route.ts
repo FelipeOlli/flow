@@ -37,6 +37,9 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
     const tz = process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
     const userEmail = process.env.AUTH_USER_EMAIL ?? undefined;
 
+    const markerScope = (body.scope === "all" ? "all" : "this") as "this" | "all";
+    const updateScope = (body.scope ?? "this") as "this" | "thisAndFollowing" | "all";
+
     let task;
     if (body.isComplete === true) {
       const completeScope = body.completeScope ?? "this";
@@ -44,17 +47,17 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
     } else if (body.isComplete === false) {
       task = await markEventIncomplete(accessToken, eventId, calendarId);
     } else if (body.isImportant === true) {
-      task = await markEventImportant(accessToken, eventId, calendarId);
+      task = await markEventImportant(accessToken, eventId, calendarId, markerScope);
     } else if (body.isImportant === false) {
-      task = await markEventUnimportant(accessToken, eventId, calendarId);
+      task = await markEventUnimportant(accessToken, eventId, calendarId, markerScope);
     } else if (body.isDelegable === true) {
-      task = await markEventDelegable(accessToken, eventId, calendarId);
+      task = await markEventDelegable(accessToken, eventId, calendarId, markerScope);
     } else if (body.isDelegable === false) {
-      task = await markEventUndelegable(accessToken, eventId, calendarId);
+      task = await markEventUndelegable(accessToken, eventId, calendarId, markerScope);
     } else if (body.category !== undefined) {
-      task = await setEventCategory(accessToken, eventId, calendarId, body.category);
+      task = await setEventCategory(accessToken, eventId, calendarId, body.category, markerScope);
     } else if (body.pillar !== undefined) {
-      task = await setEventPillar(accessToken, eventId, calendarId, body.pillar);
+      task = await setEventPillar(accessToken, eventId, calendarId, body.pillar, markerScope);
     } else {
       const hasUpdateFields =
         body.title !== undefined ||
@@ -71,7 +74,7 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
           targetCalendarId
         );
         const edited = hasUpdateFields
-          ? await updateEvent(accessToken, moved.id, body, tz, targetCalendarId)
+          ? await updateEvent(accessToken, moved.id, body, tz, targetCalendarId, updateScope)
           : moved;
         task = attendanceStatus
           ? await updateEventRsvp(
@@ -84,7 +87,7 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
           : edited;
       } else {
         const edited = hasUpdateFields
-          ? await updateEvent(accessToken, eventId, body, tz, calendarId)
+          ? await updateEvent(accessToken, eventId, body, tz, calendarId, updateScope)
           : null;
         if (attendanceStatus) {
           task = await updateEventRsvp(

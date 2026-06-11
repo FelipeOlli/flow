@@ -20,9 +20,9 @@ interface EventPopoverProps {
   onSaveEdit: (task: FlowTask, updates: UpdateTaskInput) => Promise<void>;
   onDelete: (task: FlowTask, scope?: "this" | "thisAndFollowing" | "all") => void;
   onToggleComplete: (task: FlowTask, scope?: "this" | "thisAndFollowing" | "all") => void;
-  onToggleImportant?: (task: FlowTask) => void;
-  onSetTag?: (task: FlowTask, tag: "O" | "E" | "D" | null) => void;
-  onSetPillar?: (task: FlowTask, pillar: Pillar | null) => void;
+  onToggleImportant?: (task: FlowTask, scope?: "this" | "all") => void;
+  onSetTag?: (task: FlowTask, tag: "O" | "E" | "D" | null, scope?: "this" | "all") => void;
+  onSetPillar?: (task: FlowTask, pillar: Pillar | null, scope?: "this" | "all") => void;
 }
 
 const QUICK_DURATIONS = [
@@ -71,6 +71,10 @@ export function EventPopover({
   const [recurringScope, setRecurringScope] = useState<"this" | "thisAndFollowing" | "all">("this");
   const [showRecurringCompleteDialog, setShowRecurringCompleteDialog] = useState(false);
   const [completeScope, setCompleteScope] = useState<"this" | "thisAndFollowing" | "all">("this");
+  const [showRecurringEditDialog, setShowRecurringEditDialog] = useState(false);
+  const [editScope, setEditScope] = useState<"this" | "thisAndFollowing" | "all">("this");
+  const [pendingUpdates, setPendingUpdates] = useState<UpdateTaskInput | null>(null);
+  const [pendingMarkerFn, setPendingMarkerFn] = useState<((scope: "this" | "all") => void) | null>(null);
   const [editRecurring, setEditRecurring] = useState(false);
   const [editRecurrenceType, setEditRecurrenceType] = useState<
     "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "weekdays"
@@ -206,40 +210,36 @@ export function EventPopover({
     }
   }
 
-  async function handleSaveInlineEdit() {
-    if (!title.trim()) {
-      setError("Digite um título");
-      return;
+  function buildEditUpdates(): UpdateTaskInput {
+    const updates: UpdateTaskInput = {
+      title: title.trim(),
+      description: description.trim() || undefined,
+      calendarId: task.calendarId ?? "primary",
+      isImportant: editIsImportant,
+      isDelegable: editTag === "D",
+      category: editTag === "O" ? "operational" : editTag === "E" ? "strategic" : null,
+      pillar: editPillar,
+      attendees: editAttendees,
+    };
+    if (!task.isRecurring && editRecurring) {
+      const rrule = buildRRule();
+      if (rrule.length) updates.recurrence = rrule;
     }
-    if (!task.isAllDay && new Date(endTime) <= new Date(startTime)) {
-      setError("Fim deve ser após início");
-      return;
+    if (!task.isAllDay) {
+      updates.startTime = new Date(startTime).toISOString();
+      updates.endTime = new Date(endTime).toISOString();
     }
+    if (calendarId !== (task.calendarId ?? "primary")) {
+      updates.targetCalendarId = calendarId;
+    }
+    return updates;
+  }
+
+  async function doSaveEdit(updates: UpdateTaskInput) {
     setSaving(true);
     setError("");
     setFeedback("");
     try {
-      const updates: UpdateTaskInput = {
-        title: title.trim(),
-        description: description.trim() || undefined,
-        calendarId: task.calendarId ?? "primary",
-        isImportant: editIsImportant,
-        isDelegable: editTag === "D",
-        category: editTag === "O" ? "operational" : editTag === "E" ? "strategic" : null,
-        pillar: editPillar,
-        attendees: editAttendees,
-      };
-      if (!task.isRecurring && editRecurring) {
-        const rrule = buildRRule();
-        if (rrule.length) updates.recurrence = rrule;
-      }
-      if (!task.isAllDay) {
-        updates.startTime = new Date(startTime).toISOString();
-        updates.endTime = new Date(endTime).toISOString();
-      }
-      if (calendarId !== (task.calendarId ?? "primary")) {
-        updates.targetCalendarId = calendarId;
-      }
       await onSaveEdit(task, updates);
       setEditing(false);
       setFeedback("Evento atualizado com sucesso.");
@@ -248,6 +248,34 @@ export function EventPopover({
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleSaveInlineEdit() {
+    if (!title.trim()) { setError("Digite um título"); return; }
+    if (!task.isAllDay && new Date(endTime) <= new Date(startTime)) {
+      setError("Fim deve ser após início");
+      return;
+    }
+    const updates = buildEditUpdates();
+    if (task.isRecurring) {
+      setPendingUpdates(updates);
+      setPendingMarkerFn(null);
+      setEditScope("this");
+      setShowRecurringEditDialog(true);
+      return;
+    }
+    doSaveEdit(updates);
+  }
+
+  function handleMarkerAction(fn: (scope: "this" | "all") => void) {
+    if (task.isRecurring) {
+      setPendingMarkerFn(() => fn);
+      setPendingUpdates(null);
+      setEditScope("this");
+      setShowRecurringEditDialog(true);
+      return;
+    }
+    fn("this");
   }
 
   return (
@@ -270,7 +298,7 @@ export function EventPopover({
             {!editing && onToggleImportant && (
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onToggleImportant(task); }}
+                onClick={(e) => { e.stopPropagation(); handleMarkerAction((scope) => onToggleImportant!(task, scope)); }}
                 className={`w-9 h-9 min-w-9 min-h-9 rounded-full border flex items-center justify-center transition-all
                   ${task.isImportant
                     ? "bg-[#F6BF26]/20 border-[#F6BF26]/60 text-[#F6BF26]"
@@ -490,7 +518,7 @@ export function EventPopover({
                             key={tag}
                             type="button"
                             disabled={pending}
-                            onClick={() => onSetTag(task, isActive ? null : tag)}
+                            onClick={() => handleMarkerAction((scope) => onSetTag!(task, isActive ? null : tag, scope))}
                             className={`px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 border-r border-[#5f6368] last:border-r-0
                               ${isActive ? `${activeBg[tag]} ${colors[tag]}` : "text-white/30 hover:bg-[#2a2b2e]"}`}
                           >
@@ -789,6 +817,65 @@ export function EventPopover({
           )}
         </div>
       </div>
+
+      {/* Diálogo de escopo de edição de evento recorrente */}
+      {showRecurringEditDialog && (
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShowRecurringEditDialog(false)}
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[#3c4043] bg-[#2a2b2e] p-5 shadow-2xl">
+            <h3 className="text-sm font-semibold text-[#e8eaed] mb-4">Editar evento recorrente</h3>
+            <div className="space-y-3 mb-5">
+              {(
+                [
+                  { value: "this", label: "Este evento" },
+                  { value: "thisAndFollowing", label: "Este e os eventos seguintes" },
+                  { value: "all", label: "Todos os eventos" },
+                ] as const
+              ).map(({ value, label }) => (
+                <label key={value} className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="editScope"
+                    value={value}
+                    checked={editScope === value}
+                    onChange={() => setEditScope(value)}
+                    className="accent-[#8ab4f8] w-4 h-4"
+                  />
+                  <span className="text-sm text-[#e8eaed]">{label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowRecurringEditDialog(false); setPendingUpdates(null); setPendingMarkerFn(null); }}
+                className="flex-1 px-3 py-2 rounded-lg border border-[#5f6368] text-xs text-[#e8eaed] hover:bg-[#3c4043] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRecurringEditDialog(false);
+                  if (pendingUpdates) {
+                    doSaveEdit({ ...pendingUpdates, scope: editScope });
+                    setPendingUpdates(null);
+                  } else if (pendingMarkerFn) {
+                    pendingMarkerFn(editScope === "thisAndFollowing" ? "this" : editScope);
+                    setPendingMarkerFn(null);
+                  }
+                }}
+                className="flex-1 px-3 py-2 rounded-lg bg-[#8ab4f8] text-[#202124] text-xs font-semibold hover:brightness-95 transition-colors"
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Diálogo de conclusão de evento recorrente */}
       {showRecurringCompleteDialog && (
