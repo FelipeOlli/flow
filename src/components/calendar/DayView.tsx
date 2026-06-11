@@ -92,7 +92,19 @@ function AgendaView({ tasks, currentDate, onComplete, onEdit, onImportant, getAn
             {/* Events */}
             {!isCollapsed && (
               <div className="space-y-1.5 pl-5">
-                {cal.tasks.map((task) => (
+                {cal.tasks.map((task, idx) => {
+                  const taskHour = task.isAllDay ? -1 : new Date(task.startTime).getHours();
+                  const prevHour = idx > 0 && !cal.tasks[idx - 1].isAllDay ? new Date(cal.tasks[idx - 1].startTime).getHours() : -1;
+                  const showNoonSep = taskHour >= 12 && prevHour >= 0 && prevHour < 12;
+                  return (
+                  <div key={task.id}>
+                  {showNoonSep && (
+                    <div className="flex items-center gap-2 my-1.5 pointer-events-none select-none">
+                      <div className="flex-1 h-px bg-[#5f6368]" />
+                      <span className="text-[10px] text-[#9aa0a6] font-semibold tracking-wide">12:00</span>
+                      <div className="flex-1 h-px bg-[#5f6368]" />
+                    </div>
+                  )}
                   <div
                     key={task.id}
                     onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
@@ -152,7 +164,9 @@ function AgendaView({ tasks, currentDate, onComplete, onEdit, onImportant, getAn
                       )}
                     </div>
                   </div>
-                ))}
+                  </div>
+                  );
+                })}
               </div>
             )}
           </div>
