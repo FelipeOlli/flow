@@ -58,11 +58,11 @@ ${calendarList}
 Retorne um JSON com os campos abaixo. Todos os campos são opcionais exceto title, startTime e endTime.
 
 {
-  "title": "string — título do evento",
+  "title": "string — resumo curto e direto do evento (máx. 5 palavras). Ex: 'Reunião com Pedro', 'Consulta dentista', 'Treino academia'. Nunca inclua data, hora ou detalhes no título.",
+  "description": "string ou null — informações adicionais que não cabem no título (local, pauta, nome completo, link, observações). Deixe null se não houver nada relevante a acrescentar.",
   "startTime": "string — ISO 8601 com offset do fuso ${tz}, ex: 2026-06-11T14:00:00-03:00",
   "endTime": "string — ISO 8601 com offset do fuso ${tz}, calcule com base na duração abaixo",
   "calendarId": "string ou null — id da agenda que melhor combina com o nome dito (veja regras abaixo); null se ambíguo",
-  "description": "string ou null — detalhes extras mencionados",
   "isImportant": "boolean — true se mencionar 'importante', 'urgente', 'prioridade'",
   "isAllDay": "boolean — true se mencionar 'o dia todo', 'dia inteiro', sem horário específico",
   "pillar": "null | 'trabalho' | 'saude' | 'familia' | 'espiritualidade' — inferir pelo contexto (veja exemplos abaixo)",
