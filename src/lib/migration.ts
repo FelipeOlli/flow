@@ -118,10 +118,11 @@ export async function runMigration(
     (e) =>
       !e.isCancelled &&
       !e.isAllDay &&
+      e.selfResponseStatus !== "declined" &&
       (filter.includeCompletedTimed || !e.isComplete)
   );
   const allDayToMove = filter.includeAllDay
-    ? allDayOnSource.filter((e) => !e.isCancelled && extractAllDayBounds(e) !== null)
+    ? allDayOnSource.filter((e) => !e.isCancelled && e.selfResponseStatus !== "declined" && extractAllDayBounds(e) !== null)
     : [];
 
   const diagnostics: MigrationDiagnostics = {

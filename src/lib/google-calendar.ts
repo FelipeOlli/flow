@@ -125,6 +125,7 @@ async function listEventsExpandedPage(
       q,
       maxResults: 250,
       pageToken,
+      showHiddenInvitations: true,
     });
     const batch = data.items ?? [];
     if (maxItemsPerCalendar !== undefined) {
