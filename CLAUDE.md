@@ -241,6 +241,44 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
+### 2026-06-11 (sessão 2)
+
+**O que foi feito:**
+
+1. **Voz IA v2** — Prompt enriquecido com duração estimada por tipo de evento (ligação=15min, reunião=30min, consulta=1h…), match parcial de calendário por substring, exemplos de pilar e categoria. FAB reposicionado acima do `+` (`bottom-[5.5rem] right-4`), ícone trocado para sparkle ✦. Endpoint dividido em dois (`/api/voice-event` Whisper + `/api/voice-event/parse` GPT) para feedback em 2 fases ("Transcrevendo..." → "Analisando..."). `requestData()` antes de `stop()` elimina delay do buffer.
+
+2. **Fix hold-to-record → clique simples** — Hold-to-record quebrava `getUserMedia` no iOS (fora do contexto de gesto), pedindo permissão toda vez. Revertido para clique abre modal, toque na tela para parar.
+
+3. **Métricas de dias em aberto** — `computeDaysOpen` agora usa `startTime` como base em vez de `createdAt`. Evento criado hoje para a semana que vem fica em 0 até lá. Dashboard "Tempo médio até concluir" segue a mesma lógica.
+
+4. **Escopo "este/seguintes/todos" na edição de recorrentes** — Dialog ao salvar qualquer edição em evento recorrente. `updateEvent` com scope `all` faz PATCH na master; `thisAndFollowing` trunca RRULE + cria nova série. Funções de marcador (important, category, pillar, delegable) também aceitam scope. Botões de ação rápida no popover também disparam o dialog para recorrentes.
+
+5. **Divisão visual 12h no calendário** — Label "12" em branco + semibold e linha horizontal mais clara no grid (DayView, WeekView, ThreeDayView). Separador `——— 12:00 ———` na view Lista do DayView (modo plano e modo agenda).
+
+**Arquivos modificados (principais):**
+- `src/lib/openai-event-parser.ts` — prompt enriquecido, endpoint parse separado
+- `src/app/api/voice-event/route.ts` — só Whisper
+- `src/app/api/voice-event/parse/route.ts` — só GPT (novo)
+- `src/components/calendar/VoiceCaptureModal.tsx` — 2 fases, requestData, clique simples
+- `src/components/calendar/CalendarView.tsx` — FAB sparkle acima do +, scope handlers
+- `src/lib/aging.ts` — base startTime
+- `src/app/api/stats/route.ts` — avgDaysToComplete com startTime
+- `src/lib/google-calendar.ts` — updateEvent com scope, marker functions com scope
+- `src/types/task.ts` — scope em UpdateTaskInput
+- `src/app/api/tasks/[eventId]/route.ts` — scope propagado
+- `src/components/calendar/EventPopover.tsx` — dialog de scope para recorrentes
+- `src/components/calendar/DayView.tsx` — separador 12h na lista
+- `src/components/calendar/WeekView.tsx`, `ThreeDayView.tsx` — destaque 12h no grid
+
+**Decisões tomadas:**
+- `getUserMedia` deve ser chamado em resposta direta a gesto — hold-to-record com setTimeout quebra isso no iOS
+- Endpoint de voz dividido para feedback de progresso real (não fake timer)
+- Scope `thisAndFollowing` para marcadores cosméticos = equivalente a `this` no backend
+
+**Próximos passos:** nenhum pendente.
+
+---
+
 ### 2026-06-11
 
 **O que foi feito:**
