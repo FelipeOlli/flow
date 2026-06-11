@@ -39,6 +39,7 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
 
     const markerScope = (body.scope === "all" ? "all" : "this") as "this" | "all";
     const updateScope = (body.scope ?? "this") as "this" | "thisAndFollowing" | "all";
+    const rsvpScope = (body.scope === "all" ? "all" : "this") as "this" | "all";
 
     let task;
     if (body.isComplete === true) {
@@ -82,7 +83,8 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
               edited.id,
               targetCalendarId,
               attendanceStatus,
-              userEmail
+              userEmail,
+              rsvpScope
             )
           : edited;
       } else {
@@ -95,7 +97,8 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
             edited?.id ?? eventId,
             calendarId,
             attendanceStatus,
-            userEmail
+            userEmail,
+            rsvpScope
           );
         } else {
           task = edited ?? (await getEventById(accessToken, eventId, calendarId));

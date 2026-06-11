@@ -75,6 +75,9 @@ export function EventPopover({
   const [editScope, setEditScope] = useState<"this" | "thisAndFollowing" | "all">("this");
   const [pendingUpdates, setPendingUpdates] = useState<UpdateTaskInput | null>(null);
   const [pendingMarkerFn, setPendingMarkerFn] = useState<((scope: "this" | "all") => void) | null>(null);
+  const [showRsvpScopeDialog, setShowRsvpScopeDialog] = useState(false);
+  const [rsvpScope, setRsvpScope] = useState<"this" | "thisAndFollowing" | "all">("this");
+  const [pendingRsvpStatus, setPendingRsvpStatus] = useState<"accepted" | "tentative" | "declined" | null>(null);
   const [editRecurring, setEditRecurring] = useState(false);
   const [editRecurrenceType, setEditRecurrenceType] = useState<
     "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "weekdays"
@@ -193,7 +196,7 @@ export function EventPopover({
   };
   const currentResponse = task.selfResponseStatus ?? "needsAction";
 
-  async function handleAttendanceStatus(status: "accepted" | "tentative" | "declined") {
+  async function doRsvp(status: "accepted" | "tentative" | "declined", scope: "this" | "all") {
     setSaving(true);
     setError("");
     setFeedback("");
@@ -201,6 +204,7 @@ export function EventPopover({
       await onSaveEdit(task, {
         calendarId: task.calendarId ?? "primary",
         attendanceStatus: status,
+        scope,
       });
       setFeedback("Presença atualizada.");
     } catch {
@@ -208,6 +212,16 @@ export function EventPopover({
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleAttendanceStatus(status: "accepted" | "tentative" | "declined") {
+    if (task.isRecurring) {
+      setPendingRsvpStatus(status);
+      setRsvpScope("this");
+      setShowRsvpScopeDialog(true);
+      return;
+    }
+    doRsvp(status, "this");
   }
 
   function buildEditUpdates(): UpdateTaskInput {
@@ -817,6 +831,60 @@ export function EventPopover({
           )}
         </div>
       </div>
+
+      {/* Diálogo de scope de presença em evento recorrente */}
+      {showRsvpScopeDialog && pendingRsvpStatus && (
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShowRsvpScopeDialog(false)}
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[#3c4043] bg-[#2a2b2e] p-5 shadow-2xl">
+            <h3 className="text-sm font-semibold text-[#e8eaed] mb-4">Atualizar presença em evento recorrente</h3>
+            <div className="space-y-3 mb-5">
+              {(
+                [
+                  { value: "this", label: "Este evento" },
+                  { value: "thisAndFollowing", label: "Este e os eventos seguintes" },
+                  { value: "all", label: "Todos os eventos" },
+                ] as const
+              ).map(({ value, label }) => (
+                <label key={value} className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="rsvpScope"
+                    value={value}
+                    checked={rsvpScope === value}
+                    onChange={() => setRsvpScope(value)}
+                    className="accent-[#8ab4f8] w-4 h-4"
+                  />
+                  <span className="text-sm text-[#e8eaed]">{label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowRsvpScopeDialog(false); setPendingRsvpStatus(null); }}
+                className="flex-1 px-3 py-2 rounded-lg border border-[#5f6368] text-xs text-[#e8eaed] hover:bg-[#3c4043] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRsvpScopeDialog(false);
+                  doRsvp(pendingRsvpStatus, rsvpScope === "thisAndFollowing" ? "this" : rsvpScope);
+                  setPendingRsvpStatus(null);
+                }}
+                className="flex-1 px-3 py-2 rounded-lg bg-[#8ab4f8] text-[#202124] text-xs font-semibold hover:brightness-95 transition-colors"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Diálogo de escopo de edição de evento recorrente */}
       {showRecurringEditDialog && (

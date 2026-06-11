@@ -780,10 +780,12 @@ export async function updateEventRsvp(
   eventId: string,
   calendarId: string,
   attendanceStatus: Exclude<AttendanceStatus, "needsAction">,
-  userEmail?: string
+  userEmail?: string,
+  scope: "this" | "all" = "this"
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
-  const { data: current } = await calendar.events.get({ calendarId, eventId });
+  const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
+  const { data: current } = await calendar.events.get({ calendarId, eventId: targetId });
 
   const attendees = [...(current.attendees ?? [])];
   let attendeeIndex = attendees.findIndex((att) => att.self);
@@ -807,7 +809,7 @@ export async function updateEventRsvp(
 
   const { data } = await calendar.events.patch({
     calendarId,
-    eventId,
+    eventId: targetId,
     requestBody: {
       attendees,
       attendeesOmitted: false,
