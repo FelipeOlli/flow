@@ -1,6 +1,6 @@
 {
   "name": "FLOW",
-  "short_name": " ",
+  "short_name": "FLOW",
   "description": "Controle suas tarefas diárias",
   "start_url": "/today",
   "display": "standalone",
