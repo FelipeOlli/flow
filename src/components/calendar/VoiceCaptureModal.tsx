@@ -9,10 +9,9 @@ type CaptureState = "recording" | "processing" | "error";
 interface VoiceCaptureModalProps {
   onResult: (parsed: ParsedEvent, transcript: string) => void;
   onClose: () => void;
-  stopSignal: number;
 }
 
-export function VoiceCaptureModal({ onResult, onClose, stopSignal }: VoiceCaptureModalProps) {
+export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps) {
   const [state, setState] = useState<CaptureState>("recording");
   const [seconds, setSeconds] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
@@ -34,13 +33,6 @@ export function VoiceCaptureModal({ onResult, onClose, stopSignal }: VoiceCaptur
       if (autoStopRef.current) clearTimeout(autoStopRef.current);
     };
   }, []);
-
-  // Stop when parent releases the button
-  useEffect(() => {
-    if (stopSignal > 0 && stateRef.current === "recording") {
-      stopRecording();
-    }
-  }, [stopSignal]);
 
   function stopStream() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -73,10 +65,9 @@ export function VoiceCaptureModal({ onResult, onClose, stopSignal }: VoiceCaptur
       };
 
       recorder.start(250);
-
       timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
 
-      // Auto-stop at 60s to avoid huge uploads
+      // Auto-stop at 60s
       autoStopRef.current = setTimeout(() => {
         if (stateRef.current === "recording") stopRecording();
       }, 60_000);
@@ -126,15 +117,17 @@ export function VoiceCaptureModal({ onResult, onClose, stopSignal }: VoiceCaptur
     `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
   const modal = (
-    <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="flex flex-col items-center gap-6 select-none">
+    <div
+      className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm"
+      onClick={state === "recording" ? stopRecording : undefined}
+    >
+      <div className="flex flex-col items-center gap-6 select-none" onClick={(e) => e.stopPropagation()}>
         {state === "recording" && (
           <>
             <div className="relative flex items-center justify-center">
               <div className="absolute w-32 h-32 rounded-full bg-[#a78bfa]/20 animate-ping" style={{ animationDuration: "1.4s" }} />
               <div className="absolute w-24 h-24 rounded-full bg-[#a78bfa]/30 animate-pulse" />
               <div className="relative w-20 h-20 rounded-full bg-[#a78bfa]/40 border border-[#a78bfa]/60 flex items-center justify-center">
-                {/* Sparkle icon */}
                 <svg viewBox="0 0 24 24" className="w-9 h-9 text-white" fill="currentColor">
                   <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3zM19 13.5l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6z" />
                 </svg>
@@ -142,7 +135,7 @@ export function VoiceCaptureModal({ onResult, onClose, stopSignal }: VoiceCaptur
             </div>
             <div className="text-center">
               <p className="text-white text-lg font-medium tabular-nums">{formatSeconds(seconds)}</p>
-              <p className="text-white/60 text-sm mt-1">Solte para enviar</p>
+              <p className="text-white/60 text-sm mt-1">Toque na tela para parar</p>
             </div>
           </>
         )}
