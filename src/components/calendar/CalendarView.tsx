@@ -17,6 +17,8 @@ import { TaskForm } from "@/components/tasks/TaskForm";
 import { DashboardView } from "@/components/dashboard/DashboardView";
 import { WeeklyReviewView } from "@/components/dashboard/WeeklyReviewView";
 import { getPushStatus, registerPush, unregisterPush, getActiveSubscription, type PushStatus } from "@/lib/push-client";
+import { VoiceCaptureModal } from "./VoiceCaptureModal";
+import { type ParsedEvent } from "@/lib/openai-event-parser";
 
 type View = "day" | "3days" | "week" | "month";
 const LAYERS = {
@@ -113,7 +115,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState<FlowTask | null>(null);
-  const [formDefaults, setFormDefaults] = useState<{ startTime?: string; endTime?: string }>({});
+  const [formDefaults, setFormDefaults] = useState<Partial<ParsedEvent> & { startTime?: string; endTime?: string }>({});
+  const [showVoiceCapture, setShowVoiceCapture] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState<string | null>(null);
   const [manualSourceDate, setManualSourceDate] = useState("");
@@ -687,6 +690,13 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     setShowForm(true);
   }
 
+  function handleVoiceResult(parsed: ParsedEvent) {
+    setEditingTask(null);
+    setFormDefaults(parsed);
+    setShowVoiceCapture(false);
+    setShowForm(true);
+  }
+
   const VIEW_LABELS: Record<View, string> = {
     day: "Dia",
     "3days": "3 dias",
@@ -1221,12 +1231,26 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
       {/* FAB — hidden in dashboard/projects/review mode */}
       {!showDashboard && !showWeeklyReview && (
-        <button onClick={() => openCreateForm()}
-          className={`fixed bottom-6 right-4 w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform backdrop-blur-md bg-[#8ab4f8]/30 border border-[#8ab4f8]/40 shadow-lg shadow-black/30 ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}>
-          <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
+        <>
+          {/* FAB voz IA */}
+          <button
+            onClick={() => setShowVoiceCapture(true)}
+            title="Criar evento por voz"
+            className={`fixed bottom-6 right-[4.75rem] w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform backdrop-blur-md bg-[#a78bfa]/30 border border-[#a78bfa]/40 shadow-lg shadow-black/30 ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}
+          >
+            <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="currentColor">
+              <path d="M12 1a4 4 0 014 4v7a4 4 0 01-8 0V5a4 4 0 014-4zm-6.5 9.5A6.5 6.5 0 0012 17a6.5 6.5 0 006.5-6.5h1.5A8 8 0 0112 18.5a8 8 0 01-8-7.5h1.5z"/>
+              <path d="M11 20h2v3h-2z"/>
+            </svg>
+          </button>
+          {/* FAB criar evento */}
+          <button onClick={() => openCreateForm()}
+            className={`fixed bottom-6 right-4 w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform backdrop-blur-md bg-[#8ab4f8]/30 border border-[#8ab4f8]/40 shadow-lg shadow-black/30 ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}>
+            <svg viewBox="0 0 24 24" className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        </>
       )}
 
       {/* Toast migração */}
@@ -1237,6 +1261,13 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
         >
           {migrateResult}
         </div>
+      )}
+
+      {showVoiceCapture && (
+        <VoiceCaptureModal
+          onResult={handleVoiceResult}
+          onClose={() => setShowVoiceCapture(false)}
+        />
       )}
 
       {showForm && (

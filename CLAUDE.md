@@ -241,6 +241,33 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
+### 2026-06-11
+
+**O que foi feito:**
+
+1. **Criação de evento por voz + IA** — Segundo FAB roxo (`bg-[#a78bfa]/30`) ao lado esquerdo do FAB `+`. Ao clicar: abre overlay de gravação com microfone pulsante. Clique em qualquer lugar para parar. O áudio é enviado ao endpoint `/api/voice-event` que usa OpenAI Whisper-1 (transcrição PT-BR) + GPT-4o-mini (extrai campos do evento em JSON) e retorna os dados pré-preenchidos no `TaskForm` para revisão antes de salvar. Campos populados: título, startTime, endTime, calendarId, description, isImportant, pillar, category, isDelegable, recurrenceType.
+
+**Arquivos criados:**
+- `src/lib/openai-event-parser.ts` — `transcribeAudio()` (Whisper-1) + `extractEventFields()` (GPT-4o-mini), sem SDK, usa `fetch` nativo
+- `src/app/api/voice-event/route.ts` — POST multipart/form-data, valida sessão, chama Whisper + GPT, retorna `{ transcript, parsed }`
+- `src/components/calendar/VoiceCaptureModal.tsx` — overlay com MediaRecorder, estados recording/processing/error, portal no body
+
+**Arquivos modificados:**
+- `src/components/calendar/CalendarView.tsx` — import VoiceCaptureModal + ParsedEvent, estado `showVoiceCapture`, handler `handleVoiceResult`, FAB de voz
+- `src/components/tasks/TaskForm.tsx` — interface `VoiceDefaults` com campos extras, pré-população de título, description, isImportant, pillar, category, isDelegable, recurrenceType, calendarId
+
+**Decisões tomadas:**
+- Sem SDK OpenAI — fetch nativo, consistente com o restante do projeto
+- MediaRecorder com prefer webm/opus, fallback mp4 (Safari) — Whisper aceita ambos
+- `calendarId` retornado pela IA é validado contra a lista de calendários carregada — se não bater, usa o primário
+
+**Nova variável de ambiente:**
+- `OPENAI_API_KEY=sk-...` — necessária para Whisper + GPT-4o-mini
+
+**Próximos passos:** Adicionar `OPENAI_API_KEY` nas variáveis do EasyPanel e testar no dispositivo.
+
+---
+
 ### 2026-06-09
 
 **O que foi feito:**

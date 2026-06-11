@@ -4,10 +4,23 @@ import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, Pillar } from "@/types/task";
 
+interface VoiceDefaults {
+  startTime?: string;
+  endTime?: string;
+  title?: string;
+  description?: string;
+  calendarId?: string | null;
+  isImportant?: boolean;
+  pillar?: Pillar;
+  category?: "operational" | "strategic";
+  isDelegable?: boolean;
+  recurrenceType?: "daily" | "weekdays" | "weekly" | "biweekly" | "monthly" | "yearly";
+}
+
 interface TaskFormProps {
   task?: FlowTask | null;
   currentDate: string;
-  defaults?: { startTime?: string; endTime?: string };
+  defaults?: VoiceDefaults;
   onClose: () => void;
   onSave: (data: CreateTaskInput | UpdateTaskInput) => Promise<void>;
   onComplete?: (task: FlowTask) => void;
@@ -54,23 +67,25 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
     ? toLocalDatetimeValue(task.endTime)
     : buildDefaultEnd(defaultStart, defaults?.endTime);
 
-  const [title, setTitle] = useState(task?.title ?? "");
+  const [title, setTitle] = useState(task?.title ?? defaults?.title ?? "");
   const [startTime, setStartTime] = useState(defaultStart);
   const [endTime, setEndTime] = useState(defaultEnd);
-  const [description, setDescription] = useState(task?.description ?? "");
+  const [description, setDescription] = useState(task?.description ?? defaults?.description ?? "");
   const [calendars, setCalendars] = useState<CalendarOption[]>([]);
   const [calendarId, setCalendarId] = useState("primary");
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [calendarLoadError, setCalendarLoadError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [recurring, setRecurring] = useState(false);
+  const [recurring, setRecurring] = useState(!!(defaults?.recurrenceType));
   const [recurrenceType, setRecurrenceType] = useState<
     "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "weekdays"
-  >("weekly");
-  const [isImportant, setIsImportant] = useState(false);
-  const [tag, setTag] = useState<"O" | "E" | "D" | null>(null);
-  const [pillar, setPillar] = useState<Pillar | null>(null);
+  >(defaults?.recurrenceType ?? "weekly");
+  const [isImportant, setIsImportant] = useState(defaults?.isImportant ?? false);
+  const [tag, setTag] = useState<"O" | "E" | "D" | null>(
+    defaults?.isDelegable ? "D" : defaults?.category === "strategic" ? "E" : defaults?.category === "operational" ? "O" : null
+  );
+  const [pillar, setPillar] = useState<Pillar | null>(defaults?.pillar ?? null);
   const [attendeeInput, setAttendeeInput] = useState("");
   const [attendees, setAttendees] = useState<string[]>([]);
 
@@ -98,8 +113,12 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
         if (!active) return;
         setCalendars(data);
         if (data.length > 0) {
-          const primary = data.find((c) => c.id === "primary");
-          setCalendarId(primary?.id ?? data[0].id);
+          if (defaults?.calendarId && data.some((c) => c.id === defaults.calendarId)) {
+            setCalendarId(defaults.calendarId);
+          } else {
+            const primary = data.find((c) => c.id === "primary");
+            setCalendarId(primary?.id ?? data[0].id);
+          }
         }
       } catch {
         if (!active) return;
