@@ -12,11 +12,8 @@ export function categoryLetters(task: FlowTask): { letter: string; color: string
 
 export function computeDaysOpen(task: FlowTask, tz: string): number {
   if (task.isComplete) return 0;
-  // Eventos recorrentes: cada instância nasce na sua data de início — usar startTime
-  // Eventos únicos: usar createdAt (data de criação no Google Calendar)
-  const baseIso = task.isRecurring ? task.startTime : task.createdAt;
-  if (!baseIso) return 0;
-  const baseKey = getDateKeyInTimeZone(new Date(baseIso), tz);
+  if (!task.startTime) return 0;
+  const baseKey = getDateKeyInTimeZone(new Date(task.startTime), tz);
   const todayKey = getDateKeyInTimeZone(new Date(), tz);
   return Math.max(0, diffDateKeysInDays(baseKey, todayKey));
 }

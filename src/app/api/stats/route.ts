@@ -143,8 +143,8 @@ export async function GET(req: NextRequest) {
     let avgSumDays = 0;
     let avgCount = 0;
     for (const task of tasks) {
-      if (task.isComplete && task.createdAt && task.completedAt) {
-        const days = (new Date(task.completedAt).getTime() - new Date(task.createdAt).getTime()) / 86400000;
+      if (task.isComplete && task.startTime && task.completedAt) {
+        const days = (new Date(task.completedAt).getTime() - new Date(task.startTime).getTime()) / 86400000;
         if (days >= 0) { avgSumDays += days; avgCount++; }
       }
     }
