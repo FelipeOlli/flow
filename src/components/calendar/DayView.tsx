@@ -420,6 +420,19 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
       ? orderedTimedTasks.findIndex((task) => new Date(task.startTime).getTime() > nowTs)
       : -1;
     const separatorInsertIndex = nowSeparatorIndex === -1 ? orderedTimedTasks.length : nowSeparatorIndex;
+
+    const noonTs = new Date(currentDate).setHours(12, 0, 0, 0);
+    const noonRawIndex = orderedTimedTasks.findIndex((task) => new Date(task.startTime).getTime() >= noonTs);
+    const noonInsertIndex = noonRawIndex > 0 ? noonRawIndex : -1; // só mostra se há eventos antes das 12h
+
+    const renderNoonSeparator = (key: string) => (
+      <div key={key} className="flex items-center gap-2 px-1 py-1 pointer-events-none select-none">
+        <div className="flex-1 h-px bg-[#5f6368]" />
+        <span className="text-[10px] text-[#9aa0a6] font-semibold tracking-wide">12:00</span>
+        <div className="flex-1 h-px bg-[#5f6368]" />
+      </div>
+    );
+
     const renderNowSeparator = (key: string) => (
       <div ref={listNowSepRef} key={key} style={{ scrollMarginTop: "80px" }} className="flex items-center gap-2 px-1 py-1">
         <div className="h-[2px] w-3 rounded bg-[#ea4335]" />
@@ -487,6 +500,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
           {isCurrentDay && orderedTimedTasks.length === 0 && renderNowSeparator("now-separator-empty")}
           {orderedTimedTasks.map((task, index) => (
             <Fragment key={`${task.calendarId ?? "primary"}:${task.id}:${task.startTime}`}>
+              {noonInsertIndex !== -1 && index === noonInsertIndex && renderNoonSeparator(`noon-separator-${index}`)}
               {isCurrentDay && index === separatorInsertIndex && renderNowSeparator(`now-separator-${index}`)}
               <div
                 onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
