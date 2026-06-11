@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getValidAccessToken } from "@/lib/token-store";
-import { listWritableCalendars } from "@/lib/google-calendar";
-import { transcribeAudio, extractEventFields } from "@/lib/openai-event-parser";
+import { transcribeAudio } from "@/lib/openai-event-parser";
 
+// Step 1: audio → transcript only (fast, ~1-2s)
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -18,37 +18,20 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const accessToken = await getValidAccessToken();
-    if (!accessToken) {
-      return NextResponse.json({ error: "Google Calendar não conectado" }, { status: 503 });
-    }
-
-    const calendars = await listWritableCalendars(accessToken);
-
     const arrayBuffer = await audioFile.arrayBuffer();
     const audioBuffer = Buffer.from(arrayBuffer);
     const mimeType = audioFile.type || "audio/webm";
-
-    const tz = process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
-    const now = new Date(new Date().toLocaleString("en-US", { timeZone: tz }));
 
     const transcript = await transcribeAudio(audioBuffer, mimeType);
     if (!transcript) {
       return NextResponse.json({ error: "Não foi possível transcrever o áudio" }, { status: 400 });
     }
 
-    const parsed = await extractEventFields(
-      transcript,
-      now,
-      tz,
-      calendars.map((c) => ({ id: c.id, name: c.name }))
-    );
-
-    return NextResponse.json({ transcript, parsed });
+    return NextResponse.json({ transcript });
   } catch (err) {
-    console.error("[voice-event]", err);
+    console.error("[voice-event transcribe]", err);
     return NextResponse.json(
-      { error: "Erro ao processar o áudio. Verifique a configuração da API." },
+      { error: "Erro ao transcrever o áudio. Verifique a configuração da API." },
       { status: 500 }
     );
   }

@@ -14,6 +14,7 @@ interface VoiceCaptureModalProps {
 export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps) {
   const [state, setState] = useState<CaptureState>("recording");
   const [seconds, setSeconds] = useState(0);
+  const [processingMsg, setProcessingMsg] = useState("Transcrevendo...");
   const [errorMsg, setErrorMsg] = useState("");
   const [mounted, setMounted] = useState(false);
 
@@ -83,20 +84,34 @@ export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps)
     if (autoStopRef.current) { clearTimeout(autoStopRef.current); autoStopRef.current = null; }
     setState("processing");
     stateRef.current = "processing";
+    setProcessingMsg("Transcrevendo...");
+    // Flush any buffered data immediately before stopping
+    mediaRecorderRef.current?.requestData();
     mediaRecorderRef.current?.stop();
   }
 
   async function submitAudio(blob: Blob, mimeType: string) {
     try {
+      // Phase 1: Whisper transcription
+      setProcessingMsg("Transcrevendo...");
       const formData = new FormData();
       formData.append("audio", blob, `recording.${mimeType.split("/")[1]?.split(";")[0] ?? "webm"}`);
+      const transcribeRes = await fetch("/api/voice-event", { method: "POST", body: formData });
+      const transcribeData = await transcribeRes.json();
+      if (!transcribeRes.ok) throw new Error(transcribeData.error ?? "Erro na transcrição");
+      const { transcript } = transcribeData as { transcript: string };
 
-      const res = await fetch("/api/voice-event", { method: "POST", body: formData });
-      const data = await res.json();
+      // Phase 2: GPT extraction
+      setProcessingMsg("Analisando evento...");
+      const parseRes = await fetch("/api/voice-event/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript }),
+      });
+      const parseData = await parseRes.json();
+      if (!parseRes.ok) throw new Error(parseData.error ?? "Erro na análise");
 
-      if (!res.ok) throw new Error(data.error ?? "Erro desconhecido");
-
-      onResult(data.parsed, data.transcript);
+      onResult(parseData.parsed, transcript);
     } catch (err) {
       setState("error");
       stateRef.current = "error";
@@ -148,7 +163,7 @@ export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps)
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
               </svg>
             </div>
-            <p className="text-white/70 text-sm">Analisando...</p>
+            <p className="text-white/70 text-sm">{processingMsg}</p>
           </>
         )}
 
