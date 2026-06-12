@@ -78,7 +78,7 @@ export function EventPopover({
   const [showRsvpScopeDialog, setShowRsvpScopeDialog] = useState(false);
   const [rsvpScope, setRsvpScope] = useState<"this" | "thisAndFollowing" | "all">("this");
   const [pendingRsvpStatus, setPendingRsvpStatus] = useState<"accepted" | "tentative" | "declined" | null>(null);
-  const [editRecurring, setEditRecurring] = useState(false);
+  const [editRecurring, setEditRecurring] = useState(!!task.isRecurring);
   const [editRecurrenceType, setEditRecurrenceType] = useState<
     "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "weekdays"
   >("weekly");
@@ -239,6 +239,9 @@ export function EventPopover({
       const rrule = buildRRule();
       if (rrule.length) updates.recurrence = rrule;
     }
+    if (task.isRecurring && !editRecurring) {
+      updates.removeRecurrence = true;
+    }
     if (!task.isAllDay) {
       updates.startTime = new Date(startTime).toISOString();
       updates.endTime = new Date(endTime).toISOString();
@@ -271,6 +274,11 @@ export function EventPopover({
       return;
     }
     const updates = buildEditUpdates();
+    if (updates.removeRecurrence) {
+      // Encerrar a repetição já define o alvo (master) — dialog de scope não se aplica
+      doSaveEdit(updates);
+      return;
+    }
     if (task.isRecurring) {
       setPendingUpdates(updates);
       setPendingMarkerFn(null);
@@ -711,8 +719,8 @@ export function EventPopover({
                 className="w-full bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] resize-y overflow-y-auto min-h-[2.5rem] max-h-[60vh]"
                 placeholder="Descrição"
               />
-              {/* Repetir — apenas para eventos não-recorrentes com horário */}
-              {!task.isRecurring && !task.isAllDay && (
+              {/* Repetir — eventos com horário; para recorrentes o toggle encerra a repetição */}
+              {!task.isAllDay && (
                 <div>
                   <div className="flex items-center justify-between">
                     <button
@@ -724,11 +732,18 @@ export function EventPopover({
                         <div className="absolute rounded-full bg-white shadow transition-transform" style={{ width: 18, height: 18, top: 2, left: 2, transform: editRecurring ? "translateX(18px)" : "translateX(0)" }} />
                       </div>
                       <span className={`text-xs ${editRecurring ? "text-[#e8eaed]" : "text-[#9aa0a6]"}`}>
-                        {editRecurring ? "Evento recorrente" : "Repetir"}
+                        {task.isRecurring
+                          ? (editRecurring ? (task.recurrenceSummary ?? "Evento recorrente") : "Repetir")
+                          : (editRecurring ? "Evento recorrente" : "Repetir")}
                       </span>
                     </button>
                   </div>
-                  {editRecurring && (
+                  {task.isRecurring && !editRecurring && (
+                    <p className="mt-1.5 text-xs text-[#F6BF26]">
+                      Ao salvar, esta ocorrência vira a última: as próximas repetições serão removidas e as anteriores mantidas.
+                    </p>
+                  )}
+                  {!task.isRecurring && editRecurring && (
                     <div className="mt-2 grid grid-cols-3 gap-1.5">
                       {([
                         { value: "daily",    label: "Diária" },

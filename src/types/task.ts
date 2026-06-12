@@ -76,6 +76,8 @@ export interface UpdateTaskInput {
   attendanceStatus?: Exclude<AttendanceStatus, "needsAction">;
   attendees?: string[];
   recurrence?: string[];
+  /** Encerra a repetição da série: a ocorrência editada vira a última (UNTIL inclusivo) */
+  removeRecurrence?: boolean;
   completeScope?: "this" | "thisAndFollowing" | "all";
   scope?: "this" | "thisAndFollowing" | "all";
 }

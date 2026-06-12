@@ -305,6 +305,43 @@ export async function updateEvent(
     return body;
   }
 
+  if (updates.removeRecurrence) {
+    const { data: instance } = await calendar.events.get({ calendarId, eventId });
+    const masterId = instance.recurringEventId ?? eventId;
+    const { data: master } = await calendar.events.get({ calendarId, eventId: masterId });
+    const originalStart =
+      instance.originalStartTime?.dateTime ??
+      instance.originalStartTime?.date ??
+      instance.start?.dateTime ??
+      instance.start?.date;
+
+    if (originalStart && master.recurrence?.length) {
+      // UNTIL inclusivo no início desta ocorrência — ela vira a última da série,
+      // preservando as ocorrências passadas (e seu histórico de conclusão)
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const cutoff = new Date(originalStart);
+      const untilUtc =
+        `${cutoff.getUTCFullYear()}${pad(cutoff.getUTCMonth() + 1)}${pad(cutoff.getUTCDate())}` +
+        `T${pad(cutoff.getUTCHours())}${pad(cutoff.getUTCMinutes())}${pad(cutoff.getUTCSeconds())}Z`;
+      const truncatedRecurrence = master.recurrence.map((line) => {
+        if (line.startsWith("RRULE:")) {
+          return "RRULE:" + line
+            .slice(6)
+            .split(";")
+            .filter((p) => !p.startsWith("UNTIL=") && !p.startsWith("COUNT="))
+            .concat(`UNTIL=${untilUtc}`)
+            .join(";");
+        }
+        return line;
+      });
+      await calendar.events.patch({ calendarId, eventId: masterId, requestBody: { recurrence: truncatedRecurrence } });
+    }
+
+    const requestBody = buildRequestBody(updates.startTime, updates.endTime);
+    const { data } = await calendar.events.patch({ calendarId, eventId, requestBody });
+    return mapEvent(data, calendarId);
+  }
+
   if (scope === "this") {
     const requestBody = buildRequestBody(updates.startTime, updates.endTime);
     const { data } = await calendar.events.patch({ calendarId, eventId, requestBody });
