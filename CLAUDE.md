@@ -241,6 +241,49 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
+### 2026-06-12
+
+**O que foi feito:**
+
+1. **Opção de encerrar recorrência ao editar** — Toggle "Repetir" agora aparece para eventos recorrentes no modo edição do `EventPopover` (já estava ligado). Desligar + salvar: trunca a RRULE da master com `UNTIL` inclusivo na ocorrência aberta — ela vira a última, as passadas e seus dados são mantidos, as futuras removidas. Novo campo `removeRecurrence?: boolean` em `UpdateTaskInput`. `updateEvent` trata o `removeRecurrence` antes da lógica de scope normal. O salvar pula o dialog de scope de edição nesse caso (não se aplica).
+
+2. **Ícone de recorrência no header do popover** — Removida a seção "RECORRÊNCIA" do modo leitura. Ícone de repeat (↺) adicionado ao lado do ícone de convidados no título, visível apenas quando `isRecurring`. Ambos os ícones reduzidos de `w-5` para `w-4`.
+
+3. **Fix: evento duplicado ao recusar convite** — `showHiddenInvitations: true` fazia o mesmo convite aparecer em múltiplos calendários (original + cópia sombra no calendário pessoal). `fetchAllCalendarsEvents` refatorado: coleta eventos brutos de todos os calendários, agrupa por `iCalUID` antes de mapear. Regra de dedup: vence a cópia com status RSVP mais específico (`declined=4 > tentative=3 > accepted=2 > needsAction=1 > ausente=0`). Isso garante que a cópia sombra do calendário pessoal (que reflete o RSVP com precisão) prevaleça sobre a cópia do calendário compartilhado (que pode não atualizar o `selfResponseStatus` após RSVP).
+
+**Arquivos modificados:**
+- `src/types/task.ts` — `removeRecurrence?: boolean` em `UpdateTaskInput`
+- `src/lib/google-calendar.ts` — `updateEvent` com `removeRecurrence`; `fetchAllCalendarsEvents` com dedup por `iCalUID` + prioridade de status RSVP
+- `src/components/calendar/EventPopover.tsx` — toggle Repetir para recorrentes; ícone de recorrência no título; remoção da seção Recorrência
+
+**Decisões tomadas:**
+- `UNTIL` inclusivo (sem `-1s`) no truncamento de recorrência via `removeRecurrence` — a ocorrência atual é a última da série
+- Dedup por `iCalUID` com prioridade de status RSVP em vez de "preferir não-declined" — o status RSVP é refletido com precisão na cópia sombra do calendário pessoal, não na cópia do calendário compartilhado
+- Ícone de recorrência no título do popover ao invés de seção dedicada — mais compacto e consistente com o ícone de convidados
+
+**Próximos passos:** redeploy no EasyPanel para entrar em produção.
+
+---
+
+### 2026-06-11 (sessão 4)
+
+**O que foi feito:**
+
+1. **Fix: eventos de convite não apareciam no Flow** — A API do Google Calendar omite por padrão eventos onde o usuário foi convidado mas ainda não respondeu (`needsAction`) e eventos recusados (`declined`). Adicionado `showHiddenInvitations: true` em `listEventsExpandedPage`. Migração atualizada para excluir eventos com `selfResponseStatus === "declined"` e evitar tentar mover eventos de terceiros.
+
+**Arquivos modificados:**
+- `src/lib/google-calendar.ts` — `showHiddenInvitations: true` em `listEventsExpandedPage`
+- `src/lib/migration.ts` — filtro `selfResponseStatus !== "declined"` em `timedToMove` e `allDayToMove`
+
+**Decisões tomadas:**
+- `showHiddenInvitations: true` é necessário para qualquer evento onde o user não é organizador e ainda não aceitou o convite
+- Eventos `declined` excluídos da migração pois o usuário não é organizador — a API retornaria 403 ao tentar mover
+- Eventos `declined` continuam aparecendo no calendário (com cor cinza via `getEventSurfaceColor`)
+
+**Próximos passos:** redeploy no EasyPanel para entrar em produção.
+
+---
+
 ### 2026-06-11 (sessão 3)
 
 **O que foi feito:**
@@ -573,45 +616,9 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ---
 
-### 2026-04-18 (sessão 1)
-
-**O que foi feito:**
-
-1. **Dashboard de desempenho** — Novo painel acessível via ícone de gráfico no header do CalendarView. Mostra: 4 cards de resumo (concluídos, taxa, sequência atual, melhor dia), heatmap anual estilo GitHub (53 semanas × 7 dias, cores em roxo #a78bfa), gráfico de barras mensais com total (cinza) e concluídos (roxo), e tabela de detalhamento mensal (visível em sm+). Sem bibliotecas externas — tudo CSS + Tailwind + SVG inline.
-
-2. **Endpoint `/api/stats`** — `GET ?year=2026&tz=...` busca todos os eventos do ano via `getEventsInRange`, agrega server-side por dia e por mês, calcula streak atual/melhor e melhor dia. Retorna JSON compacto sem objetos de evento completos.
-
-3. **Toggle calendário/dashboard no header** — Dois ícones individuais (📅 calendário, 📊 dashboard) com estado ativo destacado (`bg-[#3c4043]`). Ordem: calendário → dashboard → ⋮ migração → sair. Ícones soltos, sem agrupamento com borda.
-
-4. **Recorrência no formulário de criação** — Seção "Repetir" com toggle e 6 opções: Diária, Dias úteis, Semanal, Quinzenal, Mensal, Anual. Gera RRULE correto (ex: `RRULE:FREQ=WEEKLY;BYDAY=MO`). "Semanal" e "Quinzenal" detectam o dia da semana automaticamente pelo horário de início. Passa `recurrence: string[]` para `createEvent()` → Google Calendar API. Só disponível na criação (não edição).
-
-5. **Ajustes de UI no dashboard** — Números dos cards em branco, cores em roxo (#a78bfa), fix de barras mensais (altura em pixels absolutos para evitar bug de `height: X%` em flex containers sem altura explícita).
-
-**Arquivos criados:**
-- `src/app/api/stats/route.ts`
-- `src/components/dashboard/DashboardView.tsx`
-
-**Arquivos modificados:**
-- `src/components/calendar/CalendarView.tsx`
-- `src/components/tasks/TaskForm.tsx`
-- `src/lib/google-calendar.ts`
-- `src/types/task.ts`
-
-**Decisões tomadas:**
-- Dashboard sem bibliotecas de gráficos (recharts, chart.js etc.) — tudo inline para manter bundle enxuto e tema escuro consistente
-- Barras mensais usam `style={{ height: px }}` com valor absoluto calculado (não `height: X%`) — percentagem não funciona em `flex-1` sem altura explícita no pai
-- Cor roxa (#a78bfa) escolhida por não conflitar com nenhum calendário existente (dourado = importante, verde = concluído, azul = Google Calendar primário)
-- Recorrência apenas na criação: editar recorrência de evento existente é operação complexa (afeta todas vs esta instância) — deixado para versão futura
-- `NEXTAUTH_URL` no `.env.local` corrigido de `localhost:3001` para `localhost:3000`
-
-**Commit:** `bd5158c`
-
-**Próximos passos:** nenhum pendente.
-
----
-
 ## 7. Histórico de Sessões Anteriores
 
+- **2026-04-18 (s1)** — Dashboard de desempenho (heatmap anual, barras mensais, streak), endpoint `/api/stats`, toggle calendário/dashboard no header, recorrência no formulário de criação (RRULE).
 - **2026-04-17** — Flag "Importante" com estrela dourada (`colorId: "5"`, `flowImportant` em extendedProperties), ícone de estrela em todas as views, UI otimista. Fix deploy: commit manual necessário.
 - **2026-04-13** — Fix migração com calendários compartilhados (`reader`), fix timezone Alpine (`% 24`), Cache-Control no-store, ícone de convidados em todas as views, view "Agenda" no DayView (agrupada por calendário com colapso).
 - **Até 2026-04-12** — Criação do projeto, auth por usuário/senha substituindo Google OAuth login, views de calendário (dia/semana/3dias/mês), grade e lista, busca, migração automática e manual de eventos, drag & drop, RSVP, recurrence display, toggle grade/lista por view, FAB, auto-expand de descrições, filtros de busca case/accent insensitive.
