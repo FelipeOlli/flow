@@ -162,8 +162,10 @@ async function fetchAllCalendarsEvents(
     calendarItems.map((c) => c.id).join(", ")
   );
 
+  type RawItem = { event: calendar_v3.Schema$Event; calId: string; calName: string; calColor: string };
+
   const results = await Promise.allSettled(
-    calendarItems.map(async (cal) => {
+    calendarItems.map(async (cal): Promise<RawItem[]> => {
       const id = cal.id!;
       const rawEvents = await listEventsExpandedPage(
         calendar,
@@ -176,24 +178,50 @@ async function fetchAllCalendarsEvents(
       );
       const calName = cal.summary ?? "";
       const calColor = CALENDAR_COLOR_OVERRIDES[calName] ?? cal.backgroundColor ?? "#4285f4";
-      return rawEvents.map((e) => mapEvent(e, id, calName, calColor));
+      return rawEvents.map((e) => ({ event: e, calId: id, calName, calColor }));
     })
   );
 
-  const tasks: FlowTask[] = [];
+  const allRaw: RawItem[] = [];
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
     const cal = calendarItems[i];
     if (r.status === "fulfilled") {
-      tasks.push(...r.value);
+      allRaw.push(...r.value);
     } else {
-      const reason = r.reason;
       console.error(
         `[FLOW CAL] Falha ao listar eventos do calendário "${cal.summary ?? cal.id}" (${cal.id}):`,
-        reason
+        r.reason
       );
     }
   }
+
+  // Deduplicar pelo iCalUID — com showHiddenInvitations:true o mesmo convite pode
+  // aparecer em múltiplos calendários (ex.: original + cópia sombra no calendário pessoal).
+  // Quando há conflito, preferir a cópia onde o usuário NÃO está como "declined",
+  // pois ela tende a ser o calendário que realmente hospeda o evento.
+  const seenUIDs = new Map<string, RawItem>();
+  const tasks: FlowTask[] = [];
+  for (const item of allRaw) {
+    const uid = item.event.iCalUID;
+    if (!uid) {
+      tasks.push(mapEvent(item.event, item.calId, item.calName, item.calColor));
+      continue;
+    }
+    const existing = seenUIDs.get(uid);
+    if (!existing) {
+      seenUIDs.set(uid, item);
+    } else {
+      const existingDeclined = existing.event.attendees?.find((a) => a.self)?.responseStatus === "declined";
+      const newDeclined = item.event.attendees?.find((a) => a.self)?.responseStatus === "declined";
+      if (existingDeclined && !newDeclined) {
+        seenUIDs.set(uid, item);
+      }
+    }
+  }
+  seenUIDs.forEach((item) => {
+    tasks.push(mapEvent(item.event, item.calId, item.calName, item.calColor));
+  });
 
   return tasks.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 }
