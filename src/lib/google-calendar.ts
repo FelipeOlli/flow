@@ -198,8 +198,16 @@ async function fetchAllCalendarsEvents(
 
   // Deduplicar pelo iCalUID — com showHiddenInvitations:true o mesmo convite pode
   // aparecer em múltiplos calendários (ex.: original + cópia sombra no calendário pessoal).
-  // Quando há conflito, preferir a cópia onde o usuário NÃO está como "declined",
-  // pois ela tende a ser o calendário que realmente hospeda o evento.
+  // O status RSVP do usuário é refletido com mais precisão na cópia sombra do calendário
+  // pessoal do que na cópia do calendário compartilhado, então priorizamos pelo status
+  // mais específico: declined > tentative > accepted > needsAction > ausente.
+  const rsvpPriority: Record<string, number> = {
+    declined: 4, tentative: 3, accepted: 2, needsAction: 1,
+  };
+  const selfStatus = (item: RawItem) => {
+    const status = item.event.attendees?.find((a) => a.self)?.responseStatus ?? "";
+    return rsvpPriority[status] ?? 0;
+  };
   const seenUIDs = new Map<string, RawItem>();
   const tasks: FlowTask[] = [];
   for (const item of allRaw) {
@@ -209,14 +217,8 @@ async function fetchAllCalendarsEvents(
       continue;
     }
     const existing = seenUIDs.get(uid);
-    if (!existing) {
+    if (!existing || selfStatus(item) > selfStatus(existing)) {
       seenUIDs.set(uid, item);
-    } else {
-      const existingDeclined = existing.event.attendees?.find((a) => a.self)?.responseStatus === "declined";
-      const newDeclined = item.event.attendees?.find((a) => a.self)?.responseStatus === "declined";
-      if (existingDeclined && !newDeclined) {
-        seenUIDs.set(uid, item);
-      }
     }
   }
   seenUIDs.forEach((item) => {
