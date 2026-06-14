@@ -105,7 +105,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [view, setView] = useState<View>("day");
   const [showDashboard, setShowDashboard] = useState(false);
   const [showWeeklyReview, setShowWeeklyReview] = useState(false);
-  const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list" | "calendar" | "priority">("list");
+  const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list" | "calendar" | "priority" | "favorites">("list");
   const [multiDayDisplayMode, setMultiDayDisplayMode] = useState<"grid" | "list">("grid");
   const [currentDate, setCurrentDate] = useState(() =>
     initialDate ? new Date(initialDate) : new Date()
@@ -1153,8 +1153,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
             {(view === "day" || view === "3days" || view === "week") && (
               <div className="px-3 pb-2.5">
                 {view === "day" ? (
-                  <div className="grid grid-cols-4 gap-1 rounded-md bg-[#2a2b2e] p-1 border border-[#3c4043]">
-                    {(["list", "grid", "calendar", "priority"] as const).map((m) => (
+                  <div className="grid grid-cols-5 gap-1 rounded-md bg-[#2a2b2e] p-1 border border-[#3c4043]">
+                    {(["list", "favorites", "grid", "calendar", "priority"] as const).map((m) => (
                       <button
                         key={m}
                         type="button"
@@ -1163,7 +1163,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                           dayDisplayMode === m ? "bg-[#3c4043] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"
                         }`}
                       >
-                        {m === "list" ? "Lista" : m === "grid" ? "Grade" : m === "calendar" ? "Agenda" : "Prioridade"}
+                        {{ list: "Lista", favorites: "Favoritos", grid: "Grade", calendar: "Agenda", priority: "Prioridade" }[m]}
                       </button>
                     ))}
                   </div>
