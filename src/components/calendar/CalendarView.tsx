@@ -1271,6 +1271,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
       {showForm && (
         <TaskForm task={editingTask} currentDate={currentDate.toISOString()} defaults={formDefaults}
+          existingTasks={tasks}
           onClose={() => { setShowForm(false); setEditingTask(null); setFormDefaults({}); }}
           onSave={handleSave}
           onComplete={handleComplete} />

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { format } from "date-fns";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, Pillar } from "@/types/task";
+import { findConflicts, suggestFreeSlots } from "@/components/calendar/calendarLayout";
 
 interface VoiceDefaults {
   startTime?: string;
@@ -21,6 +22,7 @@ interface TaskFormProps {
   task?: FlowTask | null;
   currentDate: string;
   defaults?: VoiceDefaults;
+  existingTasks?: FlowTask[];
   onClose: () => void;
   onSave: (data: CreateTaskInput | UpdateTaskInput) => Promise<void>;
   onComplete?: (task: FlowTask) => void;
@@ -55,7 +57,7 @@ function buildDefaultEnd(start: string, defaultIso?: string): string {
   return format(d, "yyyy-MM-dd'T'HH:mm");
 }
 
-export function TaskForm({ task, currentDate, defaults, onClose, onSave, onComplete }: TaskFormProps) {
+export function TaskForm({ task, currentDate, defaults, existingTasks, onClose, onSave, onComplete }: TaskFormProps) {
   const isEditing = !!task;
   const titleRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -88,6 +90,29 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
   const [pillar, setPillar] = useState<Pillar | null>(defaults?.pillar ?? null);
   const [attendeeInput, setAttendeeInput] = useState("");
   const [attendees, setAttendees] = useState<string[]>([]);
+
+  // Detecção de conflito de horário (apenas na criação)
+  const conflictData = useMemo(() => {
+    if (isEditing || !existingTasks?.length) return { conflicts: [] as FlowTask[], suggestions: [] as { mins: number; label: string; startIso: string }[] };
+    try {
+      const startIso = new Date(startTime).toISOString();
+      const endIso   = new Date(endTime).toISOString();
+      const conflicts = findConflicts(startIso, endIso, existingTasks);
+      const suggestions = conflicts.length > 0 ? suggestFreeSlots(startIso, existingTasks) : [];
+      return { conflicts, suggestions };
+    } catch {
+      return { conflicts: [] as FlowTask[], suggestions: [] as { mins: number; label: string; startIso: string }[] };
+    }
+  }, [isEditing, existingTasks, startTime, endTime]);
+
+  function applySlot(slot: { mins: number; startIso: string }) {
+    const start = new Date(slot.startIso);
+    const end   = new Date(slot.startIso);
+    end.setMinutes(end.getMinutes() + slot.mins);
+    setStartTime(format(start, "yyyy-MM-dd'T'HH:mm"));
+    setEndTime(format(end, "yyyy-MM-dd'T'HH:mm"));
+    setError("");
+  }
 
   useEffect(() => {
     setTimeout(() => titleRef.current?.focus(), 100);
@@ -172,6 +197,10 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
     if (!title.trim()) { setError("Digite um título"); return; }
     if (new Date(endTime) <= new Date(startTime)) {
       setError("O horário de fim deve ser após o início");
+      return;
+    }
+    if (!isEditing && conflictData.conflicts.length > 0) {
+      setError("Horário ocupado. Escolha um dos horários sugeridos abaixo.");
       return;
     }
     setLoading(true);
@@ -264,6 +293,38 @@ export function TaskForm({ task, currentDate, defaults, onClose, onSave, onCompl
                   className="w-full min-w-0 bg-[#2a2b2e] text-[#e8eaed] rounded-xl px-2 sm:px-3 py-3 text-[11px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043] appearance-none" />
               </div>
             </div>
+            {/* Aviso de horário ocupado + sugestões */}
+            {!isEditing && conflictData.conflicts.length > 0 && (
+              <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0 text-red-400" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  </svg>
+                  <p className="text-sm text-red-400">
+                    Horário ocupado por <span className="font-medium">"{conflictData.conflicts[0].title}"</span>
+                    {conflictData.conflicts.length > 1 && ` e mais ${conflictData.conflicts.length - 1}`}
+                  </p>
+                </div>
+                {conflictData.suggestions.length > 0 && (
+                  <div>
+                    <p className="text-xs text-[#9aa0a6] mb-2">Próximos horários livres:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {conflictData.suggestions.map((s) => (
+                        <button
+                          key={s.mins}
+                          type="button"
+                          onClick={() => applySlot(s)}
+                          className="px-3 py-1.5 rounded-lg bg-[#2a2b2e] border border-[#3c4043] text-xs text-[#8ab4f8] hover:bg-[#8ab4f8]/10 hover:border-[#8ab4f8]/40 transition-colors"
+                        >
+                          {s.label} · {format(new Date(s.startIso), "HH:mm")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <textarea
               ref={descriptionRef}
               placeholder="Descrição (opcional)"
