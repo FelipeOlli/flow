@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isToday, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -8,6 +8,7 @@ import { signOut, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, Pillar } from "@/types/task";
 import { CALENDAR_PILLAR_OVERRIDES } from "@/lib/pillar-config";
+import { getConflictIds } from "@/components/calendar/calendarLayout";
 import { DayView } from "./DayView";
 import { ThreeDayView } from "./ThreeDayView";
 import { WeekView } from "./WeekView";
@@ -111,6 +112,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     initialDate ? new Date(initialDate) : new Date()
   );
   const [tasks, setTasks] = useState<FlowTask[]>([]);
+  const conflictIds = useMemo(() => getConflictIds(tasks), [tasks]);
   const [loading, setLoading] = useState(true);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [showForm, setShowForm] = useState(false);
@@ -1208,7 +1210,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onMove={handleMove}
           onImportant={handleImportant}
-          displayMode={dayDisplayMode} />
+          displayMode={dayDisplayMode}
+          conflictIds={conflictIds} />
       )}
       {!showDashboard && !showWeeklyReview && !loading && view === "3days" && (
         <ThreeDayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}

@@ -23,9 +23,18 @@ import {
 
 const CLIENT_TZ = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/Sao_Paulo";
 
-function AgendaView({ tasks, currentDate, onComplete, onEdit, onImportant, getAnchorFromElement }: {
+function ConflictIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0 text-[#fbbc04]" fill="none" stroke="currentColor" strokeWidth={2.2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+    </svg>
+  );
+}
+
+function AgendaView({ tasks, currentDate, conflictIds, onComplete, onEdit, onImportant, getAnchorFromElement }: {
   tasks: FlowTask[];
   currentDate: Date;
+  conflictIds?: Set<string>;
   onComplete: (task: FlowTask) => void;
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onImportant?: (task: FlowTask) => void;
@@ -53,6 +62,10 @@ function AgendaView({ tasks, currentDate, onComplete, onEdit, onImportant, getAn
     });
   }
 
+  const dayConflictCount = conflictIds
+    ? tasks.filter((t) => !t.isAllDay && conflictIds.has(t.id)).length
+    : 0;
+
   return (
     <div className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2 space-y-3">
       <div className="rounded-lg border border-[#3c4043] bg-[#2a2b2e] px-3 py-2 flex items-center justify-between">
@@ -61,6 +74,15 @@ function AgendaView({ tasks, currentDate, onComplete, onEdit, onImportant, getAn
           {format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
         </span>
       </div>
+
+      {dayConflictCount > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-[#fbbc04]/40 bg-[#fbbc04]/10 px-3 py-2">
+          <ConflictIcon />
+          <p className="text-xs text-[#fbbc04]">
+            {dayConflictCount === 1 ? "1 horário em conflito neste dia" : `${dayConflictCount} horários em conflito neste dia`}
+          </p>
+        </div>
+      )}
 
       {calendars.length === 0 && (
         <p className="text-sm text-[#9aa0a6] text-center py-6">Nenhum evento para este dia.</p>
@@ -141,6 +163,7 @@ function AgendaView({ tasks, currentDate, onComplete, onEdit, onImportant, getAn
                               <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
                             </svg>
                           )}
+                          {conflictIds?.has(task.id) && <ConflictIcon />}
                         </div>
                         <p className={`text-xs text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>
                           {task.isAllDay ? "Dia inteiro" : `${format(new Date(task.startTime), "HH:mm")} - ${format(new Date(task.endTime), "HH:mm")}`}
@@ -176,9 +199,10 @@ function AgendaView({ tasks, currentDate, onComplete, onEdit, onImportant, getAn
   );
 }
 
-function PriorityView({ tasks, currentDate, onComplete, onEdit, onImportant, getAnchorFromElement }: {
+function PriorityView({ tasks, currentDate, conflictIds, onComplete, onEdit, onImportant, getAnchorFromElement }: {
   tasks: FlowTask[];
   currentDate: Date;
+  conflictIds?: Set<string>;
   onComplete: (task: FlowTask) => void;
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onImportant?: (task: FlowTask) => void;
@@ -189,6 +213,10 @@ function PriorityView({ tasks, currentDate, onComplete, onEdit, onImportant, get
     .map((t) => ({ task: t, days: computeDaysOpen(t, CLIENT_TZ) }))
     .sort((a, b) => b.days - a.days || new Date(a.task.startTime).getTime() - new Date(b.task.startTime).getTime());
 
+  const dayConflictCount = conflictIds
+    ? tasks.filter((t) => !t.isAllDay && conflictIds.has(t.id)).length
+    : 0;
+
   return (
     <div className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2 space-y-3">
       <div className="rounded-lg border border-[#3c4043] bg-[#2a2b2e] px-3 py-2 flex items-center justify-between">
@@ -197,6 +225,15 @@ function PriorityView({ tasks, currentDate, onComplete, onEdit, onImportant, get
           {format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
         </span>
       </div>
+
+      {dayConflictCount > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-[#fbbc04]/40 bg-[#fbbc04]/10 px-3 py-2">
+          <ConflictIcon />
+          <p className="text-xs text-[#fbbc04]">
+            {dayConflictCount === 1 ? "1 horário em conflito neste dia" : `${dayConflictCount} horários em conflito neste dia`}
+          </p>
+        </div>
+      )}
 
       {open.length === 0 && (
         <p className="text-sm text-[#9aa0a6] text-center py-6">Nenhuma tarefa em aberto para este dia.</p>
@@ -233,6 +270,7 @@ function PriorityView({ tasks, currentDate, onComplete, onEdit, onImportant, get
                       <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
                     </svg>
                   )}
+                  {conflictIds?.has(task.id) && <ConflictIcon />}
                 </div>
                 <p className="text-xs text-[#d2d6da] mt-0.5">
                   {task.isAllDay ? "Dia inteiro" : `${format(new Date(task.startTime), "HH:mm")} - ${format(new Date(task.endTime), "HH:mm")}`}
@@ -269,9 +307,10 @@ function PriorityView({ tasks, currentDate, onComplete, onEdit, onImportant, get
   );
 }
 
-function FavoritesView({ tasks, currentDate, onComplete, onEdit, onImportant, getAnchorFromElement }: {
+function FavoritesView({ tasks, currentDate, conflictIds, onComplete, onEdit, onImportant, getAnchorFromElement }: {
   tasks: FlowTask[];
   currentDate: Date;
+  conflictIds?: Set<string>;
   onComplete: (task: FlowTask) => void;
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onImportant?: (task: FlowTask) => void;
@@ -282,6 +321,10 @@ function FavoritesView({ tasks, currentDate, onComplete, onEdit, onImportant, ge
     .map((t) => ({ task: t, days: computeDaysOpen(t, CLIENT_TZ) }))
     .sort((a, b) => b.days - a.days || new Date(a.task.startTime).getTime() - new Date(b.task.startTime).getTime());
 
+  const dayConflictCount = conflictIds
+    ? tasks.filter((t) => !t.isAllDay && conflictIds.has(t.id)).length
+    : 0;
+
   return (
     <div className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2 space-y-3">
       <div className="rounded-lg border border-[#3c4043] bg-[#2a2b2e] px-3 py-2 flex items-center justify-between">
@@ -290,6 +333,15 @@ function FavoritesView({ tasks, currentDate, onComplete, onEdit, onImportant, ge
           {format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
         </span>
       </div>
+
+      {dayConflictCount > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-[#fbbc04]/40 bg-[#fbbc04]/10 px-3 py-2">
+          <ConflictIcon />
+          <p className="text-xs text-[#fbbc04]">
+            {dayConflictCount === 1 ? "1 horário em conflito neste dia" : `${dayConflictCount} horários em conflito neste dia`}
+          </p>
+        </div>
+      )}
 
       {open.length === 0 && (
         <p className="text-sm text-[#9aa0a6] text-center py-6">Nenhum evento favoritado para este dia.</p>
@@ -326,6 +378,7 @@ function FavoritesView({ tasks, currentDate, onComplete, onEdit, onImportant, ge
                       <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
                     </svg>
                   )}
+                  {conflictIds?.has(task.id) && <ConflictIcon />}
                 </div>
                 <p className="text-xs text-[#d2d6da] mt-0.5">
                   {task.isAllDay ? "Dia inteiro" : `${format(new Date(task.startTime), "HH:mm")} - ${format(new Date(task.endTime), "HH:mm")}`}
@@ -367,6 +420,7 @@ interface DayViewProps {
   currentDate: Date;
   pendingIds: Set<string>;
   displayMode?: "grid" | "list" | "calendar" | "priority" | "favorites";
+  conflictIds?: Set<string>;
   onComplete: (task: FlowTask) => void;
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onDelete: (task: FlowTask) => void;
@@ -375,7 +429,7 @@ interface DayViewProps {
   onImportant?: (task: FlowTask) => void;
 }
 
-export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", onComplete, onEdit, onDelete, onTimeClick, onMove, onImportant }: DayViewProps) {
+export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", conflictIds, onComplete, onEdit, onDelete, onTimeClick, onMove, onImportant }: DayViewProps) {
   const [nowY, setNowY] = useState(currentTimeY());
   const scrollRef = useRef<HTMLDivElement>(null);
   const listScrollRef = useRef<HTMLDivElement>(null);
@@ -535,6 +589,10 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
         <div className="h-px flex-1 bg-[#ea4335]/50" />
       </div>
     );
+    const listConflictCount = conflictIds
+      ? timedTasks.filter((t) => conflictIds.has(t.id)).length
+      : 0;
+
     return (
       <div ref={listScrollRef} className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2">
         <div className="mb-2 rounded-lg border border-[#3c4043] bg-[#2a2b2e] px-3 py-2 flex items-center justify-between">
@@ -545,6 +603,15 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
             {format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
           </span>
         </div>
+
+        {listConflictCount > 0 && (
+          <div className="flex items-center gap-2 rounded-lg border border-[#fbbc04]/40 bg-[#fbbc04]/10 px-3 py-2 mb-2">
+            <ConflictIcon />
+            <p className="text-xs text-[#fbbc04]">
+              {listConflictCount === 1 ? "1 horário em conflito neste dia" : `${listConflictCount} horários em conflito neste dia`}
+            </p>
+          </div>
+        )}
 
         {allDayTasks.length > 0 && (
           <div className="space-y-2 mb-3">
@@ -636,6 +703,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                           <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
                         </svg>
                       )}
+                      {conflictIds?.has(task.id) && <ConflictIcon />}
                     </div>
                     <p className={`text-sm text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>
                       {format(new Date(task.startTime), "HH:mm")} - {format(new Date(task.endTime), "HH:mm")}
@@ -672,15 +740,15 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
   }
 
   if (displayMode === "calendar") {
-    return <AgendaView tasks={tasks} currentDate={currentDate} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
+    return <AgendaView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
   }
 
   if (displayMode === "priority") {
-    return <PriorityView tasks={tasks} currentDate={currentDate} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
+    return <PriorityView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
   }
 
   if (displayMode === "favorites") {
-    return <FavoritesView tasks={tasks} currentDate={currentDate} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
+    return <FavoritesView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
   }
 
   return (
@@ -721,6 +789,18 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
         )}
       </div>
 
+      {/* Conflict banner — grid mode */}
+      {conflictIds && timedTasks.filter((t) => conflictIds.has(t.id)).length > 0 && (
+        <div className="flex items-center gap-2 mx-4 mb-1 rounded-lg border border-[#fbbc04]/40 bg-[#fbbc04]/10 px-3 py-1.5">
+          <ConflictIcon />
+          <p className="text-xs text-[#fbbc04]">
+            {timedTasks.filter((t) => conflictIds.has(t.id)).length === 1
+              ? "1 horário em conflito neste dia"
+              : `${timedTasks.filter((t) => conflictIds.has(t.id)).length} horários em conflito neste dia`}
+          </p>
+        </div>
+      )}
+
       {/* Timeline */}
       <div ref={scrollRef} className="overflow-y-auto flex-1">
         <div
@@ -760,6 +840,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                 top={top}
                 height={durationToPx(task.startTime, task.endTime)}
                 isPending={pendingIds.has(task.id)}
+                hasConflict={conflictIds?.has(task.id)}
                 colIndex={col}
                 totalCols={totalCols}
                 sameStartIndex={sameStartIndex}

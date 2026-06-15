@@ -150,6 +150,35 @@ export function suggestFreeSlots(
   }).filter((s): s is { mins: number; label: string; startIso: string } => s !== null);
 }
 
+/**
+ * Retorna o conjunto de ids de eventos que se sobrepõem a pelo menos um outro
+ * evento pendente com horário (ignora all-day, cancelados, recusados, concluídos).
+ */
+export function getConflictIds(tasks: FlowTask[]): Set<string> {
+  const eligible = tasks.filter((t) => {
+    if (t.isAllDay) return false;
+    if (t.isCancelled) return false;
+    if ((t as FlowTask & { selfResponseStatus?: string }).selfResponseStatus === "declined") return false;
+    if (t.isComplete) return false;
+    return true;
+  });
+
+  const conflictSet = new Set<string>();
+  for (let i = 0; i < eligible.length; i++) {
+    const s1 = new Date(eligible[i].startTime).getTime();
+    const e1 = new Date(eligible[i].endTime).getTime();
+    for (let j = i + 1; j < eligible.length; j++) {
+      const s2 = new Date(eligible[j].startTime).getTime();
+      const e2 = new Date(eligible[j].endTime).getTime();
+      if (eventsConflict(s1, e1, s2, e2)) {
+        conflictSet.add(eligible[i].id);
+        conflictSet.add(eligible[j].id);
+      }
+    }
+  }
+  return conflictSet;
+}
+
 export function computeLayout(tasks: FlowTask[]) {
   if (!tasks.length) return [];
   const sorted = [...tasks].sort(

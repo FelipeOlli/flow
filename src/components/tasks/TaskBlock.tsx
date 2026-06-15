@@ -22,13 +22,14 @@ interface TaskBlockProps {
   sameStartTotal?: number;
   onTaskPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
   onImportant?: () => void;
+  hasConflict?: boolean;
 }
 
 export function TaskBlock({
   task, top, height, onComplete, onEdit, onDelete,
   isPending, compact, isDragging, colIndex = 0, totalCols = 1,
   sameStartIndex = 0, sameStartTotal = 1,
-  onTaskPointerDown, onImportant,
+  onTaskPointerDown, onImportant, hasConflict,
 }: TaskBlockProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const dense = height < 30 || (compact && totalCols >= 3);
@@ -118,6 +119,11 @@ export function TaskBlock({
               {daysOpen}d
             </span>
           )}
+          {hasConflict && (
+            <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 flex-shrink-0 text-[#fbbc04]" fill="none" stroke="currentColor" strokeWidth={2.2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+          )}
         </div>
       ) : (
         <div className="flex items-start gap-1.5">
@@ -157,6 +163,11 @@ export function TaskBlock({
                 <span className={`text-[9px] font-medium flex-shrink-0 leading-none ${agingBadgeColor(daysOpen)}`}>
                   {daysOpen}d
                 </span>
+              )}
+              {hasConflict && (
+                <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 flex-shrink-0 text-[#fbbc04]" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
               )}
               {onImportant && (
                 <button
