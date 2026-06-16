@@ -1285,6 +1285,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           task={selectedTask}
           anchor={eventAnchor}
           pending={pendingIds.has(selectedTask.id)}
+          hasConflict={conflictIds.has(selectedTask.id)}
+          existingTasks={tasks}
           onClose={closeEventCard}
           onSaveEdit={handleInlineEdit}
           onDelete={handleDelete}

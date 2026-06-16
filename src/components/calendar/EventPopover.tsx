@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarOption, FlowTask, UpdateTaskInput } from "@/types/task";
 import { computeDaysOpen, agingBadgeColor, categoryLetters } from "@/lib/aging";
 import { Pillar } from "@/types/task";
+import { suggestFreeSlots } from "@/components/calendar/calendarLayout";
 
 export interface EventAnchorPoint {
   x: number;
@@ -16,6 +17,8 @@ interface EventPopoverProps {
   task: FlowTask;
   anchor: EventAnchorPoint | null;
   pending?: boolean;
+  hasConflict?: boolean;
+  existingTasks?: FlowTask[];
   onClose: () => void;
   onSaveEdit: (task: FlowTask, updates: UpdateTaskInput) => Promise<void>;
   onDelete: (task: FlowTask, scope?: "this" | "thisAndFollowing" | "all") => void;
@@ -37,6 +40,8 @@ export function EventPopover({
   task,
   anchor,
   pending,
+  hasConflict,
+  existingTasks,
   onClose,
   onSaveEdit,
   onDelete,
@@ -82,6 +87,16 @@ export function EventPopover({
   const [editRecurrenceType, setEditRecurrenceType] = useState<
     "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "weekdays"
   >("weekly");
+
+  // Sugestões de horário livre quando há conflito
+  const conflictSuggestions = useMemo(() => {
+    if (!hasConflict || !existingTasks || task.isAllDay) return [];
+    try {
+      return suggestFreeSlots(task.startTime, existingTasks, task.id);
+    } catch {
+      return [];
+    }
+  }, [hasConflict, existingTasks, task.startTime, task.id, task.isAllDay]);
 
   const BYDAY_MAP = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
   function buildRRule(): string[] {
@@ -320,6 +335,11 @@ export function EventPopover({
                 <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
               </svg>
             )}
+            {!editing && hasConflict && (
+              <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0 text-[#fbbc04]" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            )}
           </h3>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {!editing && onToggleImportant && (
@@ -400,6 +420,32 @@ export function EventPopover({
                   );
                 })()}
               </div>
+
+              {hasConflict && (
+                <div className="rounded-xl border border-[#fbbc04]/40 bg-[#fbbc04]/10 px-3 py-2.5 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0 text-[#fbbc04]" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    </svg>
+                    <p className="text-sm text-[#fbbc04] font-medium">Horário em conflito</p>
+                  </div>
+                  {conflictSuggestions.length > 0 && (
+                    <div>
+                      <p className="text-xs text-[#9aa0a6] mb-1.5">Próximos horários livres:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {conflictSuggestions.map((s) => (
+                          <span
+                            key={s.mins}
+                            className="px-2.5 py-1 rounded-lg bg-[#2a2b2e] border border-[#fbbc04]/30 text-xs text-[#fbbc04]"
+                          >
+                            {s.label} · {format(new Date(s.startIso), "HH:mm")}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="rounded-xl border border-[#3c4043] bg-[#2a2b2e]/60 p-3 space-y-1.5">
                 <p className="text-xs uppercase tracking-wide text-[#9aa0a6]">Descrição</p>
