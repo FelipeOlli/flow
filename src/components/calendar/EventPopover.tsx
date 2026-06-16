@@ -336,7 +336,7 @@ export function EventPopover({
               </svg>
             )}
             {!editing && hasConflict && (
-              <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0 text-[#fbbc04]" fill="none" stroke="currentColor" strokeWidth={2.2}>
+              <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0 text-[#ea4335]" fill="none" stroke="currentColor" strokeWidth={2.2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
               </svg>
             )}
