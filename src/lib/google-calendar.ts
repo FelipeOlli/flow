@@ -81,6 +81,7 @@ function mapEvent(
     recurrenceEndHint: recurrenceDisplay.endHint,
     createdAt: event.created ?? undefined,
     completedAt: event.extendedProperties?.private?.["flowCompletedAt"] || undefined,
+    openSince: event.extendedProperties?.private?.["flowOpenSince"] || undefined,
   };
 }
 
@@ -916,7 +917,7 @@ export async function moveEvent(
   newEnd: Date,
   _timeZone: string,
   calendarId = "primary",
-  options?: { preserveComplete?: boolean }
+  options?: { preserveComplete?: boolean; openSince?: string }
 ): Promise<void> {
   const calendar = getClient(accessToken);
   const preserve = Boolean(options?.preserveComplete);
@@ -928,6 +929,9 @@ export async function moveEvent(
       start: { dateTime: newStart.toISOString() },
       end: { dateTime: newEnd.toISOString() },
       colorId: preserve ? COMPLETE_COLOR_ID : null,
+      ...(options?.openSince
+        ? { extendedProperties: { private: { flowOpenSince: options.openSince } } }
+        : {}),
     },
   });
 }
@@ -940,7 +944,7 @@ export async function moveAllDayEvent(
   startDateKey: string,
   endDateKeyExclusive: string,
   dayDelta: number,
-  options?: { preserveComplete?: boolean }
+  options?: { preserveComplete?: boolean; openSince?: string }
 ): Promise<void> {
   const calendar = getClient(accessToken);
   const preserve = Boolean(options?.preserveComplete);
@@ -953,6 +957,9 @@ export async function moveAllDayEvent(
       start: { date: newStart },
       end: { date: newEnd },
       colorId: preserve ? COMPLETE_COLOR_ID : null,
+      ...(options?.openSince
+        ? { extendedProperties: { private: { flowOpenSince: options.openSince } } }
+        : {}),
     },
   });
 }

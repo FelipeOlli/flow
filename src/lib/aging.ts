@@ -12,9 +12,13 @@ export function categoryLetters(task: FlowTask): { letter: string; color: string
 
 export function computeDaysOpen(task: FlowTask, tz: string): number {
   if (task.isComplete) return 0;
+  const todayKey = getDateKeyInTimeZone(new Date(), tz);
+  // Usa flowOpenSince quando disponível (carimbo da primeira migração) — evita reset a cada migração diária.
+  if (task.openSince) {
+    return Math.max(0, diffDateKeysInDays(task.openSince, todayKey));
+  }
   if (!task.startTime) return 0;
   const baseKey = getDateKeyInTimeZone(new Date(task.startTime), tz);
-  const todayKey = getDateKeyInTimeZone(new Date(), tz);
   return Math.max(0, diffDateKeysInDays(baseKey, todayKey));
 }
 

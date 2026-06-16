@@ -30,6 +30,8 @@ export interface FlowTask {
   createdAt?: string;
   /** ISO 8601 — quando o evento foi marcado como concluído (via flowCompletedAt extended property) */
   completedAt?: string;
+  /** DateKey YYYY-MM-DD — dia em que o evento foi migrado pela primeira vez (flowOpenSince). Usado para calcular dias em aberto sem resetar a cada migração. */
+  openSince?: string;
 }
 
 export type AttendanceStatus = "needsAction" | "declined" | "tentative" | "accepted";

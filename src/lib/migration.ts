@@ -175,7 +175,11 @@ export async function runMigration(
         newEnd,
         timeZone,
         event.calendarId ?? "primary",
-        { preserveComplete }
+        {
+          preserveComplete,
+          // Carimba a data de origem apenas na primeira migração; nas seguintes mantém o valor.
+          openSince: event.openSince ? undefined : sourceDateKey,
+        }
       );
 
       details.push(`✓ "${event.title}" → ${newStart.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`);
@@ -204,7 +208,10 @@ export async function runMigration(
         bounds.start,
         bounds.endExclusive,
         dayDelta,
-        { preserveComplete }
+        {
+          preserveComplete,
+          openSince: event.openSince ? undefined : sourceDateKey,
+        }
       );
       details.push(`✓ "${event.title}" → dia inteiro`);
       migrated++;

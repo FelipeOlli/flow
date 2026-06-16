@@ -241,6 +241,38 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
+### 2026-06-15
+
+**O que foi feito:**
+
+1. **Bloqueio de criação em horário ocupado** — `TaskForm` recebe `existingTasks?: FlowTask[]` do `CalendarView`. A cada mudança de `startTime`/`endTime`, `findConflicts()` detecta sobreposição. Se houver conflito: aviso vermelho inline com nome do evento ocupado + chips clicáveis `"1h · 14:30"` com próximo slot livre por duração (15m/30m/1h/1,5h/2h via `suggestFreeSlots()`). `handleSubmit` bloqueia a criação enquanto houver conflito. Cobre clique na grade, voz/IA e botão `+`.
+
+2. **Indicador visual de conflito (eventos sobrepostos/migrados)** — Eventos pendentes que se sobrepõem recebem ícone ⚠ âmbar no título em todos os modos do DayView (grid, lista, agenda, prioridade, favoritos) e um banner âmbar no topo do dia. Cálculo centralizado em `getConflictIds(tasks)` no `CalendarView` via `useMemo`. Migração continua preservando horário original — o usuário resolve manualmente.
+
+3. **Conflito no EventPopover** — Ícone ⚠ no título do popover + bloco âmbar "Horário em conflito" com chips de sugestão de horário livre, exibidos no modo leitura. Props `hasConflict` e `existingTasks` adicionadas.
+
+4. **Remoção da aba Prioridade** — Grid de abas do DayView voltou para 4 colunas (Lista / Favoritos / Grade / Agenda). Código do `PriorityView` mantido inativo.
+
+5. **Helpers em `calendarLayout.ts`** — `eventsConflict`, `findConflicts`, `suggestFreeSlots`, `getConflictIds`, `SLOT_DURATIONS` adicionados como funções puras reutilizáveis.
+
+**Arquivos modificados:**
+- `src/components/calendar/calendarLayout.ts` — helpers de conflito e sugestão
+- `src/components/tasks/TaskForm.tsx` — prop `existingTasks`, detecção + bloqueio + chips de sugestão
+- `src/components/calendar/CalendarView.tsx` — `conflictIds` via `useMemo`, props para DayView/EventPopover/TaskForm
+- `src/components/calendar/DayView.tsx` — `ConflictIcon`, banner âmbar, ícone por evento em todos os modos, prop `conflictIds`
+- `src/components/tasks/TaskBlock.tsx` — prop `hasConflict`, ícone âmbar no card (denso e normal)
+- `src/components/calendar/EventPopover.tsx` — props `hasConflict`/`existingTasks`, ícone no título, bloco de conflito com sugestões
+
+**Decisões tomadas:**
+- Criação manual bloqueada; migração não é alterada (mantém horário original, sinaliza visualmente)
+- `getConflictIds` ignora all-day, cancelados, recusados e concluídos — só eventos acionáveis
+- Sugestões de slot usam `suggestFreeSlots` com `excludeId` para ignorar o próprio evento no popover
+- Aba Prioridade removida da UI (código mantido para reativar se necessário)
+
+**Próximos passos:** redeploy no EasyPanel para entrar em produção.
+
+---
+
 ### 2026-06-12
 
 **O que foi feito:**
