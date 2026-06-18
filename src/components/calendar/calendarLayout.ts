@@ -3,7 +3,7 @@
 import { FlowTask } from "@/types/task";
 
 export const CALENDAR_DIMENSIONS = {
-  DAY_START: 6,
+  DAY_START: 0,
   DAY_END: 23,
   HOUR_PX: 56,
   MIN_EVENT_HEIGHT: 20,
@@ -179,49 +179,97 @@ export function getConflictIds(tasks: FlowTask[]): Set<string> {
   return conflictSet;
 }
 
+/**
+ * Modelo de layout igual ao Google Calendar:
+ * 1. Agrupa eventos em clusters de sobreposição transitiva.
+ * 2. Dentro de cada cluster, atribui colunas com algoritmo guloso.
+ * 3. Expande cada evento para a direita quando há colunas livres.
+ *
+ * Retorna { task, colStart, colSpan, totalCols } para cada evento.
+ */
 export function computeLayout(tasks: FlowTask[]) {
   if (!tasks.length) return [];
-  const sorted = [...tasks].sort(
-    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-  );
-  const colEnds: number[] = [];
-  const cols: number[] = [];
-  for (const task of sorted) {
-    const s = new Date(task.startTime).getTime();
-    const e = new Date(task.endTime).getTime();
-    let col = colEnds.findIndex((end) => end <= s);
-    if (col === -1) col = colEnds.length;
-    colEnds[col] = e;
-    cols.push(col);
-  }
-  const sameStartBuckets = new Map<number, number[]>();
-  sorted.forEach((task, index) => {
-    const start = new Date(task.startTime);
-    const startMinuteKey = Math.floor(start.getTime() / 60000);
-    const bucket = sameStartBuckets.get(startMinuteKey);
-    if (bucket) bucket.push(index);
-    else sameStartBuckets.set(startMinuteKey, [index]);
+
+  // Ordena por início; desempate: evento mais longo primeiro (pega coluna 0)
+  const sorted = [...tasks].sort((a, b) => {
+    const sa = new Date(a.startTime).getTime();
+    const sb = new Date(b.startTime).getTime();
+    if (sa !== sb) return sa - sb;
+    const ea = new Date(a.endTime).getTime();
+    const eb = new Date(b.endTime).getTime();
+    return eb - ea; // mais longo primeiro
   });
 
-  return sorted.map((task, i) => {
-    const s = new Date(task.startTime).getTime();
-    const e = new Date(task.endTime).getTime();
-    let maxCol = cols[i];
-    for (let j = 0; j < sorted.length; j++) {
-      const sj = new Date(sorted[j].startTime).getTime();
-      const ej = new Date(sorted[j].endTime).getTime();
-      if (sj < e && ej > s) maxCol = Math.max(maxCol, cols[j]);
+  const starts = sorted.map((t) => new Date(t.startTime).getTime());
+  const ends   = sorted.map((t) => new Date(t.endTime).getTime());
+
+  // Resultado por índice
+  const colStart = new Array<number>(sorted.length).fill(0);
+  const colSpan  = new Array<number>(sorted.length).fill(1);
+  const totalCols = new Array<number>(sorted.length).fill(1);
+
+  // Processa cluster por cluster
+  let clusterStart = 0;
+  while (clusterStart < sorted.length) {
+    // Determina o fim do cluster: varre até que nenhum evento seguinte
+    // se sobreponha a qualquer evento já no cluster.
+    let clusterEnd = clusterStart + 1;
+    let clusterMaxEnd = ends[clusterStart];
+    while (clusterEnd < sorted.length && starts[clusterEnd] < clusterMaxEnd) {
+      if (ends[clusterEnd] > clusterMaxEnd) clusterMaxEnd = ends[clusterEnd];
+      clusterEnd++;
     }
-    const startMinuteKey = Math.floor(s / 60000);
-    const sameStartIndexes = sameStartBuckets.get(startMinuteKey) ?? [i];
-    const sameStartTotal = sameStartIndexes.length;
-    const sameStartIndex = sameStartIndexes.indexOf(i);
-    return {
-      task,
-      col: cols[i],
-      totalCols: maxCol + 1,
-      sameStartIndex,
-      sameStartTotal,
-    };
-  });
+
+    const clusterIdxs = Array.from({ length: clusterEnd - clusterStart }, (_, i) => clusterStart + i);
+
+    // Atribui colunas dentro do cluster (greedy)
+    const colEnds: number[] = [];
+    const assignedCol = new Array<number>(clusterIdxs.length).fill(0);
+    for (let ci = 0; ci < clusterIdxs.length; ci++) {
+      const idx = clusterIdxs[ci];
+      const s = starts[idx];
+      let col = colEnds.findIndex((e) => e <= s);
+      if (col === -1) col = colEnds.length;
+      colEnds[col] = ends[idx];
+      assignedCol[ci] = col;
+    }
+    const numCols = colEnds.length;
+
+    // Constrói mapa: coluna → lista de (start, end) dos eventos nela
+    const colOccupancy: Array<Array<{ s: number; e: number }>> = Array.from(
+      { length: numCols },
+      () => []
+    );
+    for (let ci = 0; ci < clusterIdxs.length; ci++) {
+      const idx = clusterIdxs[ci];
+      colOccupancy[assignedCol[ci]].push({ s: starts[idx], e: ends[idx] });
+    }
+
+    // Expansão: para cada evento, estende colSpan enquanto as colunas
+    // seguintes não tiverem nenhum evento que se sobreponha a ele.
+    for (let ci = 0; ci < clusterIdxs.length; ci++) {
+      const idx = clusterIdxs[ci];
+      const s = starts[idx];
+      const e = ends[idx];
+      const baseCol = assignedCol[ci];
+      let span = 1;
+      for (let c = baseCol + 1; c < numCols; c++) {
+        const blocked = colOccupancy[c].some((ev) => ev.s < e && ev.e > s);
+        if (blocked) break;
+        span++;
+      }
+      colStart[idx]  = baseCol;
+      colSpan[idx]   = span;
+      totalCols[idx] = numCols;
+    }
+
+    clusterStart = clusterEnd;
+  }
+
+  return sorted.map((task, i) => ({
+    task,
+    colStart: colStart[i],
+    colSpan: colSpan[i],
+    totalCols: totalCols[i],
+  }));
 }

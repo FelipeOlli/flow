@@ -16,10 +16,9 @@ interface TaskBlockProps {
   isPending?: boolean;
   compact?: boolean;
   isDragging?: boolean;
-  colIndex?: number;
+  colStart?: number;
+  colSpan?: number;
   totalCols?: number;
-  sameStartIndex?: number;
-  sameStartTotal?: number;
   onTaskPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
   onImportant?: () => void;
   hasConflict?: boolean;
@@ -27,8 +26,7 @@ interface TaskBlockProps {
 
 export function TaskBlock({
   task, top, height, onComplete, onEdit, onDelete,
-  isPending, compact, isDragging, colIndex = 0, totalCols = 1,
-  sameStartIndex = 0, sameStartTotal = 1,
+  isPending, compact, isDragging, colStart = 0, colSpan = 1, totalCols = 1,
   onTaskPointerDown, onImportant, hasConflict,
 }: TaskBlockProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -46,9 +44,6 @@ export function TaskBlock({
   const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/Sao_Paulo";
   const daysOpen = computeDaysOpen(task, tz);
   const catLetters = categoryLetters(task);
-  const roofMode = sameStartTotal > 1;
-  const sameStartGapPx = 0;
-  const sameStartTotalGapPx = Math.max(0, (sameStartTotal - 1) * sameStartGapPx);
   const startDate = new Date(task.startTime);
   const startOrder = startDate.getHours() * 60 + startDate.getMinutes();
 
@@ -74,16 +69,12 @@ export function TaskBlock({
         height: `${height}px`,
         backgroundColor: color,
         borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(32,33,36,0.45)",
-        left: roofMode
-          ? `calc(((100% - ${sameStartTotalGapPx}px) / ${sameStartTotal} + ${sameStartGapPx}px) * ${sameStartIndex} + 2px)`
-          : (totalCols > 1 ? `calc(${(colIndex / totalCols) * 100}% + 2px)` : "2px"),
-        right: roofMode || totalCols > 1 ? undefined : "2px",
-        width: roofMode
-          ? `calc((100% - ${sameStartTotalGapPx}px) / ${sameStartTotal} - 2px)`
-          : (totalCols > 1 ? `calc(${(1 / totalCols) * 100}% - 3px)` : undefined),
+        left: totalCols > 1 ? `calc(${(colStart / totalCols) * 100}% + 2px)` : "2px",
+        right: totalCols > 1 ? undefined : "2px",
+        width: totalCols > 1 ? `calc(${(colSpan / totalCols) * 100}% - 3px)` : undefined,
         opacity: isDragging ? 0.88 : isPending ? 0.55 : 1,
         touchAction: "none",
-        zIndex: isDragging ? 300 : (100 + startOrder + sameStartIndex),
+        zIndex: isDragging ? 300 : (100 + startOrder),
         transition: isDragging ? "box-shadow 0.1s, opacity 0.1s" : "opacity 0.2s",
       }}
       onPointerDown={onTaskPointerDown}
@@ -98,11 +89,13 @@ export function TaskBlock({
         </div>
       )}
       {dense ? (
+        /* Modo denso: título + horário inline em uma linha (estilo Google) */
         <div className="flex items-center gap-1 w-full overflow-hidden">
           <p className={`flex-1 truncate leading-tight text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]
             ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}
             ${compact ? "text-[10px] font-semibold" : "text-[10px] font-medium"}`}>
             {task.title}
+            <span className="ml-1 opacity-80 font-normal">{formatTime(task.startTime)}</span>
           </p>
           {task.attendees && task.attendees.length > 0 && (
             <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 flex-shrink-0 text-white" fill="currentColor">

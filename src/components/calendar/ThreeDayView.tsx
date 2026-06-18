@@ -358,17 +358,17 @@ export function ThreeDayView({ tasks, currentDate, pendingIds, displayMode = "gr
                 )}
 
                 {/* Events */}
-                {layout.map(({ task, col, totalCols, sameStartIndex, sameStartTotal }) => (
+                {layout.map(({ task, colStart, colSpan, totalCols }) => (
                   <TaskBlock
                     key={task.id}
                     task={task}
                     top={timeToY(task.startTime)}
                     height={durationToPx(task.startTime, task.endTime)}
                     isPending={pendingIds.has(task.id)}
-                    colIndex={col}
+                    colStart={colStart}
+                    colSpan={colSpan}
                     totalCols={totalCols}
-                    sameStartIndex={sameStartIndex}
-                    sameStartTotal={sameStartTotal}
+                    compact
                     onComplete={() => onComplete(task)}
                     onEdit={(e) => onEdit(task, { x: e.clientX, y: e.clientY })}
                     onDelete={() => onDelete(task)}

@@ -830,7 +830,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
             </div>
           )}
 
-          {layout.map(({ task, col, totalCols, sameStartIndex, sameStartTotal }) => {
+          {layout.map(({ task, colStart, colSpan, totalCols }) => {
             const isBeingDragged = dragId === task.id;
             const top = isBeingDragged ? dragTop : timeToY(task.startTime);
             return (
@@ -841,10 +841,9 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                 height={durationToPx(task.startTime, task.endTime)}
                 isPending={pendingIds.has(task.id)}
                 hasConflict={conflictIds?.has(task.id)}
-                colIndex={col}
+                colStart={colStart}
+                colSpan={colSpan}
                 totalCols={totalCols}
-                sameStartIndex={sameStartIndex}
-                sameStartTotal={sameStartTotal}
                 isDragging={isBeingDragged}
                 onTaskPointerDown={(e) => handleTaskPointerDown(e, task)}
                 onComplete={() => onComplete(task)}
