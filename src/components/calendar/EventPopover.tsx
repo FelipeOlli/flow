@@ -331,9 +331,14 @@ export function EventPopover({
               </svg>
             )}
             {!editing && task.isRecurring && (
-              <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0 text-white/80" fill="currentColor">
-                <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
-              </svg>
+              <span className="inline-flex items-center gap-0.5 flex-shrink-0">
+                <svg viewBox="0 0 24 24" className="w-4 h-4 text-white/80" fill="currentColor">
+                  <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                </svg>
+                {task.recurrenceCode && (
+                  <span className="text-[11px] font-bold leading-none text-white/80">{task.recurrenceCode}</span>
+                )}
+              </span>
             )}
             {!editing && hasConflict && (
               <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0 text-[#ea4335]" fill="none" stroke="currentColor" strokeWidth={2.2}>

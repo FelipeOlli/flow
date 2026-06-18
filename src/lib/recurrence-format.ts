@@ -138,3 +138,31 @@ export function formatGoogleRecurrence(
 
   return { isRecurring: true, summary, endHint };
 }
+
+/**
+ * Retorna o código curto de periodicidade: "D", "S", "M", "A".
+ * Intervalo >1 prefixa o número: "2S" = quinzenal, "3M" = trimestral.
+ */
+export function recurrenceShortCode(freq: string, interval = 1): string {
+  const prefix = interval > 1 ? String(interval) : "";
+  switch (freq.toUpperCase()) {
+    case "DAILY":   return `${prefix}D`;
+    case "WEEKLY":  return `${prefix}S`;
+    case "MONTHLY": return `${prefix}M`;
+    case "YEARLY":  return `${prefix}A`;
+    default:        return "";
+  }
+}
+
+/**
+ * Extrai o código curto diretamente de um array RRULE, ex.: ["RRULE:FREQ=WEEKLY;INTERVAL=2"].
+ * Retorna "" se não houver RRULE ou FREQ.
+ */
+export function rruleShortCode(recurrence?: string[] | null): string {
+  const rruleLine = recurrence?.find((r) => r.trim().toUpperCase().startsWith("RRULE"));
+  if (!rruleLine) return "";
+  const p = parseRruleParams(rruleLine);
+  if (!p.FREQ) return "";
+  const interval = Math.max(1, parseInt(p.INTERVAL ?? "1", 10) || 1);
+  return recurrenceShortCode(p.FREQ, interval);
+}

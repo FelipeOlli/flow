@@ -26,6 +26,8 @@ export interface FlowTask {
   recurrenceSummary?: string;
   /** Ex.: "Termina em …" ou "Termina após N ocorrências" */
   recurrenceEndHint?: string;
+  /** Código curto da periodicidade: "D", "S", "M", "A", "2S" (quinzenal), etc. */
+  recurrenceCode?: string;
   /** ISO 8601 — quando o evento foi criado no Google Calendar */
   createdAt?: string;
   /** ISO 8601 — quando o evento foi marcado como concluído (via flowCompletedAt extended property) */

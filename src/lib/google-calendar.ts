@@ -1,7 +1,7 @@
 import { google, calendar_v3 } from "googleapis";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, AttendanceStatus, Pillar } from "@/types/task";
 import { getDateKeyInTimeZone, getUtcRangeForDateKey, shiftDateKey } from "./timezone";
-import { formatGoogleRecurrence } from "./recurrence-format";
+import { formatGoogleRecurrence, rruleShortCode } from "./recurrence-format";
 import { CALENDAR_PILLAR_OVERRIDES } from "./pillar-config";
 
 const COMPLETE_COLOR_ID = "2";
@@ -32,7 +32,9 @@ function mapEvent(
   event: calendar_v3.Schema$Event,
   calendarId = "primary",
   calendarName = "",
-  calendarBgColor = "#4285f4"
+  calendarBgColor = "#4285f4",
+  /** Map de recurringEventId → código curto de periodicidade ("S", "D", "M", "A"). */
+  masterCodeMap?: Map<string, string>
 ): FlowTask {
   const selfAttendee = (event.attendees ?? []).find((att) => att.self);
   const conferenceUri =
@@ -79,6 +81,13 @@ function mapEvent(
     isRecurring: recurrenceDisplay.isRecurring,
     recurrenceSummary: recurrenceDisplay.summary || undefined,
     recurrenceEndHint: recurrenceDisplay.endHint,
+    recurrenceCode: (() => {
+      // Master (tem RRULE própria)
+      if (event.recurrence?.length) return rruleShortCode(event.recurrence) || undefined;
+      // Instância expandida — busca no map de masters
+      if (event.recurringEventId && masterCodeMap) return masterCodeMap.get(event.recurringEventId) || undefined;
+      return undefined;
+    })(),
     createdAt: event.created ?? undefined,
     completedAt: event.extendedProperties?.private?.["flowCompletedAt"] || undefined,
     openSince: event.extendedProperties?.private?.["flowOpenSince"] || undefined,
@@ -165,27 +174,56 @@ async function fetchAllCalendarsEvents(
 
   type RawItem = { event: calendar_v3.Schema$Event; calId: string; calName: string; calColor: string };
 
-  const results = await Promise.allSettled(
-    calendarItems.map(async (cal): Promise<RawItem[]> => {
-      const id = cal.id!;
-      const rawEvents = await listEventsExpandedPage(
-        calendar,
-        id,
-        timeMinIso,
-        timeMaxIso,
-        timeZone,
-        options?.q,
-        options?.maxResults
-      );
-      const calName = cal.summary ?? "";
-      const calColor = CALENDAR_COLOR_OVERRIDES[calName] ?? cal.backgroundColor ?? "#4285f4";
-      return rawEvents.map((e) => ({ event: e, calId: id, calName, calColor }));
-    })
-  );
+  // Busca eventos expandidos E masters (para extrair RRULE/FREQ) em paralelo por calendário.
+  const [expandedResults, masterResults] = await Promise.all([
+    Promise.allSettled(
+      calendarItems.map(async (cal): Promise<RawItem[]> => {
+        const id = cal.id!;
+        const rawEvents = await listEventsExpandedPage(
+          calendar,
+          id,
+          timeMinIso,
+          timeMaxIso,
+          timeZone,
+          options?.q,
+          options?.maxResults
+        );
+        const calName = cal.summary ?? "";
+        const calColor = CALENDAR_COLOR_OVERRIDES[calName] ?? cal.backgroundColor ?? "#4285f4";
+        return rawEvents.map((e) => ({ event: e, calId: id, calName, calColor }));
+      })
+    ),
+    // Masters (singleEvents:false) — retornam as séries com RRULE para extrair o código curto.
+    // Erros são silenciados para não bloquear a listagem principal.
+    Promise.allSettled(
+      calendarItems.map(async (cal) => {
+        const id = cal.id!;
+        const { data } = await calendar.events.list({
+          calendarId: id,
+          timeMin: timeMinIso,
+          timeMax: timeMaxIso,
+          singleEvents: false,
+          maxResults: 250,
+        });
+        return (data.items ?? []).filter((e) => e.id && e.recurrence?.length);
+      })
+    ),
+  ]);
+
+  // Constrói mapa masterId → código curto
+  const masterCodeMap = new Map<string, string>();
+  for (const r of masterResults) {
+    if (r.status === "fulfilled") {
+      for (const master of r.value) {
+        const code = rruleShortCode(master.recurrence ?? undefined);
+        if (master.id && code) masterCodeMap.set(master.id, code);
+      }
+    }
+  }
 
   const allRaw: RawItem[] = [];
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
+  for (let i = 0; i < expandedResults.length; i++) {
+    const r = expandedResults[i];
     const cal = calendarItems[i];
     if (r.status === "fulfilled") {
       allRaw.push(...r.value);
@@ -214,7 +252,7 @@ async function fetchAllCalendarsEvents(
   for (const item of allRaw) {
     const uid = item.event.iCalUID;
     if (!uid) {
-      tasks.push(mapEvent(item.event, item.calId, item.calName, item.calColor));
+      tasks.push(mapEvent(item.event, item.calId, item.calName, item.calColor, masterCodeMap));
       continue;
     }
     const existing = seenUIDs.get(uid);
@@ -223,7 +261,7 @@ async function fetchAllCalendarsEvents(
     }
   }
   seenUIDs.forEach((item) => {
-    tasks.push(mapEvent(item.event, item.calId, item.calName, item.calColor));
+    tasks.push(mapEvent(item.event, item.calId, item.calName, item.calColor, masterCodeMap));
   });
 
   return tasks.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());

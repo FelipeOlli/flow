@@ -159,9 +159,14 @@ function AgendaView({ tasks, currentDate, conflictIds, onComplete, onEdit, onImp
                             </svg>
                           )}
                           {task.isRecurring && (
-                            <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0 text-white/70" fill="currentColor">
-                              <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
-                            </svg>
+                            <span className="inline-flex items-center gap-0.5 flex-shrink-0">
+                              <svg viewBox="0 0 24 24" className="w-3 h-3 text-white/70" fill="currentColor">
+                                <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
+                              </svg>
+                              {task.recurrenceCode && (
+                                <span className="text-[8px] font-bold leading-none text-white/70">{task.recurrenceCode}</span>
+                              )}
+                            </span>
                           )}
                           {conflictIds?.has(task.id) && <ConflictIcon />}
                         </div>
@@ -266,9 +271,14 @@ function PriorityView({ tasks, currentDate, conflictIds, onComplete, onEdit, onI
                     </svg>
                   )}
                   {task.isRecurring && (
-                    <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0 text-white/70" fill="currentColor">
-                      <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
-                    </svg>
+                    <span className="inline-flex items-center gap-0.5 flex-shrink-0">
+                      <svg viewBox="0 0 24 24" className="w-3 h-3 text-white/70" fill="currentColor">
+                        <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
+                      </svg>
+                      {task.recurrenceCode && (
+                        <span className="text-[8px] font-bold leading-none text-white/70">{task.recurrenceCode}</span>
+                      )}
+                    </span>
                   )}
                   {conflictIds?.has(task.id) && <ConflictIcon />}
                 </div>
@@ -374,9 +384,14 @@ function FavoritesView({ tasks, currentDate, conflictIds, onComplete, onEdit, on
                     </svg>
                   )}
                   {task.isRecurring && (
-                    <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0 text-white/70" fill="currentColor">
-                      <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
-                    </svg>
+                    <span className="inline-flex items-center gap-0.5 flex-shrink-0">
+                      <svg viewBox="0 0 24 24" className="w-3 h-3 text-white/70" fill="currentColor">
+                        <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
+                      </svg>
+                      {task.recurrenceCode && (
+                        <span className="text-[8px] font-bold leading-none text-white/70">{task.recurrenceCode}</span>
+                      )}
+                    </span>
                   )}
                   {conflictIds?.has(task.id) && <ConflictIcon />}
                 </div>
@@ -699,9 +714,14 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                         </svg>
                       )}
                       {task.isRecurring && (
-                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 flex-shrink-0 text-white/70" fill="currentColor">
-                          <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
-                        </svg>
+                        <span className="inline-flex items-center gap-0.5 flex-shrink-0">
+                          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-white/70" fill="currentColor">
+                            <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
+                          </svg>
+                          {task.recurrenceCode && (
+                            <span className="text-[9px] font-bold leading-none text-white/70">{task.recurrenceCode}</span>
+                          )}
+                        </span>
                       )}
                       {conflictIds?.has(task.id) && <ConflictIcon />}
                     </div>
