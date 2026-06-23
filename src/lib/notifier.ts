@@ -4,6 +4,8 @@ import webpush from "web-push";
 import { getEventsForDateKey } from "./google-calendar";
 import { getDateKeyInTimeZone } from "./timezone";
 import { listSubscriptions, removeSubscription } from "./push-store";
+import { sendTelegramMessage } from "./telegram";
+import type { FlowTask } from "@/types/task";
 
 const DATA_DIR =
   process.env.NODE_ENV === "production" ? "/app/data" : process.cwd();
@@ -29,27 +31,44 @@ function saveNotifiedToday(todayKey: string, ids: Set<string>): void {
   }
 }
 
+async function sendPushNotification(
+  subs: ReturnType<typeof listSubscriptions>,
+  title: string,
+  body: string,
+  tag: string,
+): Promise<void> {
+  const payload = JSON.stringify({ title, body, tag, url: "/today" });
+
+  for (const sub of subs) {
+    try {
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload);
+    } catch (err: unknown) {
+      const status = (err as { statusCode?: number }).statusCode;
+      if (status === 410 || status === 404) {
+        removeSubscription(sub.endpoint);
+        console.log(`[NOTIFIER] Subscription expirada removida: ${sub.endpoint.slice(0, 60)}…`);
+      }
+    }
+  }
+}
+
 export async function sendDueNotifications(accessToken: string, timeZone: string): Promise<void> {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
   const subject = process.env.VAPID_SUBJECT;
 
-  if (!publicKey || !privateKey || !subject) return;
-
   const subs = listSubscriptions();
-  if (subs.length === 0) return;
+  const pushEnabled = !!(publicKey && privateKey && subject) && subs.length > 0;
 
-  webpush.setVapidDetails(subject, publicKey, privateKey);
+  if (pushEnabled) {
+    webpush.setVapidDetails(subject!, publicKey!, privateKey!);
+  }
 
   const now = new Date();
   const todayKey = getDateKeyInTimeZone(now, timeZone);
   const notified = loadNotifiedToday(todayKey);
 
-  // janela: eventos que começam entre 9 e 11 minutos a partir de agora
-  const windowStart = new Date(now.getTime() + 9 * 60 * 1000);
-  const windowEnd = new Date(now.getTime() + 11 * 60 * 1000);
-
-  let tasks;
+  let tasks: FlowTask[];
   try {
     tasks = await getEventsForDateKey(accessToken, todayKey, timeZone);
   } catch (err) {
@@ -57,49 +76,66 @@ export async function sendDueNotifications(accessToken: string, timeZone: string
     return;
   }
 
-  const due = tasks.filter((t) => {
-    if (notified.has(t.id)) return false;
-    if (t.isComplete) return false;
-    if (t.isCancelled) return false;
-    if (t.selfResponseStatus === "declined") return false;
-    if (!t.startTime || t.isAllDay) return false;
+  // Filtros comuns a ambos os gatilhos
+  const eligible = tasks.filter(
+    (t) => !t.isComplete && !t.isCancelled && t.selfResponseStatus !== "declined" && t.startTime && !t.isAllDay,
+  );
 
-    const start = new Date(t.startTime);
-    return start >= windowStart && start <= windowEnd;
-  });
+  if (eligible.length === 0) return;
 
-  if (due.length === 0) return;
+  // Janela pré-aviso: 9–11 min antes
+  const preStart = new Date(now.getTime() + 9 * 60 * 1000);
+  const preEnd = new Date(now.getTime() + 11 * 60 * 1000);
 
-  for (const task of due) {
-    const start = new Date(task.startTime);
-    const timeStr = start.toLocaleTimeString("pt-BR", {
+  // Janela de início: -1 a +1 min
+  const startWindowStart = new Date(now.getTime() - 1 * 60 * 1000);
+  const startWindowEnd = new Date(now.getTime() + 1 * 60 * 1000);
+
+  let sent = false;
+
+  for (const task of eligible) {
+    const eventStart = new Date(task.startTime!);
+    const timeStr = eventStart.toLocaleTimeString("pt-BR", {
       hour: "2-digit",
       minute: "2-digit",
       timeZone,
     });
+    const calendarSuffix = task.calendarName ? ` • ${task.calendarName}` : "";
 
-    const payload = JSON.stringify({
-      title: task.title,
-      body: `Começa às ${timeStr}${task.calendarName ? ` • ${task.calendarName}` : ""}`,
-      tag: `flow-event-${task.id}`,
-      url: "/today",
-    });
+    // --- Pré-aviso (~10 min antes) ---
+    const preKey = task.id;
+    if (!notified.has(preKey) && eventStart >= preStart && eventStart <= preEnd) {
+      const pushBody = `Começa às ${timeStr}${calendarSuffix}`;
+      const telegramText = `⏰ <b>Em ~10 min:</b> ${task.title}\nComeça às ${timeStr}${calendarSuffix}`;
 
-    for (const sub of subs) {
-      try {
-        await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload);
-      } catch (err: unknown) {
-        const status = (err as { statusCode?: number }).statusCode;
-        if (status === 410 || status === 404) {
-          removeSubscription(sub.endpoint);
-          console.log(`[NOTIFIER] Subscription expirada removida: ${sub.endpoint.slice(0, 60)}…`);
-        }
+      if (pushEnabled) {
+        await sendPushNotification(subs, task.title, pushBody, `flow-event-${task.id}`);
       }
+      await sendTelegramMessage(telegramText);
+
+      notified.add(preKey);
+      sent = true;
+      console.log(`[NOTIFIER] Pré-aviso: "${task.title}" às ${timeStr}`);
     }
 
-    notified.add(task.id);
-    console.log(`[NOTIFIER] Notificação enviada: "${task.title}" às ${timeStr}`);
+    // --- Na hora (início do evento) ---
+    const startKey = `${task.id}:start`;
+    if (!notified.has(startKey) && eventStart >= startWindowStart && eventStart <= startWindowEnd) {
+      const pushBody = `Começou às ${timeStr}${calendarSuffix}`;
+      const telegramText = `🔔 <b>Agora:</b> ${task.title}\nComecou às ${timeStr}${calendarSuffix}`;
+
+      if (pushEnabled) {
+        await sendPushNotification(subs, `Agora: ${task.title}`, pushBody, `flow-event-${task.id}-start`);
+      }
+      await sendTelegramMessage(telegramText);
+
+      notified.add(startKey);
+      sent = true;
+      console.log(`[NOTIFIER] Início: "${task.title}" às ${timeStr}`);
+    }
   }
 
-  saveNotifiedToday(todayKey, notified);
+  if (sent) {
+    saveNotifiedToday(todayKey, notified);
+  }
 }
