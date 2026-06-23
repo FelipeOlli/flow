@@ -103,7 +103,8 @@ export async function sendDueNotifications(accessToken: string, timeZone: string
     const calendarSuffix = task.calendarName ? ` • ${task.calendarName}` : "";
 
     // --- Pré-aviso (~10 min antes) ---
-    const preKey = task.id;
+    // Chave inclui startTime: rearma se o evento for movido para outro horário
+    const preKey = `${task.id}@${task.startTime}`;
     if (!notified.has(preKey) && eventStart >= preStart && eventStart <= preEnd) {
       const pushBody = `Começa às ${timeStr}${calendarSuffix}`;
       const telegramText = `⏰ <b>Em ~10 min:</b> ${task.title}\nComeça às ${timeStr}${calendarSuffix}`;
@@ -119,7 +120,7 @@ export async function sendDueNotifications(accessToken: string, timeZone: string
     }
 
     // --- Na hora (início do evento) ---
-    const startKey = `${task.id}:start`;
+    const startKey = `${task.id}@${task.startTime}:start`;
     if (!notified.has(startKey) && eventStart >= startWindowStart && eventStart <= startWindowEnd) {
       const pushBody = `Começou às ${timeStr}${calendarSuffix}`;
       const telegramText = `🔔 <b>Agora:</b> ${task.title}\nComecou às ${timeStr}${calendarSuffix}`;
