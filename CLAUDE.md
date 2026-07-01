@@ -35,6 +35,18 @@ CRON_SECRET=<openssl rand -base64 32>
 DEFAULT_TIMEZONE=America/Sao_Paulo
 ```
 
+**Variáveis opcionais (notificações):**
+```env
+# Web Push (PWA) — gere com: npx web-push generate-vapid-keys
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:seuemail@gmail.com
+
+# Telegram — bot via @BotFather; chat_id via /getUpdates
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+```
+
 ---
 
 ## 2. Estrutura de Pastas
@@ -138,11 +150,13 @@ flow/
 - **EasyPanel**: Deploy via Dockerfile. Volume `/app/data` deve ser montado como persistente. Secrets injetados como variáveis de ambiente — nunca baked no build.
 - **VAPID keys**: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` — necessárias para Web Push. A chave pública é servida via `/api/push/vapid` (runtime), **não** via `NEXT_PUBLIC_` (que exigiria rebuild). NÃO usar `NEXT_PUBLIC_VAPID_PUBLIC_KEY` para este fim.
 
-### Web Push (notificações)
+### Web Push + Telegram (notificações)
 - **Service Worker**: `public/sw.js` — recebe push, exibe notificação nativa, abre `/today` no click.
 - **Subscriptions em arquivo**: `/app/data/.push-subscriptions.json` — mesmo padrão do token-store. Sem banco de dados.
-- **Deduplicação por arquivo**: `/app/data/.notified-today.json` — `{ date: "YYYY-MM-DD", ids: string[] }`. Limpa automaticamente ao virar o dia.
-- **Cron de notificações**: a cada minuto, filtra eventos com início entre `now+9min` e `now+11min`, exclui `isComplete`, `isCancelled`, `declined`. Erro 410/404 do push provider remove a subscription automaticamente.
+- **Deduplicação por arquivo**: `/app/data/.notified-today.json` — `{ date: "YYYY-MM-DD", ids: string[] }`. Chaves no formato `{id}@{startTime}` e `{id}@{startTime}:start` — inclui horário para rearmar se evento for reagendado. Limpa automaticamente ao virar o dia.
+- **Dois gatilhos por evento**: pré-aviso (9–11 min antes) e na hora (±1 min do início). Ambos enviam Web Push + Telegram simultaneamente.
+- **Telegram**: `src/lib/telegram.ts` — `sendTelegramMessage()` via fetch nativo, lê `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID`. No-op silencioso se vars não configuradas. Funciona independente do Web Push (guards separados em `notifier.ts`).
+- **Cron de notificações**: a cada minuto em `cron.ts`, chama `sendDueNotifications()`. Exclui `isComplete`, `isCancelled`, `declined`. Erro 410/404 do push provider remove a subscription automaticamente.
 - **Chave pública em runtime**: `push-client.ts` faz `GET /api/push/vapid` para obter a chave — não depende de build-time env vars.
 
 ### UI
@@ -240,6 +254,32 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 ---
 
 ## 6. Última Sessão
+
+### 2026-06-23
+
+**O que foi feito:**
+
+1. **Notificações via Telegram** — Sistema completo de alertas no Telegram integrado ao cron existente:
+   - Novo módulo `src/lib/telegram.ts`: `sendTelegramMessage(text)` via `fetch` nativo, no-op silencioso se vars não configuradas.
+   - `src/lib/notifier.ts` reestruturado: guards do Web Push viram flags (`pushEnabled`), não `return` antecipado — Telegram funciona mesmo sem VAPID. Dois gatilhos por evento: **pré-aviso** (9–11 min antes, ⏰) e **na hora** (±1 min do início, 🔔). Ambos enviam Telegram + Web Push.
+   - `.env.example` atualizado com `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` e VAPID vars (que faltavam).
+   - Vars de ambiente: `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` — injetadas no EasyPanel.
+
+2. **Fix: rearmar notificação ao reagendar/mover evento** — A chave de dedup em `.notified-today.json` incluía apenas `task.id`, bloqueando reenvio após move. Corrigido para `{id}@{startTime}` e `{id}@{startTime}:start` — se o horário muda, a chave muda e a notificação rearma.
+
+**Arquivos modificados:**
+- `src/lib/telegram.ts` — novo módulo
+- `src/lib/notifier.ts` — dois gatilhos, guards como flags, dedup por horário
+- `.env.example` — TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, VAPID vars
+
+**Decisões tomadas:**
+- Single-user → destino Telegram via env vars (sem UI de cadastro de chat)
+- Ambos os gatilhos (pré e início) saem nos dois canais (Telegram + Web Push)
+- Chave de dedup inclui `startTime` para rearmar ao reagendar
+
+**Próximos passos:** nenhum pendente.
+
+---
 
 ### 2026-06-15
 

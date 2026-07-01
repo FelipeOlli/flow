@@ -282,6 +282,24 @@ export function EventPopover({
     }
   }
 
+  function handleSlotReschedule(slot: { mins: number; startIso: string }) {
+    const start = new Date(slot.startIso);
+    const end = new Date(start.getTime() + slot.mins * 60_000);
+    const updates: UpdateTaskInput = {
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+      calendarId: task.calendarId ?? "primary",
+    };
+    if (task.isRecurring) {
+      setPendingUpdates(updates);
+      setPendingMarkerFn(null);
+      setEditScope("this");
+      setShowRecurringEditDialog(true);
+      return;
+    }
+    doSaveEdit(updates);
+  }
+
   function handleSaveInlineEdit() {
     if (!title.trim()) { setError("Digite um título"); return; }
     if (!task.isAllDay && new Date(endTime) <= new Date(startTime)) {
@@ -439,12 +457,15 @@ export function EventPopover({
                       <p className="text-xs text-[#9aa0a6] mb-1.5">Próximos horários livres:</p>
                       <div className="flex flex-wrap gap-1.5">
                         {conflictSuggestions.map((s) => (
-                          <span
+                          <button
+                            type="button"
                             key={s.mins}
-                            className="px-2.5 py-1 rounded-lg bg-[#2a2b2e] border border-[#fbbc04]/30 text-xs text-[#fbbc04]"
+                            disabled={saving}
+                            onClick={(e) => { e.stopPropagation(); handleSlotReschedule(s); }}
+                            className="px-2.5 py-1 rounded-lg bg-[#2a2b2e] border border-[#fbbc04]/30 text-xs text-[#fbbc04] hover:bg-[#fbbc04]/20 hover:border-[#fbbc04]/60 transition-colors disabled:opacity-50 cursor-pointer"
                           >
                             {s.label} · {format(new Date(s.startIso), "HH:mm")}
-                          </span>
+                          </button>
                         ))}
                       </div>
                     </div>
