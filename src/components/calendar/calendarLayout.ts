@@ -179,6 +179,119 @@ export function getConflictIds(tasks: FlowTask[]): Set<string> {
   return conflictSet;
 }
 
+/** Encurtamento máximo por evento (ms). */
+const MAX_SHRINK_MS = 15 * 60_000;
+/** Duração mínima de um evento após encurtamento (ms). */
+const MIN_DURATION_MS = 15 * 60_000;
+
+/**
+ * Reempacota os eventos com horário de `dateKey` sem sobreposição.
+ *
+ * Estratégia (por conflito entre A e B):
+ *  1. Tenta encurtar B (avança o início, mantém o fim) em até MAX_SHRINK_MS.
+ *  2. Se ainda sobrar, tenta recuar o fim de A em até MAX_SHRINK_MS.
+ *  3. Se ainda sobrar, empurra B para logo após A (mantém duração original).
+ *
+ * Âncora: o 1º evento do dia mantém horário original; intervalos livres são
+ * preservados (eventos sem conflito ficam onde estão).
+ *
+ * Retorna `changes` (só os eventos cujo horário realmente mudou) e `overflow`
+ * (true se o cursor final passar de DAY_END:00).
+ */
+export function packDayEvents(
+  tasks: FlowTask[],
+  dateKey: string,
+): { changes: { id: string; startIso: string; endIso: string }[]; overflow: boolean } {
+  // Eventos elegíveis do dia, ordenados por início
+  type Eligible = FlowTask & { selfResponseStatus?: string };
+  const eligible = (tasks as Eligible[])
+    .filter(
+      (t) =>
+        !t.isAllDay &&
+        !t.isComplete &&
+        !t.isCancelled &&
+        t.selfResponseStatus !== "declined" &&
+        t.startTime.startsWith(dateKey),
+    )
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+  if (eligible.length === 0) return { changes: [], overflow: false };
+
+  // Teto do dia
+  const dayEndDate = new Date(eligible[0].startTime);
+  dayEndDate.setHours(CALENDAR_DIMENSIONS.DAY_END, 0, 0, 0);
+  const dayEnd = dayEndDate.getTime();
+
+  type Placed = { id: string; origStart: number; origEnd: number; newStart: number; newEnd: number };
+  const placed: Placed[] = [];
+
+  // 1º evento: âncora (sem alterar)
+  const first = eligible[0];
+  placed.push({
+    id: first.id,
+    origStart: new Date(first.startTime).getTime(),
+    origEnd: new Date(first.endTime).getTime(),
+    newStart: new Date(first.startTime).getTime(),
+    newEnd: new Date(first.endTime).getTime(),
+  });
+
+  for (let i = 1; i < eligible.length; i++) {
+    const t = eligible[i];
+    const origStart = new Date(t.startTime).getTime();
+    const origEnd = new Date(t.endTime).getTime();
+    const origDur = origEnd - origStart;
+    const prev = placed[placed.length - 1];
+    const cursor = prev.newEnd;
+
+    if (origStart >= cursor) {
+      // Sem conflito
+      placed.push({ id: t.id, origStart, origEnd, newStart: origStart, newEnd: origEnd });
+      continue;
+    }
+
+    // Há conflito: overlap = quanto B começa antes do fim de A
+    const overlap = cursor - origStart;
+
+    // Passo 1: encurtar B (avança início, mantém fim → reduz duração pelo front)
+    const shrinkB = Math.max(0, Math.min(overlap, MAX_SHRINK_MS, origDur - MIN_DURATION_MS));
+    let newStartB = origStart + shrinkB;
+    let remainingOverlap = Math.max(0, cursor - newStartB);
+
+    // Passo 2: encurtar A (recua fim de A)
+    if (remainingOverlap > 0) {
+      const aDur = prev.newEnd - prev.newStart;
+      const shrinkA = Math.max(0, Math.min(remainingOverlap, MAX_SHRINK_MS, aDur - MIN_DURATION_MS));
+      prev.newEnd -= shrinkA;
+      remainingOverlap = Math.max(0, prev.newEnd - newStartB);
+    }
+
+    // Passo 3: empurrar B se ainda houver sobreposição
+    if (remainingOverlap > 0) {
+      // Empurra: mantém duração ORIGINAL (não penaliza duas vezes)
+      newStartB = prev.newEnd;
+      placed.push({ id: t.id, origStart, origEnd, newStart: newStartB, newEnd: newStartB + origDur });
+    } else {
+      // Encurtamento suficiente: B começa em newStartB, fim inalterado
+      placed.push({ id: t.id, origStart, origEnd, newStart: newStartB, newEnd: origEnd });
+    }
+  }
+
+  // Detecta overflow
+  const cursor = placed[placed.length - 1].newEnd;
+  const overflow = cursor > dayEnd;
+
+  // Retorna só os que mudaram
+  const changes = placed
+    .filter((p) => p.newStart !== p.origStart || p.newEnd !== p.origEnd)
+    .map((p) => ({
+      id: p.id,
+      startIso: new Date(p.newStart).toISOString(),
+      endIso: new Date(p.newEnd).toISOString(),
+    }));
+
+  return { changes, overflow };
+}
+
 /**
  * Modelo de layout igual ao Google Calendar:
  * 1. Agrupa eventos em clusters de sobreposição transitiva.

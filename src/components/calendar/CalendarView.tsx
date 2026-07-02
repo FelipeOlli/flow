@@ -8,7 +8,7 @@ import { signOut, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, Pillar } from "@/types/task";
 import { CALENDAR_PILLAR_OVERRIDES } from "@/lib/pillar-config";
-import { getConflictIds } from "@/components/calendar/calendarLayout";
+import { getConflictIds, packDayEvents } from "@/components/calendar/calendarLayout";
 import { DayView } from "./DayView";
 import { ThreeDayView } from "./ThreeDayView";
 import { WeekView } from "./WeekView";
@@ -152,6 +152,10 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [pushModalOpen, setPushModalOpen] = useState(false);
   const pushButtonRef = useRef<HTMLButtonElement | null>(null);
   const [pushModalPos, setPushModalPos] = useState<{ top: number; right: number } | null>(null);
+  const [autoFitOpen, setAutoFitOpen] = useState(false);
+  const [autoFitChanges, setAutoFitChanges] = useState<{ id: string; startIso: string; endIso: string; title: string }[]>([]);
+  const [autoFitOverflow, setAutoFitOverflow] = useState(false);
+  const [autoFitting, setAutoFitting] = useState(false);
 
   function scheduleMigrateResultClear(ms: number) {
     if (migrateResultClearRef.current) clearTimeout(migrateResultClearRef.current);
@@ -483,6 +487,56 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     }
 
     await fetchTasks();
+  }
+
+  function handleAutoFit() {
+    const dateKey = format(currentDate, "yyyy-MM-dd");
+    const { changes, overflow } = packDayEvents(tasks, dateKey);
+    if (changes.length === 0) {
+      setMigrateResult("Nada a reorganizar — nenhum conflito encontrado.");
+      scheduleMigrateResultClear(4_000);
+      return;
+    }
+    // Enriquecer com título para o modal
+    const enriched = changes.map((c) => {
+      const task = tasks.find((t) => t.id === c.id);
+      return { ...c, title: task?.title ?? c.id };
+    });
+    setAutoFitChanges(enriched);
+    setAutoFitOverflow(overflow);
+    setAutoFitOpen(true);
+  }
+
+  async function confirmAutoFit() {
+    setAutoFitting(true);
+    // Update otimista
+    setTasks((prev) =>
+      prev.map((t) => {
+        const change = autoFitChanges.find((c) => c.id === t.id);
+        if (!change) return t;
+        return { ...t, startTime: change.startIso, endTime: change.endIso };
+      }),
+    );
+    setAutoFitOpen(false);
+    try {
+      await Promise.all(
+        autoFitChanges.map((c) => {
+          const task = tasks.find((t) => t.id === c.id);
+          return fetch(`/api/tasks/${c.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              startTime: c.startIso,
+              endTime: c.endIso,
+              calendarId: task?.calendarId ?? "primary",
+            }),
+          });
+        }),
+      );
+    } finally {
+      setAutoFitting(false);
+      await fetchTasks();
+    }
   }
 
   async function handleManualMigration() {
@@ -1042,6 +1096,75 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
               </>,
               document.body
             )}
+
+            {/* Modal de confirmação — reorganizar dia */}
+            {autoFitOpen && typeof document !== "undefined" && createPortal(
+              <>
+                <div className="fixed inset-0 z-[4800] bg-black/50" onClick={() => setAutoFitOpen(false)} />
+                <div className="fixed inset-0 z-[4900] flex items-center justify-center p-4 pointer-events-none">
+                  <div
+                    className="w-full max-w-sm rounded-2xl border border-[#3c4043] bg-[#202124] shadow-2xl p-5 space-y-4 pointer-events-auto"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <h3 className="text-base font-medium text-[#e8eaed]">Reorganizar eventos do dia</h3>
+                    {autoFitOverflow && (
+                      <div className="flex items-start gap-2 rounded-lg bg-[#fbbc04]/10 border border-[#fbbc04]/40 px-3 py-2">
+                        <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0 text-[#fbbc04] mt-0.5" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                        </svg>
+                        <p className="text-xs text-[#fbbc04] leading-snug">Alguns eventos ainda ultrapassam o fim do dia mesmo após o encurtamento máximo.</p>
+                      </div>
+                    )}
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                      <p className="text-xs text-[#9aa0a6] mb-2">Alterações que serão feitas:</p>
+                      {autoFitChanges.map((c) => (
+                        <div key={c.id} className="flex items-baseline gap-2 text-xs text-[#e8eaed]">
+                          <span className="truncate max-w-[9rem] text-[#9aa0a6] flex-shrink-0">{c.title}</span>
+                          <span className="text-[#9aa0a6]">→</span>
+                          <span className="font-medium tabular-nums">
+                            {format(new Date(c.startIso), "HH:mm")}–{format(new Date(c.endIso), "HH:mm")}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setAutoFitOpen(false)}
+                        className="h-8 px-4 rounded-lg text-xs text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={confirmAutoFit}
+                        className="h-8 px-4 rounded-lg bg-[#8ab4f8]/20 border border-[#8ab4f8]/40 text-xs text-[#8ab4f8] hover:bg-[#8ab4f8]/30 transition-colors"
+                      >
+                        Reorganizar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>,
+              document.body,
+            )}
+
+            {/* Auto-fit: reorganizar eventos do dia */}
+            <button
+              type="button"
+              onClick={handleAutoFit}
+              disabled={autoFitting}
+              className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors disabled:opacity-40"
+              aria-label="Reorganizar eventos do dia"
+              title="Reorganizar eventos do dia"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h13M8 12h9M8 18h5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 6l1.5 1.5L3 9" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l1.5 1.5L3 15" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 18l1.5 1.5L3 21" />
+              </svg>
+            </button>
 
             <button onClick={() => signOut({ callbackUrl: "/sign-in" })}
               className="w-8 h-8 flex items-center justify-center text-[#9aa0a6] hover:text-[#e8eaed] transition-colors">
