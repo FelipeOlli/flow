@@ -183,6 +183,8 @@ export function getConflictIds(tasks: FlowTask[]): Set<string> {
 const MAX_SHRINK_MS = 15 * 60_000;
 /** Duração mínima de um evento após encurtamento (ms). */
 const MIN_DURATION_MS = 15 * 60_000;
+/** Hora mínima para alocar eventos no auto-fit (não usa madrugada). */
+const WORK_DAY_START_HOUR = 6;
 
 /**
  * Reempacota os eventos com horário de `dateKey` sem sobreposição.
@@ -222,17 +224,26 @@ export function packDayEvents(
   dayEndDate.setHours(CALENDAR_DIMENSIONS.DAY_END, 0, 0, 0);
   const dayEnd = dayEndDate.getTime();
 
+  // Piso do dia: eventos nunca alocados antes das WORK_DAY_START_HOUR
+  const floorDate = new Date(eligible[0].startTime);
+  floorDate.setHours(WORK_DAY_START_HOUR, 0, 0, 0);
+  const floorMs = floorDate.getTime();
+
   type Placed = { id: string; origStart: number; origEnd: number; newStart: number; newEnd: number };
   const placed: Placed[] = [];
 
-  // 1º evento: âncora (sem alterar)
+  // 1º evento: âncora — respeita piso de 06h (desloca evento inteiro se necessário)
   const first = eligible[0];
+  const firstOrigStart = new Date(first.startTime).getTime();
+  const firstOrigEnd = new Date(first.endTime).getTime();
+  const firstStart = Math.max(firstOrigStart, floorMs);
+  const firstDur = firstOrigEnd - firstOrigStart;
   placed.push({
     id: first.id,
-    origStart: new Date(first.startTime).getTime(),
-    origEnd: new Date(first.endTime).getTime(),
-    newStart: new Date(first.startTime).getTime(),
-    newEnd: new Date(first.endTime).getTime(),
+    origStart: firstOrigStart,
+    origEnd: firstOrigEnd,
+    newStart: firstStart,
+    newEnd: firstStart + firstDur,
   });
 
   for (let i = 1; i < eligible.length; i++) {
