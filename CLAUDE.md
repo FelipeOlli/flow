@@ -255,6 +255,23 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
+### 2026-07-07
+
+**O que foi feito:**
+
+1. **Reorganizador (auto-fit) não aloca entre 00h e 06h** — Função `packDayEvents()` em `src/components/calendar/calendarLayout.ts` agora respeita piso de 06h para alocação. Âncora (1º evento do dia) desloca para 06h se começar antes, mantendo duração original. Eventos subsequentes seguem naturalmente via `cursor = prev.newEnd`, já ≥ 06h.
+
+**Arquivos modificados:**
+- `src/components/calendar/calendarLayout.ts` — constante `WORK_DAY_START_HOUR = 6`, cálculo de piso, lógica de âncora com `Math.max(origStart, floorMs)`
+
+**Decisões tomadas:**
+- Piso de 06h aplicado apenas na âncora, não em todos os eventos — simplifica lógica e os subsequentes habilmente cascata
+- Grid de renderização (`DAY_START: 0`) mantém 00h–23h — eventos criados manualmente na madrugada ainda aparecem, só o reorganizador respeita piso
+
+**Próximos passos:** nenhum pendente.
+
+---
+
 ### 2026-07-06
 
 **O que foi feito:**
