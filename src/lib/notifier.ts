@@ -83,13 +83,9 @@ export async function sendDueNotifications(accessToken: string, timeZone: string
 
   if (eligible.length === 0) return;
 
-  // Janela pré-aviso: 9–11 min antes
-  const preStart = new Date(now.getTime() + 9 * 60 * 1000);
-  const preEnd = new Date(now.getTime() + 11 * 60 * 1000);
-
-  // Janela de início: -1 a +1 min
-  const startWindowStart = new Date(now.getTime() - 1 * 60 * 1000);
-  const startWindowEnd = new Date(now.getTime() + 1 * 60 * 1000);
+  // Janela pré-aviso: 4–6 min antes (disparo único ~5 min antes)
+  const preStart = new Date(now.getTime() + 4 * 60 * 1000);
+  const preEnd = new Date(now.getTime() + 6 * 60 * 1000);
 
   let sent = false;
 
@@ -102,12 +98,12 @@ export async function sendDueNotifications(accessToken: string, timeZone: string
     });
     const calendarSuffix = task.calendarName ? ` • ${task.calendarName}` : "";
 
-    // --- Pré-aviso (~10 min antes) ---
+    // --- Pré-aviso (~5 min antes) ---
     // Chave inclui startTime: rearma se o evento for movido para outro horário
     const preKey = `${task.id}@${task.startTime}`;
     if (!notified.has(preKey) && eventStart >= preStart && eventStart <= preEnd) {
       const pushBody = `Começa às ${timeStr}${calendarSuffix}`;
-      const telegramText = `⏰ <b>Em ~10 min:</b> ${task.title}\nComeça às ${timeStr}${calendarSuffix}`;
+      const telegramText = `⏰ <b>Em 5 min:</b> ${task.title}\nComeça às ${timeStr}${calendarSuffix}`;
 
       if (pushEnabled) {
         await sendPushNotification(subs, task.title, pushBody, `flow-event-${task.id}`);
@@ -117,22 +113,6 @@ export async function sendDueNotifications(accessToken: string, timeZone: string
       notified.add(preKey);
       sent = true;
       console.log(`[NOTIFIER] Pré-aviso: "${task.title}" às ${timeStr}`);
-    }
-
-    // --- Na hora (início do evento) ---
-    const startKey = `${task.id}@${task.startTime}:start`;
-    if (!notified.has(startKey) && eventStart >= startWindowStart && eventStart <= startWindowEnd) {
-      const pushBody = `Começou às ${timeStr}${calendarSuffix}`;
-      const telegramText = `🔔 <b>Agora:</b> ${task.title}\nComecou às ${timeStr}${calendarSuffix}`;
-
-      if (pushEnabled) {
-        await sendPushNotification(subs, `Agora: ${task.title}`, pushBody, `flow-event-${task.id}-start`);
-      }
-      await sendTelegramMessage(telegramText);
-
-      notified.add(startKey);
-      sent = true;
-      console.log(`[NOTIFIER] Início: "${task.title}" às ${timeStr}`);
     }
   }
 
