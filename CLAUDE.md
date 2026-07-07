@@ -153,8 +153,8 @@ flow/
 ### Web Push + Telegram (notificações)
 - **Service Worker**: `public/sw.js` — recebe push, exibe notificação nativa, abre `/today` no click.
 - **Subscriptions em arquivo**: `/app/data/.push-subscriptions.json` — mesmo padrão do token-store. Sem banco de dados.
-- **Deduplicação por arquivo**: `/app/data/.notified-today.json` — `{ date: "YYYY-MM-DD", ids: string[] }`. Chaves no formato `{id}@{startTime}` e `{id}@{startTime}:start` — inclui horário para rearmar se evento for reagendado. Limpa automaticamente ao virar o dia.
-- **Dois gatilhos por evento**: pré-aviso (9–11 min antes) e na hora (±1 min do início). Ambos enviam Web Push + Telegram simultaneamente.
+- **Deduplicação por arquivo**: `/app/data/.notified-today.json` — `{ date: "YYYY-MM-DD", ids: string[] }`. Chaves no formato `{id}@{startTime}` — inclui horário para rearmar se evento for reagendado. Limpa automaticamente ao virar o dia.
+- **Gatilho único por evento**: pré-aviso ~5 min antes (janela 4–6 min). Envia Web Push + Telegram simultaneamente.
 - **Telegram**: `src/lib/telegram.ts` — `sendTelegramMessage()` via fetch nativo, lê `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID`. No-op silencioso se vars não configuradas. Funciona independente do Web Push (guards separados em `notifier.ts`).
 - **Cron de notificações**: a cada minuto em `cron.ts`, chama `sendDueNotifications()`. Exclui `isComplete`, `isCancelled`, `declined`. Erro 410/404 do push provider remove a subscription automaticamente.
 - **Chave pública em runtime**: `push-client.ts` faz `GET /api/push/vapid` para obter a chave — não depende de build-time env vars.
@@ -254,6 +254,24 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 ---
 
 ## 6. Última Sessão
+
+### 2026-07-06
+
+**O que foi feito:**
+
+1. **Notificações apenas 5 min antes de cada evento** — Removido gatilho duplo (pré-aviso + na hora) mantendo apenas alerta único ~5 min antes do início. Janela ajustada de 9–11 min para 4–6 min em `sendDueNotifications()`. Bloco de notificação "na hora" (±1 min) removido completamente.
+
+**Arquivos modificados:**
+- `src/lib/notifier.ts` — janela pré-aviso 4–6 min, texto atualizado, gatilho de início removido
+- `CLAUDE.md` — atualizada documentação sobre gatilho único (seção "Web Push + Telegram")
+
+**Decisões tomadas:**
+- Gatilho único em 4–6 min (em vez de dois: 9–11 min + ±1 min) — cobrindo dedup por `{id}@{startTime}` apenas
+- Chave de dedup `{id}@{startTime}:start` não mais necessária — simplificação da lógica
+
+**Próximos passos:** nenhum pendente.
+
+---
 
 ### 2026-06-23
 
