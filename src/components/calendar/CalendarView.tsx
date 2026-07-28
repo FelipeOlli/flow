@@ -8,7 +8,7 @@ import { signOut, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, Pillar } from "@/types/task";
 import { CALENDAR_PILLAR_OVERRIDES } from "@/lib/pillar-config";
-import { getConflictIds, packDayEvents } from "@/components/calendar/calendarLayout";
+import { getConflictIds, packDayEvents, suggestFreeSlots } from "@/components/calendar/calendarLayout";
 import { DayView } from "./DayView";
 import { ThreeDayView } from "./ThreeDayView";
 import { WeekView } from "./WeekView";
@@ -115,6 +115,13 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const conflictIds = useMemo(() => getConflictIds(tasks), [tasks]);
   const [loading, setLoading] = useState(true);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const [conflictPanelOpen, setConflictPanelOpen] = useState(false);
+  const dayConflictTasks = useMemo(() => {
+    const dateKey = format(currentDate, "yyyy-MM-dd");
+    return tasks
+      .filter((t) => !t.isAllDay && t.startTime.startsWith(dateKey) && conflictIds.has(t.id))
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }, [tasks, conflictIds, currentDate]);
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState<FlowTask | null>(null);
   const [formDefaults, setFormDefaults] = useState<Partial<ParsedEvent> & { startTime?: string; endTime?: string }>({});
@@ -456,6 +463,37 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     }
   }
 
+  async function handleConflictReschedule(task: FlowTask, slot: { mins: number; startIso: string }) {
+    const start = new Date(slot.startIso);
+    const end = new Date(start.getTime() + slot.mins * 60_000);
+    // Update otimista — mesmo padrão de handleMove
+    setTasks((prev) => prev.map((t) =>
+      t.id === task.id
+        ? { ...t, startTime: start.toISOString(), endTime: end.toISOString() }
+        : t
+    ));
+    setPendingIds((p) => new Set(p).add(task.id));
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+          calendarId: task.calendarId ?? "primary",
+          ...(task.isRecurring ? { scope: "this" } : {}),
+        }),
+      });
+      if (!res.ok) {
+        setMigrateResult("Não foi possível reagendar. Verifique o acesso ao calendário.");
+        scheduleMigrateResultClear(4_000);
+      }
+    } finally {
+      setPendingIds((p) => { const n = new Set(p); n.delete(task.id); return n; });
+      await fetchTasks();
+    }
+  }
+
   async function handleInlineEdit(task: FlowTask, updates: UpdateTaskInput) {
     const calendarId = updates.targetCalendarId ?? updates.calendarId ?? task.calendarId ?? "primary";
     const { isImportant, isDelegable, category, pillar, ...baseUpdates } = updates;
@@ -638,6 +676,10 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   }, [selectedTask, tasks]);
 
   useEffect(() => {
+    if (conflictPanelOpen && dayConflictTasks.length === 0) setConflictPanelOpen(false);
+  }, [conflictPanelOpen, dayConflictTasks]);
+
+  useEffect(() => {
     const term = searchQuery.trim();
     if (!term) {
       setSearchResults([]);
@@ -777,7 +819,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     return format(currentDate, "MMMM yyyy", { locale: ptBR });
   })();
 
-  const overlayOpen = showForm || !!selectedTask;
+  const overlayOpen = showForm || !!selectedTask || conflictPanelOpen;
 
   return (
     <div className="h-svh bg-[#202124] flex flex-col">
@@ -1149,6 +1191,75 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
               document.body,
             )}
 
+            {conflictPanelOpen && typeof document !== "undefined" && createPortal(
+              <>
+                <div className="fixed inset-0 z-[4800] bg-black/50" onClick={() => setConflictPanelOpen(false)} />
+                <div className="fixed inset-0 z-[4900] flex items-center justify-center p-4 pointer-events-none">
+                  <div
+                    className="w-full max-w-sm rounded-2xl border border-[#3c4043] bg-[#202124] shadow-2xl p-5 space-y-4 pointer-events-auto"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div>
+                      <h3 className="text-base font-medium text-[#e8eaed]">Horários em conflito</h3>
+                      <p className="text-xs text-[#9aa0a6] mt-0.5">
+                        {dayConflictTasks.length === 1
+                          ? "1 evento com sobreposição de horário"
+                          : `${dayConflictTasks.length} eventos com sobreposição de horário`}
+                      </p>
+                    </div>
+                    {dayConflictTasks.length === 0 ? (
+                      <p className="text-xs text-[#9aa0a6]">Nenhum conflito restante.</p>
+                    ) : (
+                      <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                        {dayConflictTasks.map((task) => {
+                          const suggestions = suggestFreeSlots(task.startTime, tasks, task.id);
+                          const pending = pendingIds.has(task.id);
+                          return (
+                            <div key={task.id} className="rounded-lg border border-[#3c4043] bg-[#2a2b2e] px-3 py-2.5 space-y-2">
+                              <div>
+                                <p className="text-sm text-[#e8eaed] font-medium truncate">{task.title}</p>
+                                <p className="text-xs text-[#9aa0a6]">
+                                  {format(new Date(task.startTime), "HH:mm")}–{format(new Date(task.endTime), "HH:mm")}
+                                  {task.calendarName ? ` · ${task.calendarName}` : ""}
+                                </p>
+                              </div>
+                              {suggestions.length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {suggestions.map((s) => (
+                                    <button
+                                      type="button"
+                                      key={s.mins}
+                                      disabled={pending}
+                                      onClick={() => handleConflictReschedule(task, s)}
+                                      className="px-2.5 py-1 rounded-lg bg-[#202124] border border-[#fbbc04]/30 text-xs text-[#fbbc04] hover:bg-[#fbbc04]/20 hover:border-[#fbbc04]/60 transition-colors disabled:opacity-50 cursor-pointer"
+                                    >
+                                      {s.label} · {format(new Date(s.startIso), "HH:mm")}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-[#9aa0a6]">Sem horários livres neste dia.</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setConflictPanelOpen(false)}
+                        className="h-8 px-4 rounded-lg text-xs text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors"
+                      >
+                        Fechar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>,
+              document.body,
+            )}
+
             {/* Auto-fit: reorganizar eventos do dia */}
             <button
               type="button"
@@ -1334,7 +1445,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           onDelete={handleDelete} onTimeClick={openCreateForm} onMove={handleMove}
           onImportant={handleImportant}
           displayMode={dayDisplayMode}
-          conflictIds={conflictIds} />
+          conflictIds={conflictIds}
+          onConflictClick={() => setConflictPanelOpen(true)} />
       )}
       {!showDashboard && !showWeeklyReview && !loading && view === "3days" && (
         <ThreeDayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}

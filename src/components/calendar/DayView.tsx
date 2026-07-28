@@ -31,10 +31,28 @@ function ConflictIcon() {
   );
 }
 
-function AgendaView({ tasks, currentDate, conflictIds, onComplete, onEdit, onImportant, getAnchorFromElement }: {
+/** Banner âmbar "N horários em conflito" — clicável quando `onClick` é passado. */
+function ConflictBanner({ count, onClick, className = "" }: { count: number; onClick?: () => void; className?: string }) {
+  if (count === 0) return null;
+  const label = count === 1 ? "1 horário em conflito neste dia" : `${count} horários em conflito neste dia`;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-2 w-full text-left rounded-lg border border-[#fbbc04]/40 bg-[#fbbc04]/10 px-3 py-1.5 hover:bg-[#fbbc04]/20 transition-colors cursor-pointer ${className}`}
+    >
+      <ConflictIcon />
+      <p className="text-xs text-[#fbbc04]">{label}</p>
+      <span className="ml-auto text-[#fbbc04]/70 text-xs">ver ›</span>
+    </button>
+  );
+}
+
+function AgendaView({ tasks, currentDate, conflictIds, onConflictClick, onComplete, onEdit, onImportant, getAnchorFromElement }: {
   tasks: FlowTask[];
   currentDate: Date;
   conflictIds?: Set<string>;
+  onConflictClick?: () => void;
   onComplete: (task: FlowTask) => void;
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onImportant?: (task: FlowTask) => void;
@@ -75,14 +93,7 @@ function AgendaView({ tasks, currentDate, conflictIds, onComplete, onEdit, onImp
         </span>
       </div>
 
-      {dayConflictCount > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-[#fbbc04]/40 bg-[#fbbc04]/10 px-3 py-2">
-          <ConflictIcon />
-          <p className="text-xs text-[#fbbc04]">
-            {dayConflictCount === 1 ? "1 horário em conflito neste dia" : `${dayConflictCount} horários em conflito neste dia`}
-          </p>
-        </div>
-      )}
+      <ConflictBanner count={dayConflictCount} onClick={onConflictClick} />
 
       {calendars.length === 0 && (
         <p className="text-sm text-[#9aa0a6] text-center py-6">Nenhum evento para este dia.</p>
@@ -204,10 +215,11 @@ function AgendaView({ tasks, currentDate, conflictIds, onComplete, onEdit, onImp
   );
 }
 
-function PriorityView({ tasks, currentDate, conflictIds, onComplete, onEdit, onImportant, getAnchorFromElement }: {
+function PriorityView({ tasks, currentDate, conflictIds, onConflictClick, onComplete, onEdit, onImportant, getAnchorFromElement }: {
   tasks: FlowTask[];
   currentDate: Date;
   conflictIds?: Set<string>;
+  onConflictClick?: () => void;
   onComplete: (task: FlowTask) => void;
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onImportant?: (task: FlowTask) => void;
@@ -231,14 +243,7 @@ function PriorityView({ tasks, currentDate, conflictIds, onComplete, onEdit, onI
         </span>
       </div>
 
-      {dayConflictCount > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-[#fbbc04]/40 bg-[#fbbc04]/10 px-3 py-2">
-          <ConflictIcon />
-          <p className="text-xs text-[#fbbc04]">
-            {dayConflictCount === 1 ? "1 horário em conflito neste dia" : `${dayConflictCount} horários em conflito neste dia`}
-          </p>
-        </div>
-      )}
+      <ConflictBanner count={dayConflictCount} onClick={onConflictClick} />
 
       {open.length === 0 && (
         <p className="text-sm text-[#9aa0a6] text-center py-6">Nenhuma tarefa em aberto para este dia.</p>
@@ -317,10 +322,11 @@ function PriorityView({ tasks, currentDate, conflictIds, onComplete, onEdit, onI
   );
 }
 
-function FavoritesView({ tasks, currentDate, conflictIds, onComplete, onEdit, onImportant, getAnchorFromElement }: {
+function FavoritesView({ tasks, currentDate, conflictIds, onConflictClick, onComplete, onEdit, onImportant, getAnchorFromElement }: {
   tasks: FlowTask[];
   currentDate: Date;
   conflictIds?: Set<string>;
+  onConflictClick?: () => void;
   onComplete: (task: FlowTask) => void;
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onImportant?: (task: FlowTask) => void;
@@ -344,14 +350,7 @@ function FavoritesView({ tasks, currentDate, conflictIds, onComplete, onEdit, on
         </span>
       </div>
 
-      {dayConflictCount > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-[#fbbc04]/40 bg-[#fbbc04]/10 px-3 py-2">
-          <ConflictIcon />
-          <p className="text-xs text-[#fbbc04]">
-            {dayConflictCount === 1 ? "1 horário em conflito neste dia" : `${dayConflictCount} horários em conflito neste dia`}
-          </p>
-        </div>
-      )}
+      <ConflictBanner count={dayConflictCount} onClick={onConflictClick} />
 
       {open.length === 0 && (
         <p className="text-sm text-[#9aa0a6] text-center py-6">Nenhum evento favoritado para este dia.</p>
@@ -436,6 +435,7 @@ interface DayViewProps {
   pendingIds: Set<string>;
   displayMode?: "grid" | "list" | "calendar" | "priority" | "favorites";
   conflictIds?: Set<string>;
+  onConflictClick?: () => void;
   onComplete: (task: FlowTask) => void;
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onDelete: (task: FlowTask) => void;
@@ -444,7 +444,7 @@ interface DayViewProps {
   onImportant?: (task: FlowTask) => void;
 }
 
-export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", conflictIds, onComplete, onEdit, onDelete, onTimeClick, onMove, onImportant }: DayViewProps) {
+export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", conflictIds, onConflictClick, onComplete, onEdit, onDelete, onTimeClick, onMove, onImportant }: DayViewProps) {
   const [nowY, setNowY] = useState(currentTimeY());
   const scrollRef = useRef<HTMLDivElement>(null);
   const listScrollRef = useRef<HTMLDivElement>(null);
@@ -619,14 +619,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
           </span>
         </div>
 
-        {listConflictCount > 0 && (
-          <div className="flex items-center gap-2 rounded-lg border border-[#fbbc04]/40 bg-[#fbbc04]/10 px-3 py-2 mb-2">
-            <ConflictIcon />
-            <p className="text-xs text-[#fbbc04]">
-              {listConflictCount === 1 ? "1 horário em conflito neste dia" : `${listConflictCount} horários em conflito neste dia`}
-            </p>
-          </div>
-        )}
+        <ConflictBanner count={listConflictCount} onClick={onConflictClick} className="mb-2" />
 
         {allDayTasks.length > 0 && (
           <div className="space-y-2 mb-3">
@@ -760,15 +753,15 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
   }
 
   if (displayMode === "calendar") {
-    return <AgendaView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
+    return <AgendaView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onConflictClick={onConflictClick} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
   }
 
   if (displayMode === "priority") {
-    return <PriorityView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
+    return <PriorityView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onConflictClick={onConflictClick} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
   }
 
   if (displayMode === "favorites") {
-    return <FavoritesView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
+    return <FavoritesView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onConflictClick={onConflictClick} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
   }
 
   return (
@@ -810,16 +803,11 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
       </div>
 
       {/* Conflict banner — grid mode */}
-      {conflictIds && timedTasks.filter((t) => conflictIds.has(t.id)).length > 0 && (
-        <div className="flex items-center gap-2 mx-4 mb-1 rounded-lg border border-[#fbbc04]/40 bg-[#fbbc04]/10 px-3 py-1.5">
-          <ConflictIcon />
-          <p className="text-xs text-[#fbbc04]">
-            {timedTasks.filter((t) => conflictIds.has(t.id)).length === 1
-              ? "1 horário em conflito neste dia"
-              : `${timedTasks.filter((t) => conflictIds.has(t.id)).length} horários em conflito neste dia`}
-          </p>
-        </div>
-      )}
+      <ConflictBanner
+        count={conflictIds ? timedTasks.filter((t) => conflictIds.has(t.id)).length : 0}
+        onClick={onConflictClick}
+        className="mx-4 mb-1"
+      />
 
       {/* Timeline */}
       <div ref={scrollRef} className="overflow-y-auto flex-1">
