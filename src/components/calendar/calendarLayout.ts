@@ -179,12 +179,29 @@ export function getConflictIds(tasks: FlowTask[]): Set<string> {
   return conflictSet;
 }
 
-/** Encurtamento máximo por evento (ms). */
+/** Encurtamento máximo por evento (ms), para calendários sem janela comercial. */
 const MAX_SHRINK_MS = 15 * 60_000;
 /** Duração mínima de um evento após encurtamento (ms). */
-const MIN_DURATION_MS = 15 * 60_000;
+const MIN_DURATION_MS = 5 * 60_000;
 /** Hora mínima para alocar eventos no auto-fit (não usa madrugada). */
 const WORK_DAY_START_HOUR = 6;
+/** Janela comercial (08h–18h) para calendários restritos, ex.: TI CF Contabilidade. */
+const BUSINESS_START_HOUR = 8;
+const BUSINESS_END_HOUR = 18;
+
+/** Calendários restritos a horário comercial (08h–18h). Match case-insensitive. */
+function isBusinessHoursCalendar(calendarName?: string): boolean {
+  return (calendarName ?? "").toLowerCase().includes("cf contabilidade");
+}
+
+/** Piso/teto (ms) do dia de `refIso`, conforme a regra do calendário. */
+function getDayBounds(refIso: string, businessHours: boolean): { floorMs: number; ceilingMs: number } {
+  const floorDate = new Date(refIso);
+  floorDate.setHours(businessHours ? BUSINESS_START_HOUR : WORK_DAY_START_HOUR, 0, 0, 0);
+  const ceilingDate = new Date(refIso);
+  ceilingDate.setHours(businessHours ? BUSINESS_END_HOUR : CALENDAR_DIMENSIONS.DAY_END, 0, 0, 0);
+  return { floorMs: floorDate.getTime(), ceilingMs: ceilingDate.getTime() };
+}
 
 /**
  * Reempacota os eventos com horário de `dateKey` sem sobreposição.
@@ -219,77 +236,117 @@ export function packDayEvents(
 
   if (eligible.length === 0) return { changes: [], overflow: false };
 
-  // Teto do dia
+  // Teto geral do dia (calendários sem janela comercial)
   const dayEndDate = new Date(eligible[0].startTime);
   dayEndDate.setHours(CALENDAR_DIMENSIONS.DAY_END, 0, 0, 0);
   const dayEnd = dayEndDate.getTime();
 
-  // Piso do dia: eventos nunca alocados antes das WORK_DAY_START_HOUR
-  const floorDate = new Date(eligible[0].startTime);
-  floorDate.setHours(WORK_DAY_START_HOUR, 0, 0, 0);
-  const floorMs = floorDate.getTime();
-
   type Placed = { id: string; origStart: number; origEnd: number; newStart: number; newEnd: number };
   const placed: Placed[] = [];
+  let overflow = false;
 
-  // 1º evento: âncora — respeita piso de 06h (desloca evento inteiro se necessário)
+  /** Aplica piso do calendário (desloca start, preserva duração) e, se TI CF, teto 18h (encurta pela cauda). */
+  function clampToCalendarWindow(
+    business: boolean,
+    floorMs: number,
+    ceilingMs: number,
+    start: number,
+    end: number,
+  ): { start: number; end: number } {
+    let newStart = start;
+    let newEnd = end;
+    if (newStart < floorMs) {
+      const dur = newEnd - newStart;
+      newStart = floorMs;
+      newEnd = newStart + dur;
+    }
+    if (business && newEnd > ceilingMs) {
+      const maxDur = Math.max(MIN_DURATION_MS, ceilingMs - newStart);
+      newEnd = newStart + maxDur;
+      if (newStart > ceilingMs - MIN_DURATION_MS) overflow = true;
+    }
+    return { start: newStart, end: newEnd };
+  }
+
+  // 1º evento: âncora — respeita piso do calendário (desloca evento inteiro se necessário)
   const first = eligible[0];
+  const firstBusiness = isBusinessHoursCalendar(first.calendarName);
+  const { floorMs: firstFloor, ceilingMs: firstCeiling } = getDayBounds(first.startTime, firstBusiness);
   const firstOrigStart = new Date(first.startTime).getTime();
   const firstOrigEnd = new Date(first.endTime).getTime();
-  const firstStart = Math.max(firstOrigStart, floorMs);
   const firstDur = firstOrigEnd - firstOrigStart;
+  const firstClamped = clampToCalendarWindow(
+    firstBusiness,
+    firstFloor,
+    firstCeiling,
+    firstOrigStart,
+    firstOrigStart + firstDur,
+  );
   placed.push({
     id: first.id,
     origStart: firstOrigStart,
     origEnd: firstOrigEnd,
-    newStart: firstStart,
-    newEnd: firstStart + firstDur,
+    newStart: firstClamped.start,
+    newEnd: firstClamped.end,
   });
 
   for (let i = 1; i < eligible.length; i++) {
     const t = eligible[i];
+    const business = isBusinessHoursCalendar(t.calendarName);
+    const { floorMs, ceilingMs } = getDayBounds(t.startTime, business);
     const origStart = new Date(t.startTime).getTime();
     const origEnd = new Date(t.endTime).getTime();
     const origDur = origEnd - origStart;
     const prev = placed[placed.length - 1];
     const cursor = prev.newEnd;
 
+    let newStart: number;
+    let newEnd: number;
+
     if (origStart >= cursor) {
       // Sem conflito
-      placed.push({ id: t.id, origStart, origEnd, newStart: origStart, newEnd: origEnd });
-      continue;
-    }
-
-    // Há conflito: overlap = quanto B começa antes do fim de A
-    const overlap = cursor - origStart;
-
-    // Passo 1: encurtar B (avança início, mantém fim → reduz duração pelo front)
-    const shrinkB = Math.max(0, Math.min(overlap, MAX_SHRINK_MS, origDur - MIN_DURATION_MS));
-    let newStartB = origStart + shrinkB;
-    let remainingOverlap = Math.max(0, cursor - newStartB);
-
-    // Passo 2: encurtar A (recua fim de A)
-    if (remainingOverlap > 0) {
-      const aDur = prev.newEnd - prev.newStart;
-      const shrinkA = Math.max(0, Math.min(remainingOverlap, MAX_SHRINK_MS, aDur - MIN_DURATION_MS));
-      prev.newEnd -= shrinkA;
-      remainingOverlap = Math.max(0, prev.newEnd - newStartB);
-    }
-
-    // Passo 3: empurrar B se ainda houver sobreposição
-    if (remainingOverlap > 0) {
-      // Empurra: mantém duração ORIGINAL (não penaliza duas vezes)
-      newStartB = prev.newEnd;
-      placed.push({ id: t.id, origStart, origEnd, newStart: newStartB, newEnd: newStartB + origDur });
+      newStart = origStart;
+      newEnd = origEnd;
     } else {
-      // Encurtamento suficiente: B começa em newStartB, fim inalterado
-      placed.push({ id: t.id, origStart, origEnd, newStart: newStartB, newEnd: origEnd });
+      // Há conflito: overlap = quanto B começa antes do fim de A
+      const overlap = cursor - origStart;
+
+      // Passo 1: encurtar B (avança início, mantém fim → reduz duração pelo front)
+      // TI CF não usa o teto MAX_SHRINK_MS — encurta o quanto precisar até MIN_DURATION_MS
+      const shrinkB = business
+        ? Math.max(0, Math.min(overlap, origDur - MIN_DURATION_MS))
+        : Math.max(0, Math.min(overlap, MAX_SHRINK_MS, origDur - MIN_DURATION_MS));
+      let newStartB = origStart + shrinkB;
+      let remainingOverlap = Math.max(0, cursor - newStartB);
+
+      // Passo 2: encurtar A (recua fim de A)
+      if (remainingOverlap > 0) {
+        const aDur = prev.newEnd - prev.newStart;
+        const shrinkA = Math.max(0, Math.min(remainingOverlap, MAX_SHRINK_MS, aDur - MIN_DURATION_MS));
+        prev.newEnd -= shrinkA;
+        remainingOverlap = Math.max(0, prev.newEnd - newStartB);
+      }
+
+      // Passo 3: empurrar B se ainda houver sobreposição
+      if (remainingOverlap > 0) {
+        // Empurra: mantém duração ORIGINAL (não penaliza duas vezes)
+        newStartB = prev.newEnd;
+        newStart = newStartB;
+        newEnd = newStartB + origDur;
+      } else {
+        // Encurtamento suficiente: B começa em newStartB, fim inalterado
+        newStart = newStartB;
+        newEnd = origEnd;
+      }
     }
+
+    const clamped = clampToCalendarWindow(business, floorMs, ceilingMs, newStart, newEnd);
+    placed.push({ id: t.id, origStart, origEnd, newStart: clamped.start, newEnd: clamped.end });
   }
 
-  // Detecta overflow
+  // Detecta overflow: cursor final passa das 23h, ou algum evento TI CF não coube na janela
   const cursor = placed[placed.length - 1].newEnd;
-  const overflow = cursor > dayEnd;
+  overflow = overflow || cursor > dayEnd;
 
   // Retorna só os que mudaram
   const changes = placed
