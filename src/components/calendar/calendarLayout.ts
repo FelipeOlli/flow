@@ -245,7 +245,13 @@ export function packDayEvents(
   const placed: Placed[] = [];
   let overflow = false;
 
-  /** Aplica piso do calendário (desloca start, preserva duração) e, se TI CF, teto 18h (encurta pela cauda). */
+  /**
+   * Aplica piso do calendário (desloca start, preserva duração) e, se TI CF, teto 18h.
+   * Evento que estoura o teto mas começa antes dele: encurta pela cauda.
+   * Evento inteiramente depois do teto (isolado, sem conflito): puxa para caber
+   * antes do teto, preservando duração; se a duração não couber na janela, encurta
+   * até MIN_DURATION_MS.
+   */
   function clampToCalendarWindow(
     business: boolean,
     floorMs: number,
@@ -260,10 +266,24 @@ export function packDayEvents(
       newStart = floorMs;
       newEnd = newStart + dur;
     }
-    if (business && newEnd > ceilingMs) {
-      const maxDur = Math.max(MIN_DURATION_MS, ceilingMs - newStart);
-      newEnd = newStart + maxDur;
-      if (newStart > ceilingMs - MIN_DURATION_MS) overflow = true;
+    if (business) {
+      if (newStart >= ceilingMs) {
+        // Evento inteiro fora da janela: puxa para caber antes do teto
+        const dur = newEnd - newStart;
+        newStart = Math.max(floorMs, ceilingMs - dur);
+        newEnd = newStart + dur;
+        if (newEnd > ceilingMs) {
+          // Duração maior que a janela inteira: encurta ao mínimo possível
+          newEnd = ceilingMs;
+          newStart = Math.max(floorMs, newEnd - MIN_DURATION_MS);
+        }
+        if (newStart > ceilingMs - MIN_DURATION_MS) overflow = true;
+      } else if (newEnd > ceilingMs) {
+        // Evento estoura o teto pela cauda: encurta mantendo o início
+        const maxDur = Math.max(MIN_DURATION_MS, ceilingMs - newStart);
+        newEnd = newStart + maxDur;
+        if (newStart > ceilingMs - MIN_DURATION_MS) overflow = true;
+      }
     }
     return { start: newStart, end: newEnd };
   }
