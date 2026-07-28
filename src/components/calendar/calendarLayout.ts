@@ -52,8 +52,10 @@ export function snapY(y: number): number {
   return Math.round(y / (CALENDAR_DIMENSIONS.HOUR_PX / 2)) * (CALENDAR_DIMENSIONS.HOUR_PX / 2);
 }
 
-/** Durações padrão de slot (mesmos valores dos botões rápidos do TaskForm). */
+/** Durações padrão de slot para sugestão de horário livre (conflitos). */
 export const SLOT_DURATIONS = [
+  { mins: 5, label: "5m" },
+  { mins: 10, label: "10m" },
   { mins: 15, label: "15m" },
   { mins: 30, label: "30m" },
   { mins: 60, label: "1h" },
