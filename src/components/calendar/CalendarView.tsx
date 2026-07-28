@@ -840,32 +840,32 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       )}
       {/* Header */}
       <div className="flex-shrink-0 bg-[#202124] border-b border-[#3c4043] relative z-10">
-        <div className="flex items-center justify-between gap-2 px-3 py-3">
-          <div className="flex items-center">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3 py-3">
+          <div className="flex items-center w-full sm:w-auto min-w-0">
             <button onClick={() => navigate("prev")}
-              className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:bg-[#2a2b2e] transition-colors">
+              className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full text-[#9aa0a6] hover:bg-[#2a2b2e] transition-colors">
               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
             </button>
 
-            <button onClick={() => setCurrentDate(new Date())} className="w-56 text-center px-1">
+            <button onClick={() => setCurrentDate(new Date())} className="flex-1 sm:flex-none sm:w-56 min-w-0 text-center px-1">
               <p className="text-sm font-medium text-[#e8eaed] capitalize truncate">{dateLabel}</p>
             </button>
 
             <button onClick={() => navigate("next")}
-              className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:bg-[#2a2b2e] transition-colors">
+              className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full text-[#9aa0a6] hover:bg-[#2a2b2e] transition-colors">
               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center justify-between sm:justify-end gap-1.5 w-full sm:w-auto">
             {/* Calendário */}
             <button
               onClick={() => { setShowDashboard(false); setShowWeeklyReview(false); }}
-              className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+              className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full transition-colors ${
                 !showDashboard && !showWeeklyReview
                   ? "bg-[#3c4043] text-[#e8eaed]"
                   : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
@@ -884,7 +884,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
             {/* Dashboard */}
             <button
               onClick={() => { setShowDashboard(true); setShowWeeklyReview(false); }}
-              className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+              className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full transition-colors ${
                 showDashboard && !showWeeklyReview
                   ? "bg-[#3c4043] text-[#e8eaed]"
                   : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
@@ -903,7 +903,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
               return (
                 <button
                   onClick={() => { setShowWeeklyReview(true); setShowDashboard(false); }}
-                  className={`relative w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+                  className={`relative w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full transition-colors ${
                     showWeeklyReview
                       ? "bg-[#3c4043] text-[#e8eaed]"
                       : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
@@ -932,7 +932,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                 }
                 setPushModalOpen((prev) => !prev);
               }}
-              className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+              className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full transition-colors ${
                 pushActive
                   ? "text-[#8ab4f8] bg-[#8ab4f8]/10"
                   : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
@@ -952,7 +952,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
             </button>
 
             {/* Migração (3 pontos) */}
-            <div className="relative">
+            <div className="relative flex-shrink-0">
               <button
                 ref={migrationButtonRef}
                 type="button"
@@ -963,7 +963,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                   }
                   setMigrationMenuOpen((prev) => !prev);
                 }}
-                className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors"
+                className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors"
                 aria-label="Ações avançadas"
                 title="Ações avançadas"
               >
@@ -1265,7 +1265,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
               type="button"
               onClick={handleAutoFit}
               disabled={autoFitting}
-              className="w-8 h-8 flex items-center justify-center rounded-full text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors disabled:opacity-40"
+              className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e] transition-colors disabled:opacity-40"
               aria-label="Reorganizar eventos do dia"
               title="Reorganizar eventos do dia"
             >
@@ -1278,7 +1278,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
             </button>
 
             <button onClick={() => signOut({ callbackUrl: "/sign-in" })}
-              className="w-8 h-8 flex items-center justify-center text-[#9aa0a6] hover:text-[#e8eaed] transition-colors">
+              className="w-8 h-8 flex-shrink-0 flex items-center justify-center text-[#9aa0a6] hover:text-[#e8eaed] transition-colors">
               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
