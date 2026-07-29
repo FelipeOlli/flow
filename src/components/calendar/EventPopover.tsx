@@ -29,6 +29,8 @@ interface EventPopoverProps {
 }
 
 const QUICK_DURATIONS = [
+  { mins: 5, label: "5m" },
+  { mins: 10, label: "10m" },
   { mins: 15, label: "15m" },
   { mins: 30, label: "30m" },
   { mins: 60, label: "1h" },
@@ -735,13 +737,13 @@ export function EventPopover({
                 <>
                   <div>
                     <label className="text-xs text-[#9aa0a6] mb-1.5 block">Duração rápida</label>
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-4 gap-2">
                       {QUICK_DURATIONS.map(({ mins, label }) => (
                         <button
                           key={mins}
                           type="button"
                           onClick={() => setDuration(mins)}
-                          className={`flex-1 py-2 rounded-xl text-xs font-medium transition-colors
+                          className={`py-2 rounded-xl text-xs font-medium transition-colors
                             ${currentDurationMins === mins
                               ? "bg-emerald-500 text-white"
                               : "bg-[#2a2b2e] text-[#bdc1c6] hover:text-[#e8eaed] border border-[#3c4043]"}`}
