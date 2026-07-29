@@ -12,6 +12,7 @@ export interface ParsedEvent {
   category?: "operational" | "strategic";
   isDelegable?: boolean;
   recurrenceType?: "daily" | "weekdays" | "weekly" | "biweekly" | "monthly" | "yearly";
+  attendees?: string[];
 }
 
 export async function transcribeAudio(audioBuffer: Buffer, mimeType: string): Promise<string> {

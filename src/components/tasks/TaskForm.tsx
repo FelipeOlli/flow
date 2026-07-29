@@ -16,6 +16,7 @@ interface VoiceDefaults {
   category?: "operational" | "strategic";
   isDelegable?: boolean;
   recurrenceType?: "daily" | "weekdays" | "weekly" | "biweekly" | "monthly" | "yearly";
+  attendees?: string[];
 }
 
 interface TaskFormProps {
@@ -91,7 +92,7 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, onClose, 
   );
   const [pillar, setPillar] = useState<Pillar | null>(defaults?.pillar ?? null);
   const [attendeeInput, setAttendeeInput] = useState("");
-  const [attendees, setAttendees] = useState<string[]>([]);
+  const [attendees, setAttendees] = useState<string[]>(defaults?.attendees ?? []);
 
   // Detecção de conflito de horário (apenas na criação)
   const conflictData = useMemo(() => {

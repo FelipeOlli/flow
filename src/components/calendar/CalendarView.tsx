@@ -19,6 +19,7 @@ import { DashboardView } from "@/components/dashboard/DashboardView";
 import { WeeklyReviewView } from "@/components/dashboard/WeeklyReviewView";
 import { getPushStatus, registerPush, unregisterPush, getActiveSubscription, type PushStatus } from "@/lib/push-client";
 import { VoiceCaptureModal } from "./VoiceCaptureModal";
+import { FileCaptureModal } from "./FileCaptureModal";
 import { type ParsedEvent } from "@/lib/openai-event-parser";
 
 type View = "day" | "3days" | "week" | "month";
@@ -126,6 +127,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [editingTask, setEditingTask] = useState<FlowTask | null>(null);
   const [formDefaults, setFormDefaults] = useState<Partial<ParsedEvent> & { startTime?: string; endTime?: string }>({});
   const [showVoiceCapture, setShowVoiceCapture] = useState(false);
+  const [showFileCapture, setShowFileCapture] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState<string | null>(null);
   const [manualSourceDate, setManualSourceDate] = useState("");
@@ -785,6 +787,13 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     } else {
       setFormDefaults({});
     }
+    setShowForm(true);
+  }
+
+  function handleFileResult(parsed: ParsedEvent) {
+    setEditingTask(null);
+    setFormDefaults(parsed);
+    setShowFileCapture(false);
     setShowForm(true);
   }
 
@@ -1470,6 +1479,16 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {/* FAB — hidden in dashboard/projects/review mode */}
       {!showDashboard && !showWeeklyReview && (
         <>
+          {/* FAB arquivo/imagem IA */}
+          <button
+            onClick={() => setShowFileCapture(true)}
+            title="Criar evento por imagem/arquivo com IA"
+            className={`fixed bottom-[9.5rem] right-4 w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform backdrop-blur-md bg-[#4dd0e1]/30 border border-[#4dd0e1]/40 shadow-lg shadow-black/30 ${overlayOpen ? LAYERS.fabBehindOverlay : LAYERS.fab}`}
+          >
+            <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21.44 11.05l-9.19 9.19a5 5 0 01-7.07-7.07l9.19-9.19a3 3 0 014.24 4.24l-9.19 9.19a1 1 0 01-1.41-1.41l8.48-8.49" />
+            </svg>
+          </button>
           {/* FAB voz IA */}
           <button
             onClick={() => setShowVoiceCapture(true)}
@@ -1504,6 +1523,13 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
         <VoiceCaptureModal
           onResult={handleVoiceResult}
           onClose={() => setShowVoiceCapture(false)}
+        />
+      )}
+
+      {showFileCapture && (
+        <FileCaptureModal
+          onResult={handleFileResult}
+          onClose={() => setShowFileCapture(false)}
         />
       )}
 
