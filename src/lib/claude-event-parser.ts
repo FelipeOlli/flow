@@ -15,16 +15,22 @@ const EVENT_SCHEMA = {
     title: { type: "string" },
     startTime: { type: "string" },
     endTime: { type: "string" },
-    calendarId: { type: ["string", "null"] },
-    description: { type: ["string", "null"] },
+    calendarId: { anyOf: [{ type: "string" }, { type: "null" }] },
+    description: { anyOf: [{ type: "string" }, { type: "null" }] },
     isImportant: { type: "boolean" },
     isAllDay: { type: "boolean" },
-    pillar: { type: ["string", "null"], enum: ["trabalho", "saude", "familia", "espiritualidade", null] },
-    category: { type: ["string", "null"], enum: ["operational", "strategic", null] },
+    pillar: {
+      anyOf: [{ type: "string", enum: ["trabalho", "saude", "familia", "espiritualidade"] }, { type: "null" }],
+    },
+    category: {
+      anyOf: [{ type: "string", enum: ["operational", "strategic"] }, { type: "null" }],
+    },
     isDelegable: { type: "boolean" },
     recurrenceType: {
-      type: ["string", "null"],
-      enum: ["daily", "weekdays", "weekly", "biweekly", "monthly", "yearly", null],
+      anyOf: [
+        { type: "string", enum: ["daily", "weekdays", "weekly", "biweekly", "monthly", "yearly"] },
+        { type: "null" },
+      ],
     },
     attendees: { type: "array", items: { type: "string" } },
   },
