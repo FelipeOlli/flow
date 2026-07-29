@@ -1,32 +1,33 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ParsedEvent } from "@/lib/openai-event-parser";
 
-type CaptureState = "idle" | "processing" | "error";
+type CaptureState = "processing" | "error";
 
 interface FileCaptureModalProps {
+  file: File;
   onResult: (parsed: ParsedEvent) => void;
   onClose: () => void;
 }
 
-export function FileCaptureModal({ onResult, onClose }: FileCaptureModalProps) {
-  const [state, setState] = useState<CaptureState>("idle");
+export function FileCaptureModal({ file, onResult, onClose }: FileCaptureModalProps) {
+  const [state, setState] = useState<CaptureState>("processing");
   const [errorMsg, setErrorMsg] = useState("");
   const [mounted, setMounted] = useState(false);
-  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
-    inputRef.current?.click();
+    submitFile(file);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function submitFile(file: File) {
+  async function submitFile(f: File) {
     setState("processing");
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", f);
       const res = await fetch("/api/file-event/parse", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Erro na análise");
@@ -37,40 +38,14 @@ export function FileCaptureModal({ onResult, onClose }: FileCaptureModalProps) {
     }
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) submitFile(file);
-    e.target.value = "";
-  }
-
   function handleRetry() {
     setErrorMsg("");
-    setState("idle");
-    inputRef.current?.click();
+    submitFile(file);
   }
 
   const modal = (
     <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*,.pdf,.txt,.eml"
-        hidden
-        onChange={handleFileChange}
-      />
-
       <div className="flex flex-col items-center gap-6 select-none">
-        {state === "idle" && (
-          <>
-            <div className="w-20 h-20 rounded-full bg-[#4dd0e1]/20 border border-[#4dd0e1]/40 flex items-center justify-center">
-              <svg viewBox="0 0 24 24" className="w-9 h-9 text-[#4dd0e1]" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21.44 11.05l-9.19 9.19a5 5 0 01-7.07-7.07l9.19-9.19a3 3 0 014.24 4.24l-9.19 9.19a1 1 0 01-1.41-1.41l8.48-8.49" />
-              </svg>
-            </div>
-            <p className="text-white/60 text-sm">Escolhendo arquivo...</p>
-          </>
-        )}
-
         {state === "processing" && (
           <>
             <div className="w-20 h-20 rounded-full bg-[#8ab4f8]/20 border border-[#8ab4f8]/40 flex items-center justify-center">
