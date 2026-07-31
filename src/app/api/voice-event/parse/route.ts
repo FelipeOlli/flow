@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getValidAccessToken } from "@/lib/token-store";
 import { listWritableCalendars } from "@/lib/google-calendar";
-import { extractEventFields } from "@/lib/openai-event-parser";
+import { extractEventFieldsFromMedia } from "@/lib/claude-event-parser";
 
-// Step 2: transcript → parsed event fields (GPT-4o-mini, ~1-2s)
+// Step 2: transcript → parsed event fields (Claude, mesma lógica do file-event)
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -24,8 +24,8 @@ export async function POST(req: NextRequest) {
     const tz = process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
     const now = new Date(new Date().toLocaleString("en-US", { timeZone: tz }));
 
-    const parsed = await extractEventFields(
-      transcript,
+    const parsed = await extractEventFieldsFromMedia(
+      { kind: "transcript", text: transcript },
       now,
       tz,
       calendars.map((c) => ({ id: c.id, name: c.name }))

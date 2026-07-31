@@ -7,7 +7,8 @@ const client = new Anthropic();
 export type MediaInput =
   | { kind: "image"; mimeType: string; base64: string }
   | { kind: "pdf"; base64: string }
-  | { kind: "text"; text: string };
+  | { kind: "text"; text: string }
+  | { kind: "transcript"; text: string };
 
 const EVENT_SCHEMA = {
   type: "object" as const,
@@ -38,7 +39,12 @@ const EVENT_SCHEMA = {
   additionalProperties: false,
 };
 
-function buildSystemPrompt(now: Date, tz: string, calendars: { id: string; name: string }[]): string {
+function buildSystemPrompt(
+  now: Date,
+  tz: string,
+  calendars: { id: string; name: string }[],
+  source: "media" | "voice"
+): string {
   const dayNames = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
   const monthNames = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
   const nowStr = `${dayNames[now.getDay()]}, ${now.getDate()} de ${monthNames[now.getMonth()]} de ${now.getFullYear()}, ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -47,7 +53,58 @@ function buildSystemPrompt(now: Date, tz: string, calendars: { id: string; name:
     ? calendars.map((c) => `- id: "${c.id}", nome: "${c.name}"`).join("\n")
     : "- id: \"primary\", nome: \"Principal\"";
 
-  return `Você é um assistente de agenda. Extraia os detalhes de um evento a partir de uma imagem, PDF ou texto de um arquivo enviado pelo usuário (convite, print de conversa, comprovante, e-mail).
+  const intro =
+    source === "voice"
+      ? "Você é um assistente de agenda. Extraia os detalhes de um evento a partir de um texto transcrito de voz em português brasileiro, ditado pelo usuário."
+      : "Você é um assistente de agenda. Extraia os detalhes de um evento a partir de uma imagem, PDF ou texto de um arquivo enviado pelo usuário (convite, print de conversa, comprovante, e-mail).";
+
+  const durationRules =
+    source === "voice"
+      ? `DURAÇÃO ESTIMADA (use quando o usuário não informar duração explícita):
+- Ligação / ligar para / call → 15 min
+- Reunião / standup / alinhamento / check-in → 30 min
+- Consulta médica / dentista / exame / terapia → 1 h
+- Treino / academia / corrida / exercício → 1 h
+- Almoço / café / jantar → 1 h
+- Responder / revisar / conferir / cadastrar / organizar → 30 min
+- Bloco de foco / deep work / codificar / estudar → 2 h
+- Aula / curso / workshop / treinamento → 1h30
+- Default (qualquer outro) → 1 h`
+      : `DURAÇÃO ESTIMADA (use quando não houver duração explícita):
+- Ligação / call → 15 min
+- Reunião / standup / alinhamento / check-in → 30 min
+- Consulta médica / dentista / exame / terapia → 1 h
+- Treino / academia / corrida / exercício → 1 h
+- Almoço / café / jantar → 1 h
+- Aula / curso / workshop / treinamento → 1h30
+- Default (qualquer outro) → 1 h`;
+
+  const dateRules =
+    source === "voice"
+      ? `REGRAS DE DATA:
+- "amanhã" = próximo dia
+- "próxima [dia]" = o [dia] da semana que vem (nunca o da semana atual)
+- "semana que vem" = mesma hora, +7 dias
+- "daqui a Xh" = agora + X horas
+- Se sem horário e isAllDay=false, use 08:00 como padrão
+- Para eventos all-day: startTime e endTime devem ter T00:00:00 com o offset correto`
+      : `REGRAS DE DATA:
+- "amanhã" = próximo dia
+- "próxima [dia]" = o [dia] da semana que vem (nunca o da semana atual)
+- Se sem horário e isAllDay=false, use 08:00 como padrão
+- Para eventos all-day: startTime e endTime devem ter T00:00:00 com o offset correto`;
+
+  const isDelegableRule =
+    source === "voice"
+      ? `- isDelegable: true se o usuário disser "delegar", "pedir para", "mandar alguém"`
+      : `- isDelegable: true se o conteúdo sugerir que a tarefa pode ser delegada`;
+
+  const attendeesLine =
+    source === "voice"
+      ? ""
+      : `\n- attendees: lista de e-mails de convidados/participantes visíveis no documento/imagem. Lista vazia se nenhum e-mail estiver visível.`;
+
+  return `${intro}
 
 Data/hora atual: ${nowStr} (fuso: ${tz})
 
@@ -65,18 +122,10 @@ Retorne os campos abaixo. Todos são opcionais exceto title, startTime e endTime
 - isAllDay: true se o evento não tiver horário específico (o dia todo)
 - pillar: 'trabalho' | 'saude' | 'familia' | 'espiritualidade' — inferir pelo contexto (veja exemplos abaixo)
 - category: 'operational' | 'strategic' — inferir pelo tipo (veja exemplos abaixo)
-- isDelegable: true se o conteúdo sugerir que a tarefa pode ser delegada
-- recurrenceType: 'daily' | 'weekdays' | 'weekly' | 'biweekly' | 'monthly' | 'yearly', ou null se não houver recorrência
-- attendees: lista de e-mails de convidados/participantes visíveis no documento/imagem. Lista vazia se nenhum e-mail estiver visível.
+${isDelegableRule}
+- recurrenceType: 'daily' | 'weekdays' | 'weekly' | 'biweekly' | 'monthly' | 'yearly', ou null se não houver recorrência${attendeesLine}
 
-DURAÇÃO ESTIMADA (use quando não houver duração explícita):
-- Ligação / call → 15 min
-- Reunião / standup / alinhamento / check-in → 30 min
-- Consulta médica / dentista / exame / terapia → 1 h
-- Treino / academia / corrida / exercício → 1 h
-- Almoço / café / jantar → 1 h
-- Aula / curso / workshop / treinamento → 1h30
-- Default (qualquer outro) → 1 h
+${durationRules}
 
 MATCH DE AGENDA (calendarId):
 - Compare o nome mencionado com os nomes das agendas ignorando maiúsculas, acentos e artigos.
@@ -93,11 +142,7 @@ CATEGORIA — exemplos:
 - operational: responder e-mails, cadastrar nota fiscal, organizar, conferir, ligar para fulano, rotina
 - strategic: reunião 1:1, planejamento, tomada de decisão, criação de produto, alinhamento estratégico
 
-REGRAS DE DATA:
-- "amanhã" = próximo dia
-- "próxima [dia]" = o [dia] da semana que vem (nunca o da semana atual)
-- Se sem horário e isAllDay=false, use 08:00 como padrão
-- Para eventos all-day: startTime e endTime devem ter T00:00:00 com o offset correto`;
+${dateRules}`;
 }
 
 export async function extractEventFieldsFromMedia(
@@ -106,7 +151,7 @@ export async function extractEventFieldsFromMedia(
   tz: string,
   calendars: { id: string; name: string }[]
 ): Promise<ParsedEvent> {
-  const systemPrompt = buildSystemPrompt(now, tz, calendars);
+  const systemPrompt = buildSystemPrompt(now, tz, calendars, input.kind === "transcript" ? "voice" : "media");
 
   const content: Anthropic.Messages.ContentBlockParam[] =
     input.kind === "image"
@@ -119,6 +164,8 @@ export async function extractEventFieldsFromMedia(
           { type: "document", source: { type: "base64", media_type: "application/pdf", data: input.base64 } },
           { type: "text", text: "Extraia os dados do evento a partir deste documento." },
         ]
+      : input.kind === "transcript"
+      ? [{ type: "text", text: `Transcrição de voz: "${input.text}"` }]
       : [{ type: "text", text: `Conteúdo do arquivo:\n"""\n${input.text}\n"""` }];
 
   const message = await client.messages.create({
