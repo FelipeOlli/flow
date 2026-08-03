@@ -13,30 +13,36 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const formData = await req.formData();
-  const file = formData.get("file");
-  if (!(file instanceof Blob) || file.size === 0) {
-    return NextResponse.json({ error: "Arquivo inválido" }, { status: 400 });
-  }
-  if (file.size > MAX_SIZE_BYTES) {
-    return NextResponse.json({ error: "Arquivo muito grande (máx. 10 MB)" }, { status: 400 });
-  }
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const mimeType = file.type || "";
-  const fileName = file instanceof File ? file.name : "";
+  const pastedText = formData.get("text");
 
   let input: MediaInput;
-  if (mimeType.startsWith("image/")) {
-    input = { kind: "image", mimeType, base64: buffer.toString("base64") };
-  } else if (mimeType === "application/pdf") {
-    input = { kind: "pdf", base64: buffer.toString("base64") };
-  } else if (TEXT_MIME_TYPES.includes(mimeType) || /\.(txt|eml)$/i.test(fileName)) {
-    input = { kind: "text", text: buffer.toString("utf-8") };
+  if (typeof pastedText === "string" && pastedText.trim()) {
+    input = { kind: "text", text: pastedText.trim().slice(0, 20000) };
   } else {
-    return NextResponse.json(
-      { error: "Tipo de arquivo não suportado. Envie uma imagem, PDF ou arquivo .txt/.eml." },
-      { status: 400 }
-    );
+    const file = formData.get("file");
+    if (!(file instanceof Blob) || file.size === 0) {
+      return NextResponse.json({ error: "Arquivo inválido" }, { status: 400 });
+    }
+    if (file.size > MAX_SIZE_BYTES) {
+      return NextResponse.json({ error: "Arquivo muito grande (máx. 10 MB)" }, { status: 400 });
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const mimeType = file.type || "";
+    const fileName = file instanceof File ? file.name : "";
+
+    if (mimeType.startsWith("image/")) {
+      input = { kind: "image", mimeType, base64: buffer.toString("base64") };
+    } else if (mimeType === "application/pdf") {
+      input = { kind: "pdf", base64: buffer.toString("base64") };
+    } else if (TEXT_MIME_TYPES.includes(mimeType) || /\.(txt|eml)$/i.test(fileName)) {
+      input = { kind: "text", text: buffer.toString("utf-8") };
+    } else {
+      return NextResponse.json(
+        { error: "Tipo de arquivo não suportado. Envie uma imagem, PDF ou arquivo .txt/.eml." },
+        { status: 400 }
+      );
+    }
   }
 
   try {

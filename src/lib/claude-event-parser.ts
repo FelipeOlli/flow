@@ -56,7 +56,7 @@ function buildSystemPrompt(
   const intro =
     source === "voice"
       ? "Você é um assistente de agenda. Extraia os detalhes de um evento a partir de um texto transcrito de voz em português brasileiro, ditado pelo usuário."
-      : "Você é um assistente de agenda. Extraia os detalhes de um evento a partir de uma imagem, PDF ou texto de um arquivo enviado pelo usuário (convite, print de conversa, comprovante, e-mail).";
+      : "Você é um assistente de agenda. Extraia os detalhes de um evento a partir de uma imagem, PDF, arquivo ou texto colado pelo usuário (convite, print de conversa, comprovante, e-mail, mensagem copiada).";
 
   const durationRules =
     source === "voice"
