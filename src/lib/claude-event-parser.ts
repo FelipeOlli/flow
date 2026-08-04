@@ -42,7 +42,7 @@ const EVENT_OBJECT_SCHEMA = {
 const EVENT_SCHEMA = {
   type: "object" as const,
   properties: {
-    events: { type: "array" as const, items: EVENT_OBJECT_SCHEMA, maxItems: 20 },
+    events: { type: "array" as const, items: EVENT_OBJECT_SCHEMA },
   },
   required: ["events"],
   additionalProperties: false,
