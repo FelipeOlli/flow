@@ -362,6 +362,11 @@ export async function updateEvent(
   scope: "this" | "thisAndFollowing" | "all" = "this"
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
+  // Uma instância isolada não pode carregar RRULE própria — mudar o padrão de
+  // repetição sempre precisa atingir a master (no mínimo "todos os eventos").
+  if (updates.recurrence !== undefined && scope === "this") {
+    scope = "all";
+  }
 
   function buildRequestBody(startISO?: string, endISO?: string): calendar_v3.Schema$Event {
     const body: calendar_v3.Schema$Event = {};
@@ -496,7 +501,7 @@ export async function updateEvent(
     summary: updates.title !== undefined ? updates.title : (master.summary ?? ""),
     start: { dateTime: newStart, timeZone },
     end: { dateTime: newEnd, timeZone },
-    recurrence: originalRRule,
+    recurrence: updates.recurrence ?? originalRRule,
     attendees: updates.attendees !== undefined
       ? updates.attendees.map((email) => ({ email }))
       : (master.attendees ?? undefined),
@@ -880,6 +885,22 @@ export async function getEventById(
   const calendar = getClient(accessToken);
   const { data } = await calendar.events.get({ calendarId, eventId });
   return mapEvent(data, calendarId);
+}
+
+/**
+ * Retorna a RRULE bruta da série (instâncias expandidas via singleEvents não trazem
+ * o recurrence, só a master). Usado para pré-popular a UI de edição de recorrência.
+ */
+export async function getEventRecurrenceRule(
+  accessToken: string,
+  eventId: string,
+  calendarId = "primary"
+): Promise<string[] | null> {
+  const calendar = getClient(accessToken);
+  const { data: instance } = await calendar.events.get({ calendarId, eventId });
+  const masterId = instance.recurringEventId ?? eventId;
+  const master = masterId === eventId ? instance : (await calendar.events.get({ calendarId, eventId: masterId })).data;
+  return master.recurrence?.length ? master.recurrence : null;
 }
 
 export async function updateEventRsvp(

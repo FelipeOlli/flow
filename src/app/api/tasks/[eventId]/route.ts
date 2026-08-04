@@ -65,7 +65,9 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
         body.startTime !== undefined ||
         body.endTime !== undefined ||
         body.description !== undefined ||
-        body.attendees !== undefined;
+        body.attendees !== undefined ||
+        body.recurrence !== undefined ||
+        body.removeRecurrence !== undefined;
 
       if (targetCalendarId !== calendarId) {
         const moved = await moveEventToCalendar(

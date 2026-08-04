@@ -89,6 +89,8 @@ export function EventPopover({
   const [editRecurrenceType, setEditRecurrenceType] = useState<
     "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "weekdays"
   >("weekly");
+  const [recurrenceDirty, setRecurrenceDirty] = useState(false);
+  const [customRecurrenceRule, setCustomRecurrenceRule] = useState(false);
 
   // Sugestões de horário livre quando há conflito
   const conflictSuggestions = useMemo(() => {
@@ -101,6 +103,30 @@ export function EventPopover({
   }, [hasConflict, existingTasks, task.startTime, task.id, task.isAllDay]);
 
   const BYDAY_MAP = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+
+  /** Mapeia uma RRULE do Google para um dos padrões simples do seletor, ou null se for custom (BYMONTHDAY, UNTIL, COUNT, INTERVAL fora do suportado, etc.). */
+  function parseRRuleToType(recurrence: string[]): typeof editRecurrenceType | null {
+    const line = recurrence.find((r) => r.trim().toUpperCase().startsWith("RRULE"));
+    if (!line) return null;
+    const params: Record<string, string> = {};
+    for (const part of line.replace(/^RRULE:/i, "").split(";")) {
+      const eq = part.indexOf("=");
+      if (eq === -1) continue;
+      params[part.slice(0, eq).toUpperCase()] = part.slice(eq + 1).toUpperCase();
+    }
+    if (params.UNTIL || params.COUNT) return null;
+    const freq = params.FREQ;
+    const interval = Math.max(1, parseInt(params.INTERVAL ?? "1", 10) || 1);
+    const byDay = params.BYDAY ?? "";
+    if (freq === "DAILY" && interval === 1 && !byDay) return "daily";
+    if (freq === "WEEKLY" && interval === 1 && byDay === "MO,TU,WE,TH,FR") return "weekdays";
+    if (freq === "WEEKLY" && interval === 1) return "weekly";
+    if (freq === "WEEKLY" && interval === 2) return "biweekly";
+    if (freq === "MONTHLY" && interval === 1 && !byDay) return "monthly";
+    if (freq === "YEARLY" && interval === 1 && !byDay) return "yearly";
+    return null;
+  }
+
   function buildRRule(): string[] {
     if (!editRecurring) return [];
     const dayCode = BYDAY_MAP[new Date(startTime).getDay()];
@@ -148,9 +174,37 @@ export function EventPopover({
     setEditing(false);
     setError("");
     setFeedback("");
-    setEditRecurring(false);
+    setEditRecurring(!!task.isRecurring);
     setEditRecurrenceType("weekly");
+    setRecurrenceDirty(false);
+    setCustomRecurrenceRule(false);
   }, [task]);
+
+  // Recorrentes: instâncias expandidas não trazem a RRULE (só a master tem).
+  // Busca a regra real para pré-selecionar o padrão correto no seletor.
+  useEffect(() => {
+    if (!task.isRecurring) return;
+    let active = true;
+    async function loadRecurrence() {
+      try {
+        const res = await fetch(`/api/tasks/${task.id}/recurrence?calendarId=${encodeURIComponent(task.calendarId ?? "primary")}`);
+        if (!res.ok || !active) return;
+        const data: { recurrence: string[] | null } = await res.json();
+        if (!active || !data.recurrence) return;
+        const parsed = parseRRuleToType(data.recurrence);
+        if (parsed) {
+          setEditRecurrenceType(parsed);
+          setCustomRecurrenceRule(false);
+        } else {
+          setCustomRecurrenceRule(true);
+        }
+      } catch {
+        // silencioso — seletor fica com o padrão, usuário pode ajustar manualmente
+      }
+    }
+    loadRecurrence();
+    return () => { active = false; };
+  }, [task.id, task.isRecurring, task.calendarId]);
 
   useEffect(() => {
     const el = descriptionRef.current;
@@ -252,7 +306,7 @@ export function EventPopover({
       pillar: editPillar,
       attendees: editAttendees,
     };
-    if (!task.isRecurring && editRecurring) {
+    if (editRecurring && (!task.isRecurring || recurrenceDirty)) {
       const rrule = buildRRule();
       if (rrule.length) updates.recurrence = rrule;
     }
@@ -317,7 +371,8 @@ export function EventPopover({
     if (task.isRecurring) {
       setPendingUpdates(updates);
       setPendingMarkerFn(null);
-      setEditScope("this");
+      // Mudar o padrão de repetição não existe para uma ocorrência isolada
+      setEditScope(updates.recurrence !== undefined ? "all" : "this");
       setShowRecurringEditDialog(true);
       return;
     }
@@ -808,28 +863,37 @@ export function EventPopover({
                       Ao salvar, esta ocorrência vira a última: as próximas repetições serão removidas e as anteriores mantidas.
                     </p>
                   )}
-                  {!task.isRecurring && editRecurring && (
-                    <div className="mt-2 grid grid-cols-3 gap-1.5">
-                      {([
-                        { value: "daily",    label: "Diária" },
-                        { value: "weekdays", label: "Dias úteis" },
-                        { value: "weekly",   label: "Semanal" },
-                        { value: "biweekly", label: "Quinzenal" },
-                        { value: "monthly",  label: "Mensal" },
-                        { value: "yearly",   label: "Anual" },
-                      ] as { value: typeof editRecurrenceType; label: string }[]).map(({ value, label }) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setEditRecurrenceType(value)}
-                          className={`py-2 rounded-xl text-xs font-medium transition-colors border
-                            ${editRecurrenceType === value
-                              ? "bg-[#8ab4f8]/15 border-[#8ab4f8]/60 text-[#8ab4f8]"
-                              : "bg-[#2a2b2e] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"}`}
-                        >
-                          {label}
-                        </button>
-                      ))}
+                  {editRecurring && (
+                    <div className="mt-2">
+                      {task.isRecurring && (
+                        <p className="mb-1.5 text-[11px] text-[#9aa0a6]">
+                          {customRecurrenceRule
+                            ? "Esta série usa uma regra personalizada. Escolher um padrão abaixo substitui a regra atual (a partir do escopo escolhido ao salvar)."
+                            : "Padrão atual selecionado — escolha outro para alterar a repetição."}
+                        </p>
+                      )}
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {([
+                          { value: "daily",    label: "Diária" },
+                          { value: "weekdays", label: "Dias úteis" },
+                          { value: "weekly",   label: "Semanal" },
+                          { value: "biweekly", label: "Quinzenal" },
+                          { value: "monthly",  label: "Mensal" },
+                          { value: "yearly",   label: "Anual" },
+                        ] as { value: typeof editRecurrenceType; label: string }[]).map(({ value, label }) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => { setEditRecurrenceType(value); setRecurrenceDirty(true); setCustomRecurrenceRule(false); }}
+                            className={`py-2 rounded-xl text-xs font-medium transition-colors border
+                              ${editRecurrenceType === value && !customRecurrenceRule
+                                ? "bg-[#8ab4f8]/15 border-[#8ab4f8]/60 text-[#8ab4f8]"
+                                : "bg-[#2a2b2e] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"}`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -975,6 +1039,11 @@ export function EventPopover({
           />
           <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[#3c4043] bg-[#2a2b2e] p-5 shadow-2xl">
             <h3 className="text-sm font-semibold text-[#e8eaed] mb-4">Editar evento recorrente</h3>
+            {pendingUpdates?.recurrence !== undefined && (
+              <p className="text-xs text-[#9aa0a6] mb-3 -mt-1">
+                Mudar o padrão de repetição afeta a série — não é possível aplicar só a esta ocorrência.
+              </p>
+            )}
             <div className="space-y-3 mb-5">
               {(
                 [
@@ -982,7 +1051,8 @@ export function EventPopover({
                   { value: "thisAndFollowing", label: "Este e os eventos seguintes" },
                   { value: "all", label: "Todos os eventos" },
                 ] as const
-              ).map(({ value, label }) => (
+              ).filter(({ value }) => value !== "this" || pendingUpdates?.recurrence === undefined)
+                .map(({ value, label }) => (
                 <label key={value} className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="radio"
