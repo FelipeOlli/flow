@@ -7,6 +7,7 @@ import { CalendarOption, FlowTask, UpdateTaskInput } from "@/types/task";
 import { computeDaysOpen, agingBadgeColor, categoryLetters } from "@/lib/aging";
 import { Pillar } from "@/types/task";
 import { suggestFreeSlots } from "@/components/calendar/calendarLayout";
+import { formatGoogleRecurrence } from "@/lib/recurrence-format";
 
 export interface EventAnchorPoint {
   x: number;
@@ -91,6 +92,7 @@ export function EventPopover({
   >("weekly");
   const [recurrenceDirty, setRecurrenceDirty] = useState(false);
   const [customRecurrenceRule, setCustomRecurrenceRule] = useState(false);
+  const [fetchedRecurrenceSummary, setFetchedRecurrenceSummary] = useState("");
 
   // Sugestões de horário livre quando há conflito
   const conflictSuggestions = useMemo(() => {
@@ -178,6 +180,7 @@ export function EventPopover({
     setEditRecurrenceType("weekly");
     setRecurrenceDirty(false);
     setCustomRecurrenceRule(false);
+    setFetchedRecurrenceSummary("");
   }, [task]);
 
   // Recorrentes: instâncias expandidas não trazem a RRULE (só a master tem).
@@ -191,6 +194,8 @@ export function EventPopover({
         if (!res.ok || !active) return;
         const data: { recurrence: string[] | null } = await res.json();
         if (!active || !data.recurrence) return;
+        const display = formatGoogleRecurrence(data.recurrence);
+        setFetchedRecurrenceSummary(display.summary + (display.endHint ? ` · ${display.endHint}` : ""));
         const parsed = parseRRuleToType(data.recurrence);
         if (parsed) {
           setEditRecurrenceType(parsed);
@@ -482,6 +487,9 @@ export function EventPopover({
               <div className={`text-sm text-[#e8eaed] ${task.isCancelled ? "line-through text-[#9aa0a6]" : ""}`}>
                 <p className="capitalize">{dateLabel}</p>
                 <p>{timeLabel}</p>
+                {task.isRecurring && fetchedRecurrenceSummary && (
+                  <p className="mt-0.5 text-white/70">{fetchedRecurrenceSummary}</p>
+                )}
                 {(() => {
                   const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/Sao_Paulo";
                   const d = computeDaysOpen(task, tz);
@@ -853,7 +861,7 @@ export function EventPopover({
                       </div>
                       <span className={`text-xs ${editRecurring ? "text-[#e8eaed]" : "text-[#9aa0a6]"}`}>
                         {task.isRecurring
-                          ? (editRecurring ? (task.recurrenceSummary ?? "Evento recorrente") : "Repetir")
+                          ? (editRecurring ? (fetchedRecurrenceSummary || task.recurrenceSummary || "Evento recorrente") : "Repetir")
                           : (editRecurring ? "Evento recorrente" : "Repetir")}
                       </span>
                     </button>
@@ -868,7 +876,7 @@ export function EventPopover({
                       {task.isRecurring && (
                         <p className="mb-1.5 text-[11px] text-[#9aa0a6]">
                           {customRecurrenceRule
-                            ? "Esta série usa uma regra personalizada. Escolher um padrão abaixo substitui a regra atual (a partir do escopo escolhido ao salvar)."
+                            ? `Recorrência atual: ${fetchedRecurrenceSummary || "regra personalizada"}. Escolher um padrão abaixo substitui a regra atual (a partir do escopo escolhido ao salvar).`
                             : "Padrão atual selecionado — escolha outro para alterar a repetição."}
                         </p>
                       )}
