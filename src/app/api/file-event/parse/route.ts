@@ -55,14 +55,14 @@ export async function POST(req: NextRequest) {
     const tz = process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
     const now = new Date(new Date().toLocaleString("en-US", { timeZone: tz }));
 
-    const parsed = await extractEventFieldsFromMedia(
+    const events = await extractEventFieldsFromMedia(
       input,
       now,
       tz,
       calendars.map((c) => ({ id: c.id, name: c.name }))
     );
 
-    return NextResponse.json({ parsed });
+    return NextResponse.json({ events, parsed: events[0] });
   } catch (err) {
     console.error("[file-event parse]", err);
     return NextResponse.json(

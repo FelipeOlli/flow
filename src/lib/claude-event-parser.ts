@@ -10,7 +10,7 @@ export type MediaInput =
   | { kind: "text"; text: string }
   | { kind: "transcript"; text: string };
 
-const EVENT_SCHEMA = {
+const EVENT_OBJECT_SCHEMA = {
   type: "object" as const,
   properties: {
     title: { type: "string" },
@@ -39,6 +39,15 @@ const EVENT_SCHEMA = {
   additionalProperties: false,
 };
 
+const EVENT_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    events: { type: "array" as const, items: EVENT_OBJECT_SCHEMA, maxItems: 20 },
+  },
+  required: ["events"],
+  additionalProperties: false,
+};
+
 function buildSystemPrompt(
   now: Date,
   tz: string,
@@ -55,8 +64,8 @@ function buildSystemPrompt(
 
   const intro =
     source === "voice"
-      ? "Você é um assistente de agenda. Extraia os detalhes de um evento a partir de um texto transcrito de voz em português brasileiro, ditado pelo usuário."
-      : "Você é um assistente de agenda. Extraia os detalhes de um evento a partir de uma imagem, PDF, arquivo ou texto colado pelo usuário (convite, print de conversa, comprovante, e-mail, mensagem copiada).";
+      ? "Você é um assistente de agenda. Extraia os detalhes do evento (normalmente um único) a partir de um texto transcrito de voz em português brasileiro, ditado pelo usuário."
+      : "Você é um assistente de agenda. Extraia os detalhes de todos os eventos presentes em uma imagem, PDF, arquivo ou texto colado pelo usuário (convite, print de conversa, comprovante, e-mail, mensagem copiada, post de divulgação com vários eventos).";
 
   const durationRules =
     source === "voice"
@@ -87,12 +96,15 @@ function buildSystemPrompt(
 - "semana que vem" = mesma hora, +7 dias
 - "daqui a Xh" = agora + X horas
 - Se sem horário e isAllDay=false, use 08:00 como padrão
-- Para eventos all-day: startTime e endTime devem ter T00:00:00 com o offset correto`
+- Para eventos all-day: startTime e endTime devem ter T00:00:00 com o offset correto
+- Se a data mencionada (dia/mês) já passou neste ano, use o mesmo dia/mês do ano seguinte`
       : `REGRAS DE DATA:
 - "amanhã" = próximo dia
 - "próxima [dia]" = o [dia] da semana que vem (nunca o da semana atual)
 - Se sem horário e isAllDay=false, use 08:00 como padrão
-- Para eventos all-day: startTime e endTime devem ter T00:00:00 com o offset correto`;
+- Para eventos all-day: startTime e endTime devem ter T00:00:00 com o offset correto
+- Se a data mencionada (dia/mês) já passou neste ano, use o mesmo dia/mês do ano seguinte
+- "21 e 22 de agosto" ou "21 a 22 de agosto" com um único horário (ex: "08h às 20h") descreve o MESMO evento ocorrendo em cada um dos dias — gere um item por dia, repetindo título e horário. Só gere um único item atravessando os dias se o texto indicar explicitamente evento contínuo (pernoite, viagem, hospedagem)`;
 
   const isDelegableRule =
     source === "voice"
@@ -111,7 +123,7 @@ Data/hora atual: ${nowStr} (fuso: ${tz})
 Agendas disponíveis:
 ${calendarList}
 
-Retorne os campos abaixo. Todos são opcionais exceto title, startTime e endTime.
+Retorne um array \`events\`, com um item por evento encontrado. Se houver apenas um evento, retorne um array com 1 item. Cada item tem os campos abaixo — todos são opcionais exceto title, startTime e endTime.
 
 - title: resumo curto e direto do evento (máx. 5 palavras). Nunca inclua data, hora ou detalhes no título.
 - description: informações adicionais que não cabem no título (local, pauta, nome completo, link, observações). Deixe vazio se não houver nada relevante.
@@ -145,12 +157,29 @@ CATEGORIA — exemplos:
 ${dateRules}`;
 }
 
+function normalizeEvent(raw: Record<string, unknown>): ParsedEvent {
+  return {
+    title: String(raw.title ?? "Novo evento"),
+    startTime: String(raw.startTime),
+    endTime: String(raw.endTime),
+    calendarId: raw.calendarId ? String(raw.calendarId) : null,
+    description: raw.description ? String(raw.description) : undefined,
+    isImportant: raw.isImportant === true,
+    isAllDay: raw.isAllDay === true,
+    pillar: (raw.pillar as Pillar) ?? undefined,
+    category: (raw.category as "operational" | "strategic") ?? undefined,
+    isDelegable: raw.isDelegable === true,
+    recurrenceType: (raw.recurrenceType as ParsedEvent["recurrenceType"]) ?? undefined,
+    attendees: Array.isArray(raw.attendees) ? raw.attendees.map(String) : undefined,
+  };
+}
+
 export async function extractEventFieldsFromMedia(
   input: MediaInput,
   now: Date,
   tz: string,
   calendars: { id: string; name: string }[]
-): Promise<ParsedEvent> {
+): Promise<ParsedEvent[]> {
   const systemPrompt = buildSystemPrompt(now, tz, calendars, input.kind === "transcript" ? "voice" : "media");
 
   const content: Anthropic.Messages.ContentBlockParam[] =
@@ -170,7 +199,7 @@ export async function extractEventFieldsFromMedia(
 
   const message = await client.messages.create({
     model: "claude-opus-5",
-    max_tokens: 2048,
+    max_tokens: 8192,
     output_config: {
       effort: "low",
       format: { type: "json_schema", schema: EVENT_SCHEMA },
@@ -183,20 +212,10 @@ export async function extractEventFieldsFromMedia(
   if (!textBlock) {
     throw new Error("Claude não retornou conteúdo de texto");
   }
-  const raw = JSON.parse(textBlock.text) as Record<string, unknown>;
+  const raw = JSON.parse(textBlock.text) as { events?: unknown };
+  if (!Array.isArray(raw.events) || raw.events.length === 0) {
+    throw new Error("Nenhum evento encontrado");
+  }
 
-  return {
-    title: String(raw.title ?? "Novo evento"),
-    startTime: String(raw.startTime),
-    endTime: String(raw.endTime),
-    calendarId: raw.calendarId ? String(raw.calendarId) : null,
-    description: raw.description ? String(raw.description) : undefined,
-    isImportant: raw.isImportant === true,
-    isAllDay: raw.isAllDay === true,
-    pillar: (raw.pillar as Pillar) ?? undefined,
-    category: (raw.category as "operational" | "strategic") ?? undefined,
-    isDelegable: raw.isDelegable === true,
-    recurrenceType: (raw.recurrenceType as ParsedEvent["recurrenceType"]) ?? undefined,
-    attendees: Array.isArray(raw.attendees) ? raw.attendees.map(String) : undefined,
-  };
+  return raw.events.map((e) => normalizeEvent(e as Record<string, unknown>));
 }

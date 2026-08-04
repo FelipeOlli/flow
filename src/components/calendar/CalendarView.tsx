@@ -797,6 +797,64 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     setShowForm(true);
   }
 
+  const BATCH_BYDAY_MAP = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+
+  function buildBatchRRule(type: ParsedEvent["recurrenceType"], startIso: string): string[] | undefined {
+    if (!type) return undefined;
+    const dayCode = BATCH_BYDAY_MAP[new Date(startIso).getDay()];
+    switch (type) {
+      case "daily":     return ["RRULE:FREQ=DAILY"];
+      case "weekly":    return [`RRULE:FREQ=WEEKLY;BYDAY=${dayCode}`];
+      case "biweekly":  return [`RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=${dayCode}`];
+      case "monthly":   return ["RRULE:FREQ=MONTHLY"];
+      case "yearly":    return ["RRULE:FREQ=YEARLY"];
+      case "weekdays":  return ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"];
+      default:          return undefined;
+    }
+  }
+
+  async function handleBatchCreate(events: ParsedEvent[]): Promise<{ okIndexes: number[]; errors: string[] }> {
+    const okIndexes: number[] = [];
+    const errors: string[] = [];
+    for (let i = 0; i < events.length; i++) {
+      const e = events[i];
+      try {
+        const payload: CreateTaskInput = {
+          title: e.title,
+          startTime: new Date(e.startTime).toISOString(),
+          endTime: new Date(e.endTime).toISOString(),
+          description: e.description || undefined,
+          calendarId: e.calendarId ?? "primary",
+        };
+        const rrule = buildBatchRRule(e.recurrenceType, payload.startTime);
+        if (rrule) payload.recurrence = rrule;
+        if (e.isImportant) payload.isImportant = true;
+        if (e.category) payload.category = e.category;
+        if (e.isDelegable) payload.isDelegable = true;
+        if (e.pillar) payload.pillar = e.pillar;
+        if (e.attendees?.length) payload.attendees = e.attendees;
+
+        const res = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error();
+        okIndexes.push(i);
+      } catch {
+        errors.push(e.title);
+      }
+    }
+    await fetchTasks();
+    if (errors.length === 0) {
+      setMigrateResult(`${okIndexes.length} ${okIndexes.length === 1 ? "evento criado" : "eventos criados"}.`);
+    } else {
+      setMigrateResult(`${okIndexes.length} de ${events.length} eventos criados. Falhou: ${errors.join(", ")}.`);
+    }
+    scheduleMigrateResultClear(errors.length ? 8_000 : 4_000);
+    return { okIndexes, errors };
+  }
+
   function handleVoiceResult(parsed: ParsedEvent) {
     setEditingTask(null);
     setFormDefaults(parsed);
@@ -1529,6 +1587,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {showCapture && (
         <FileCaptureModal
           onResult={handleFileResult}
+          onBatchResult={handleBatchCreate}
           onClose={() => setShowCapture(false)}
         />
       )}
