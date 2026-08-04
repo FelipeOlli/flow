@@ -69,6 +69,7 @@ export function EventPopover({
     (task.attendees ?? []).map((a) => a.email ?? "").filter(Boolean)
   );
   const [attendeeInput, setAttendeeInput] = useState("");
+  const [frequentAttendees, setFrequentAttendees] = useState<{ email: string; name?: string }[]>([]);
   const [calendars, setCalendars] = useState<CalendarOption[]>([]);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [calendarLoadError, setCalendarLoadError] = useState("");
@@ -239,6 +240,15 @@ export function EventPopover({
       }
     }
     loadCalendars();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/attendees/frequent")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: { email: string; name?: string }[]) => { if (active) setFrequentAttendees(data); })
+      .catch(() => {});
     return () => { active = false; };
   }, []);
 
@@ -959,6 +969,25 @@ export function EventPopover({
                     Adicionar
                   </button>
                 </div>
+                {frequentAttendees.filter((a) => !editAttendees.includes(a.email)).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {frequentAttendees
+                      .filter((a) => !editAttendees.includes(a.email))
+                      .filter((a) => !attendeeInput.trim() || a.email.includes(attendeeInput.trim().toLowerCase()) || a.name?.toLowerCase().includes(attendeeInput.trim().toLowerCase()))
+                      .slice(0, 8)
+                      .map((a) => (
+                        <button
+                          key={a.email}
+                          type="button"
+                          onClick={() => { setEditAttendees((prev) => [...prev, a.email]); setAttendeeInput(""); }}
+                          className="px-2 py-1 rounded-full bg-[#2a2b2e] border border-[#3c4043] text-[11px] text-[#9aa0a6] hover:text-[#e8eaed] hover:border-[#8ab4f8]/60 transition-colors"
+                          title={a.email}
+                        >
+                          {a.name || a.email}
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
               {error && <p className="text-xs text-[#f28b82]">{error}</p>}
               {feedback && <p className="text-xs text-emerald-400">{feedback}</p>}

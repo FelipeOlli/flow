@@ -93,6 +93,7 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, onClose, 
   const [pillar, setPillar] = useState<Pillar | null>(defaults?.pillar ?? null);
   const [attendeeInput, setAttendeeInput] = useState("");
   const [attendees, setAttendees] = useState<string[]>(defaults?.attendees ?? []);
+  const [frequentAttendees, setFrequentAttendees] = useState<{ email: string; name?: string }[]>([]);
 
   // Detecção de conflito de horário (apenas na criação)
   const conflictData = useMemo(() => {
@@ -120,6 +121,16 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, onClose, 
   useEffect(() => {
     setTimeout(() => titleRef.current?.focus(), 100);
   }, []);
+
+  useEffect(() => {
+    if (isEditing) return;
+    let active = true;
+    fetch("/api/attendees/frequent")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: { email: string; name?: string }[]) => { if (active) setFrequentAttendees(data); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [isEditing]);
 
   useEffect(() => {
     const el = descriptionRef.current;
@@ -508,6 +519,25 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, onClose, 
                     Adicionar
                   </button>
                 </div>
+                {frequentAttendees.filter((a) => !attendees.includes(a.email)).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {frequentAttendees
+                      .filter((a) => !attendees.includes(a.email))
+                      .filter((a) => !attendeeInput.trim() || a.email.includes(attendeeInput.trim().toLowerCase()) || a.name?.toLowerCase().includes(attendeeInput.trim().toLowerCase()))
+                      .slice(0, 8)
+                      .map((a) => (
+                        <button
+                          key={a.email}
+                          type="button"
+                          onClick={() => { setAttendees((prev) => [...prev, a.email]); setAttendeeInput(""); }}
+                          className="px-2 py-1 rounded-full bg-[#2a2b2e] border border-[#3c4043] text-[11px] text-[#9aa0a6] hover:text-[#e8eaed] hover:border-[#8ab4f8]/60 transition-colors"
+                          title={a.email}
+                        >
+                          {a.name || a.email}
+                        </button>
+                      ))}
+                  </div>
+                )}
                 {attendees.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {attendees.map((email) => (

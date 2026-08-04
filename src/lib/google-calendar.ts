@@ -338,6 +338,53 @@ export async function createEvent(
   return mapEvent(data, calendarId);
 }
 
+export interface FrequentAttendee {
+  email: string;
+  name?: string;
+  count: number;
+}
+
+/** Convidados mais frequentes nos últimos 12 meses (+30 dias futuros), pra sugerir ao criar/editar evento. */
+export async function getFrequentAttendees(accessToken: string): Promise<FrequentAttendee[]> {
+  const calendar = getClient(accessToken);
+  const calendarItems = (await listCalendarEntries(calendar, "writer")).filter((c) => Boolean(c.id));
+
+  const now = Date.now();
+  const timeMin = new Date(now - 365 * 24 * 60 * 60 * 1000).toISOString();
+  const timeMax = new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const results = await Promise.allSettled(
+    calendarItems.map((cal) =>
+      calendar.events.list({
+        calendarId: cal.id!,
+        timeMin,
+        timeMax,
+        singleEvents: true,
+        maxResults: 250,
+        orderBy: "startTime",
+      })
+    )
+  );
+
+  const counts = new Map<string, { name?: string; count: number }>();
+  for (const r of results) {
+    if (r.status !== "fulfilled") continue;
+    for (const event of r.value.data.items ?? []) {
+      for (const att of event.attendees ?? []) {
+        if (att.self || att.resource || !att.email) continue;
+        const email = att.email.toLowerCase();
+        const existing = counts.get(email);
+        counts.set(email, { name: att.displayName ?? existing?.name, count: (existing?.count ?? 0) + 1 });
+      }
+    }
+  }
+
+  return Array.from(counts.entries())
+    .map(([email, v]) => ({ email, name: v.name, count: v.count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20);
+}
+
 export async function listWritableCalendars(accessToken: string): Promise<CalendarOption[]> {
   const calendar = getClient(accessToken);
   const { data } = await calendar.calendarList.list({
