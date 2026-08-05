@@ -71,9 +71,15 @@ export function eventsConflict(
   return startA < endB && endA > startB;
 }
 
+/** Evento que não ocupa mais o horário: cancelado pelo organizador ou recusado por mim. */
+export function isFreedSlot(task: FlowTask): boolean {
+  const t = task as FlowTask & { selfResponseStatus?: string };
+  return Boolean(t.isCancelled) || t.selfResponseStatus === "declined";
+}
+
 /**
  * Retorna os eventos de `tasks` que conflitam com o intervalo [startIso, endIso].
- * Ignora all-day, cancelados, recusados e eventos de outros dias.
+ * Ignora all-day, cancelados, recusados, concluídos e eventos de outros dias.
  * `excludeId` permite ignorar o próprio evento (útil na edição).
  */
 export function findConflicts(
@@ -88,8 +94,8 @@ export function findConflicts(
 
   return tasks.filter((t) => {
     if (t.isAllDay) return false;
-    if (t.isCancelled) return false;
-    if ((t as FlowTask & { selfResponseStatus?: string }).selfResponseStatus === "declined") return false;
+    if (isFreedSlot(t)) return false;
+    if (t.isComplete) return false;
     if (excludeId && t.id === excludeId) return false;
     if (!t.startTime.startsWith(dayKey)) return false;
     const s = new Date(t.startTime).getTime();
@@ -110,11 +116,11 @@ export function suggestFreeSlots(
   const dayKey       = desiredStartIso.slice(0, 10);
   const desiredStart = new Date(desiredStartIso).getTime();
 
-  // Eventos ocupados do dia (sem all-day, cancelados, recusados)
+  // Eventos ocupados do dia (sem all-day, cancelados, recusados, concluídos)
   const occupied = tasks.filter((t) => {
     if (t.isAllDay) return false;
-    if (t.isCancelled) return false;
-    if ((t as FlowTask & { selfResponseStatus?: string }).selfResponseStatus === "declined") return false;
+    if (isFreedSlot(t)) return false;
+    if (t.isComplete) return false;
     if (excludeId && t.id === excludeId) return false;
     return t.startTime.startsWith(dayKey);
   });
@@ -388,13 +394,24 @@ export function packDayEvents(
  * 2. Dentro de cada cluster, atribui colunas com algoritmo guloso.
  * 3. Expande cada evento para a direita quando há colunas livres.
  *
- * Retorna { task, colStart, colSpan, totalCols } para cada evento.
+ * Eventos cancelados/recusados (`isFreedSlot`) não disputam coluna com os
+ * demais — entram como `ghost` (faixa fina), pois o horário está livre.
+ *
+ * Retorna { task, colStart, colSpan, totalCols, ghost } para cada evento.
  */
 export function computeLayout(tasks: FlowTask[]) {
   if (!tasks.length) return [];
 
+  const ghostTasks = tasks.filter(isFreedSlot);
+  const blockingTasks = tasks.filter((t) => !isFreedSlot(t));
+  const ghostResults = ghostTasks.map((task) => ({
+    task, colStart: 0, colSpan: 1, totalCols: 1, ghost: true as const,
+  }));
+
+  if (!blockingTasks.length) return ghostResults;
+
   // Ordena por início; desempate: evento mais longo primeiro (pega coluna 0)
-  const sorted = [...tasks].sort((a, b) => {
+  const sorted = [...blockingTasks].sort((a, b) => {
     const sa = new Date(a.startTime).getTime();
     const sb = new Date(b.startTime).getTime();
     if (sa !== sb) return sa - sb;
@@ -469,10 +486,14 @@ export function computeLayout(tasks: FlowTask[]) {
     clusterStart = clusterEnd;
   }
 
-  return sorted.map((task, i) => ({
-    task,
-    colStart: colStart[i],
-    colSpan: colSpan[i],
-    totalCols: totalCols[i],
-  }));
+  return [
+    ...sorted.map((task, i) => ({
+      task,
+      colStart: colStart[i],
+      colSpan: colSpan[i],
+      totalCols: totalCols[i],
+      ghost: false as const,
+    })),
+    ...ghostResults,
+  ];
 }

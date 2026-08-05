@@ -364,7 +364,7 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
                 )}
 
                 {/* Events */}
-                {layout.map(({ task, colStart, colSpan, totalCols }) => (
+                {layout.map(({ task, colStart, colSpan, totalCols, ghost }) => (
                   <TaskBlock
                     key={task.id}
                     task={task}
@@ -374,6 +374,7 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
                     colStart={colStart}
                     colSpan={colSpan}
                     totalCols={totalCols}
+                    ghost={ghost}
                     compact
                     onComplete={() => onComplete(task)}
                     onEdit={(e) => onEdit(task, { x: e.clientX, y: e.clientY })}

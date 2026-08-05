@@ -22,12 +22,14 @@ interface TaskBlockProps {
   onTaskPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
   onImportant?: () => void;
   hasConflict?: boolean;
+  /** Evento cancelado/recusado: horário livre, exibido como faixa fina clicável. */
+  ghost?: boolean;
 }
 
 export function TaskBlock({
   task, top, height, onComplete, onEdit, onDelete,
   isPending, compact, isDragging, colStart = 0, colSpan = 1, totalCols = 1,
-  onTaskPointerDown, onImportant, hasConflict,
+  onTaskPointerDown, onImportant, hasConflict, ghost,
 }: TaskBlockProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const dense = height < 30 || (compact && totalCols >= 3);
@@ -69,17 +71,19 @@ export function TaskBlock({
         height: `${height}px`,
         backgroundColor: color,
         borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(32,33,36,0.45)",
-        left: totalCols > 1 ? `calc(${(colStart / totalCols) * 100}% + 2px)` : "2px",
-        right: totalCols > 1 ? undefined : "2px",
-        width: totalCols > 1 ? `calc(${(colSpan / totalCols) * 100}% - 3px)` : undefined,
-        opacity: isDragging ? 0.88 : isPending ? 0.55 : 1,
+        left: ghost ? "2px" : totalCols > 1 ? `calc(${(colStart / totalCols) * 100}% + 2px)` : "2px",
+        right: ghost ? undefined : totalCols > 1 ? undefined : "2px",
+        width: ghost ? "10px" : totalCols > 1 ? `calc(${(colSpan / totalCols) * 100}% - 3px)` : undefined,
+        opacity: isDragging ? 0.88 : isPending ? 0.55 : ghost ? 0.55 : 1,
         touchAction: "none",
-        zIndex: isDragging ? 300 : (100 + startOrder),
+        zIndex: isDragging ? 300 : ghost ? 50 + startOrder : (100 + startOrder),
         transition: isDragging ? "box-shadow 0.1s, opacity 0.1s" : "opacity 0.2s",
       }}
-      onPointerDown={onTaskPointerDown}
+      onPointerDown={ghost ? undefined : onTaskPointerDown}
       onClick={(e) => { e.stopPropagation(); onEdit(e); }}
     >
+      {ghost ? null : (
+      <>
       {/* Badges D/O/E no topo do card */}
       {catLetters.length > 0 && (
         <div className="absolute top-0.5 right-0.5 flex gap-0.5 z-10">
@@ -230,6 +234,8 @@ export function TaskBlock({
             </button>
           )}
         </div>
+      )}
+      </>
       )}
     </div>
   );
