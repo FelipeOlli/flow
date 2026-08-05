@@ -64,7 +64,7 @@ function buildSystemPrompt(
 
   const intro =
     source === "voice"
-      ? "Você é um assistente de agenda. Extraia os detalhes do evento (normalmente um único) a partir de um texto transcrito de voz em português brasileiro, ditado pelo usuário."
+      ? "Você é um assistente de agenda. Extraia os detalhes de todos os eventos mencionados (normalmente um único, mas o usuário pode ditar mais de um) a partir de um texto transcrito de voz em português brasileiro."
       : "Você é um assistente de agenda. Extraia os detalhes de todos os eventos presentes em uma imagem, PDF, arquivo ou texto colado pelo usuário (convite, print de conversa, comprovante, e-mail, mensagem copiada, post de divulgação com vários eventos).";
 
   const durationRules =
@@ -97,7 +97,8 @@ function buildSystemPrompt(
 - "daqui a Xh" = agora + X horas
 - Se sem horário e isAllDay=false, use 08:00 como padrão
 - Para eventos all-day: startTime e endTime devem ter T00:00:00 com o offset correto
-- Se a data mencionada (dia/mês) já passou neste ano, use o mesmo dia/mês do ano seguinte`
+- Se a data mencionada (dia/mês) já passou neste ano, use o mesmo dia/mês do ano seguinte
+- Se o usuário ditar mais de um evento na mesma frase (ex: "reunião amanhã 10h e consulta quinta 15h"), gere um item por evento`
       : `REGRAS DE DATA:
 - "amanhã" = próximo dia
 - "próxima [dia]" = o [dia] da semana que vem (nunca o da semana atual)

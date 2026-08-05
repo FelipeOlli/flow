@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       calendars.map((c) => ({ id: c.id, name: c.name }))
     );
 
-    return NextResponse.json({ parsed: events[0] });
+    return NextResponse.json({ events, parsed: events[0] });
   } catch (err) {
     console.error("[voice-event parse]", err);
     return NextResponse.json(

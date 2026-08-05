@@ -8,10 +8,11 @@ type CaptureState = "recording" | "processing" | "error";
 
 interface VoiceCaptureModalProps {
   onResult: (parsed: ParsedEvent, transcript: string) => void;
+  onMultipleResults: (events: ParsedEvent[], transcript: string) => void;
   onClose: () => void;
 }
 
-export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps) {
+export function VoiceCaptureModal({ onResult, onMultipleResults, onClose }: VoiceCaptureModalProps) {
   const [state, setState] = useState<CaptureState>("recording");
   const [seconds, setSeconds] = useState(0);
   const [processingMsg, setProcessingMsg] = useState("Transcrevendo...");
@@ -111,7 +112,12 @@ export function VoiceCaptureModal({ onResult, onClose }: VoiceCaptureModalProps)
       const parseData = await parseRes.json();
       if (!parseRes.ok) throw new Error(parseData.error ?? "Erro na análise");
 
-      onResult(parseData.parsed, transcript);
+      const events = (parseData.events as ParsedEvent[] | undefined) ?? (parseData.parsed ? [parseData.parsed as ParsedEvent] : []);
+      if (events.length <= 1) {
+        onResult(events[0] ?? (parseData.parsed as ParsedEvent), transcript);
+      } else {
+        onMultipleResults(events, transcript);
+      }
     } catch (err) {
       setState("error");
       stateRef.current = "error";

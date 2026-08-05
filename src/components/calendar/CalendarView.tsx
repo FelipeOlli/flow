@@ -801,15 +801,24 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     setShowForm(true);
   }
 
-  function handleFileBatchResult(events: ParsedEvent[]) {
+  function startEventQueue(events: ParsedEvent[]) {
     setEditingTask(null);
     setEventQueue(events);
     setQueueIndex(0);
     setQueueCreated(0);
     setQueueSkipped(0);
     setFormDefaults(events[0]);
-    setShowCapture(false);
     setShowForm(true);
+  }
+
+  function handleFileBatchResult(events: ParsedEvent[]) {
+    startEventQueue(events);
+    setShowCapture(false);
+  }
+
+  function handleVoiceBatchResult(events: ParsedEvent[]) {
+    startEventQueue(events);
+    setShowVoiceCapture(false);
   }
 
   function finishQueue(created: number, skipped: number) {
@@ -1569,6 +1578,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {showVoiceCapture && (
         <VoiceCaptureModal
           onResult={handleVoiceResult}
+          onMultipleResults={handleVoiceBatchResult}
           onClose={() => setShowVoiceCapture(false)}
         />
       )}
