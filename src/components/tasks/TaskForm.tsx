@@ -12,6 +12,7 @@ interface VoiceDefaults {
   description?: string;
   calendarId?: string | null;
   isImportant?: boolean;
+  isAllDay?: boolean;
   pillar?: Pillar;
   category?: "operational" | "strategic";
   isDelegable?: boolean;
@@ -24,6 +25,9 @@ interface TaskFormProps {
   currentDate: string;
   defaults?: VoiceDefaults;
   existingTasks?: FlowTask[];
+  /** Modo fila: um TaskForm por evento de um lote extraído por IA. */
+  queue?: { index: number; total: number };
+  onSkip?: () => void;
   onClose: () => void;
   onSave: (data: CreateTaskInput | UpdateTaskInput) => Promise<void>;
   onComplete?: (task: FlowTask) => void;
@@ -60,7 +64,7 @@ function buildDefaultEnd(start: string, defaultIso?: string): string {
   return format(d, "yyyy-MM-dd'T'HH:mm");
 }
 
-export function TaskForm({ task, currentDate, defaults, existingTasks, onClose, onSave, onComplete }: TaskFormProps) {
+export function TaskForm({ task, currentDate, defaults, existingTasks, queue, onSkip, onClose, onSave, onComplete }: TaskFormProps) {
   const isEditing = !!task;
   const titleRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -238,7 +242,9 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, onClose, 
         if (attendees.length) (payload as CreateTaskInput).attendees = attendees;
       }
       await onSave(payload);
-      onClose();
+      // No modo fila quem decide o próximo passo (avançar ou encerrar) é o pai;
+      // fora da fila, o comportamento de sempre é fechar ao salvar.
+      if (!queue) onClose();
     } catch {
       setError("Erro ao salvar. Tente novamente.");
       setLoading(false);
@@ -251,14 +257,26 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, onClose, 
       <div className="fixed inset-0 z-[4000] flex items-center justify-center p-2 sm:p-6">
         <div className="w-full max-w-3xl bg-[#202124] rounded-2xl border border-[#3c4043] shadow-2xl shadow-black/40 p-3 sm:p-6 max-h-[92vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-2xl font-normal text-[#e8eaed]">
-              {isEditing ? "Editar evento" : "Novo evento"}
-            </h2>
+            <div>
+              <h2 className="text-2xl font-normal text-[#e8eaed]">
+                {isEditing ? "Editar evento" : queue ? `Novo evento — ${queue.index + 1} de ${queue.total}` : "Novo evento"}
+              </h2>
+              {queue && (
+                <div className="flex gap-1 mt-2">
+                  {Array.from({ length: queue.total }).map((_, i) => (
+                    <span
+                      key={i}
+                      className={`w-1.5 h-1.5 rounded-full ${i <= queue.index ? "bg-[#8ab4f8]" : "bg-[#3c4043]"}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               type="button"
               onClick={onClose}
               className="w-9 h-9 min-w-9 min-h-9 rounded-full border border-[#8ab4f8] text-[#8ab4f8] hover:bg-[#8ab4f8]/10 transition-colors flex items-center justify-center"
-              aria-label="Fechar"
+              aria-label={queue ? "Encerrar fila de eventos" : "Fechar"}
             >
               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M18 6L6 18M6 6l12 12" />
@@ -596,13 +614,19 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, onClose, 
             )}
             {error && <p className="text-red-400 text-sm">{error}</p>}
             <div className="flex gap-3 pt-1">
-              <button type="button" onClick={onClose}
+              <button type="button" onClick={queue ? onSkip : onClose}
                 className="flex-1 py-3 rounded-xl bg-[#2a2b2e] border border-[#3c4043] text-[#e8eaed] font-medium hover:bg-[#313236] transition-colors">
-                Cancelar
+                {queue ? "Pular" : "Cancelar"}
               </button>
               <button type="submit" disabled={loading}
                 className="flex-1 py-3 rounded-xl bg-emerald-500 text-white font-medium hover:bg-emerald-600 transition-colors disabled:opacity-50">
-                {loading ? "Salvando..." : isEditing ? "Salvar" : "Criar"}
+                {loading
+                  ? "Salvando..."
+                  : isEditing
+                  ? "Salvar"
+                  : queue && queue.index < queue.total - 1
+                  ? "Criar e próximo"
+                  : "Criar"}
               </button>
             </div>
           </form>

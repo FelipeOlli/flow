@@ -128,6 +128,10 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [formDefaults, setFormDefaults] = useState<Partial<ParsedEvent> & { startTime?: string; endTime?: string }>({});
   const [showVoiceCapture, setShowVoiceCapture] = useState(false);
   const [showCapture, setShowCapture] = useState(false);
+  const [eventQueue, setEventQueue] = useState<ParsedEvent[]>([]);
+  const [queueIndex, setQueueIndex] = useState(0);
+  const [queueCreated, setQueueCreated] = useState(0);
+  const [queueSkipped, setQueueSkipped] = useState(0);
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState<string | null>(null);
   const [manualSourceDate, setManualSourceDate] = useState("");
@@ -797,62 +801,47 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     setShowForm(true);
   }
 
-  const BATCH_BYDAY_MAP = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+  function handleFileBatchResult(events: ParsedEvent[]) {
+    setEditingTask(null);
+    setEventQueue(events);
+    setQueueIndex(0);
+    setQueueCreated(0);
+    setQueueSkipped(0);
+    setFormDefaults(events[0]);
+    setShowCapture(false);
+    setShowForm(true);
+  }
 
-  function buildBatchRRule(type: ParsedEvent["recurrenceType"], startIso: string): string[] | undefined {
-    if (!type) return undefined;
-    const dayCode = BATCH_BYDAY_MAP[new Date(startIso).getDay()];
-    switch (type) {
-      case "daily":     return ["RRULE:FREQ=DAILY"];
-      case "weekly":    return [`RRULE:FREQ=WEEKLY;BYDAY=${dayCode}`];
-      case "biweekly":  return [`RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=${dayCode}`];
-      case "monthly":   return ["RRULE:FREQ=MONTHLY"];
-      case "yearly":    return ["RRULE:FREQ=YEARLY"];
-      case "weekdays":  return ["RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"];
-      default:          return undefined;
+  function finishQueue(created: number, skipped: number) {
+    setEventQueue([]);
+    setQueueIndex(0);
+    setShowForm(false);
+    setEditingTask(null);
+    setFormDefaults({});
+    const parts = [`${created} ${created === 1 ? "evento criado" : "eventos criados"}`];
+    if (skipped > 0) parts.push(`${skipped} ${skipped === 1 ? "pulado" : "pulados"}`);
+    setMigrateResult(parts.join(", ") + ".");
+    scheduleMigrateResultClear(4_000);
+  }
+
+  function advanceQueue(outcome: "created" | "skipped") {
+    const created = outcome === "created" ? queueCreated + 1 : queueCreated;
+    const skipped = outcome === "skipped" ? queueSkipped + 1 : queueSkipped;
+    setQueueCreated(created);
+    setQueueSkipped(skipped);
+    const next = queueIndex + 1;
+    if (next < eventQueue.length) {
+      setQueueIndex(next);
+      setFormDefaults(eventQueue[next]);
+    } else {
+      finishQueue(created, skipped);
     }
   }
 
-  async function handleBatchCreate(events: ParsedEvent[]): Promise<{ okIndexes: number[]; errors: string[] }> {
-    const okIndexes: number[] = [];
-    const errors: string[] = [];
-    for (let i = 0; i < events.length; i++) {
-      const e = events[i];
-      try {
-        const payload: CreateTaskInput = {
-          title: e.title,
-          startTime: new Date(e.startTime).toISOString(),
-          endTime: new Date(e.endTime).toISOString(),
-          description: e.description || undefined,
-          calendarId: e.calendarId ?? "primary",
-        };
-        const rrule = buildBatchRRule(e.recurrenceType, payload.startTime);
-        if (rrule) payload.recurrence = rrule;
-        if (e.isImportant) payload.isImportant = true;
-        if (e.category) payload.category = e.category;
-        if (e.isDelegable) payload.isDelegable = true;
-        if (e.pillar) payload.pillar = e.pillar;
-        if (e.attendees?.length) payload.attendees = e.attendees;
-
-        const res = await fetch("/api/tasks", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) throw new Error();
-        okIndexes.push(i);
-      } catch {
-        errors.push(e.title);
-      }
-    }
-    await fetchTasks();
-    if (errors.length === 0) {
-      setMigrateResult(`${okIndexes.length} ${okIndexes.length === 1 ? "evento criado" : "eventos criados"}.`);
-    } else {
-      setMigrateResult(`${okIndexes.length} de ${events.length} eventos criados. Falhou: ${errors.join(", ")}.`);
-    }
-    scheduleMigrateResultClear(errors.length ? 8_000 : 4_000);
-    return { okIndexes, errors };
+  function cancelQueue() {
+    const created = queueCreated;
+    const skipped = queueSkipped + (eventQueue.length - queueIndex);
+    finishQueue(created, skipped);
   }
 
   function handleVoiceResult(parsed: ParsedEvent) {
@@ -1587,17 +1576,27 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       {showCapture && (
         <FileCaptureModal
           onResult={handleFileResult}
-          onBatchResult={handleBatchCreate}
+          onMultipleResults={handleFileBatchResult}
           onClose={() => setShowCapture(false)}
         />
       )}
 
       {showForm && (
-        <TaskForm task={editingTask} currentDate={currentDate.toISOString()} defaults={formDefaults}
+        <TaskForm
+          key={eventQueue.length ? `queue-${queueIndex}` : "single"}
+          task={editingTask}
+          currentDate={currentDate.toISOString()}
+          defaults={formDefaults}
           existingTasks={tasks}
-          onClose={() => { setShowForm(false); setEditingTask(null); setFormDefaults({}); }}
-          onSave={handleSave}
-          onComplete={handleComplete} />
+          queue={eventQueue.length > 1 ? { index: queueIndex, total: eventQueue.length } : undefined}
+          onSkip={eventQueue.length > 1 ? () => advanceQueue("skipped") : undefined}
+          onClose={eventQueue.length > 1 ? cancelQueue : () => { setShowForm(false); setEditingTask(null); setFormDefaults({}); }}
+          onSave={async (data) => {
+            await handleSave(data);
+            if (eventQueue.length > 1) advanceQueue("created");
+          }}
+          onComplete={handleComplete}
+        />
       )}
 
       {selectedTask && (
