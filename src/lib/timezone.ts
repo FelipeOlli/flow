@@ -25,6 +25,25 @@ export function shiftDateKey(dateKey: string, days: number): string {
   return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
 }
 
+/** 0 = domingo … 6 = sábado. dateKey é literal, independe de timezone. */
+export function getWeekdayForDateKey(dateKey: string): number {
+  const [y, m, d] = parseDateKey(dateKey);
+  return new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+}
+
+export function isWeekendDateKey(dateKey: string): boolean {
+  const weekday = getWeekdayForDateKey(dateKey);
+  return weekday === 0 || weekday === 6;
+}
+
+/** Se cair em sáb/dom, avança para a segunda seguinte; senão devolve igual. */
+export function toNextBusinessDateKey(dateKey: string): string {
+  const weekday = getWeekdayForDateKey(dateKey);
+  if (weekday === 6) return shiftDateKey(dateKey, 2); // sábado → segunda
+  if (weekday === 0) return shiftDateKey(dateKey, 1); // domingo → segunda
+  return dateKey;
+}
+
 /** toKey minus fromKey in calendar days (e.g. 2026-04-03 vs 2026-04-04 → -1). */
 export function diffDateKeysInDays(fromKey: string, toKey: string): number {
   if (!isDateKey(fromKey) || !isDateKey(toKey)) return 0;

@@ -1,13 +1,32 @@
 import { differenceInMinutes } from "date-fns";
 import { getEventsForDateKey, moveAllDayEvent, moveEvent } from "./google-calendar";
+import { isBusinessHoursCalendar } from "./pillar-config";
 import {
   diffDateKeysInDays,
   getDateKeyInTimeZone,
   getReferenceDateForDateKey,
   getTimePartsInTimeZone,
+  isWeekendDateKey,
   shiftDateKey,
+  toNextBusinessDateKey,
   zonedDateTimeToUtc,
 } from "./timezone";
+
+/**
+ * Eventos pendentes de calendários restritos a dias úteis (ex.: TI CF Contabilidade)
+ * nunca são empurrados pela migração automática para sábado/domingo — pulam direto
+ * para a próxima segunda. Se a origem já está no fim de semana (evento colocado lá
+ * manualmente), o fluxo segue normal (sábado → domingo, domingo → segunda).
+ */
+function resolveTargetDateKey(
+  sourceDateKey: string,
+  baseTargetDateKey: string,
+  calendarName?: string
+): string {
+  if (!isBusinessHoursCalendar(calendarName)) return baseTargetDateKey;
+  if (isWeekendDateKey(sourceDateKey)) return baseTargetDateKey;
+  return toNextBusinessDateKey(baseTargetDateKey);
+}
 
 function extractErrorReason(err: unknown): string {
   if (err && typeof err === "object") {
@@ -61,6 +80,8 @@ export interface MigrationDiagnostics {
   eligibleAllDay: number;
   includeCompletedTimed: boolean;
   includeAllDayFilter: boolean;
+  /** Quantos eventos de calendários restritos a dias úteis pularam o fim de semana (foram além da base). */
+  deferredToBusinessDay: number;
 }
 
 export interface MigrationResult {
@@ -98,7 +119,6 @@ export async function runMigration(
       : todayDateKey;
   const sourceDay = getReferenceDateForDateKey(sourceDateKey, timeZone);
   const targetDay = getReferenceDateForDateKey(targetDateKey, timeZone);
-  const dayDelta = diffDateKeysInDays(sourceDateKey, targetDateKey);
 
   console.log(`[FLOW MIGRATION] Buscando eventos de ${sourceDateKey} → ${targetDateKey} (${timeZone})`);
 
@@ -125,6 +145,10 @@ export async function runMigration(
     ? allDayOnSource.filter((e) => !e.isCancelled && e.selfResponseStatus !== "declined" && extractAllDayBounds(e) !== null)
     : [];
 
+  const deferredToBusinessDay = [...timedToMove, ...allDayToMove].filter(
+    (e) => resolveTargetDateKey(sourceDateKey, targetDateKey, e.calendarName) !== targetDateKey
+  ).length;
+
   const diagnostics: MigrationDiagnostics = {
     sourceDateKey,
     targetDateKey,
@@ -140,10 +164,11 @@ export async function runMigration(
     eligibleAllDay: allDayToMove.length,
     includeCompletedTimed: filter.includeCompletedTimed,
     includeAllDayFilter: filter.includeAllDay,
+    deferredToBusinessDay,
   };
 
   console.log(
-    `[FLOW MIGRATION] Fila: ${timedToMove.length} com horário, ${allDayToMove.length} dia inteiro (filtro concluídas=${filter.includeCompletedTimed}, allDay=${filter.includeAllDay})`,
+    `[FLOW MIGRATION] Fila: ${timedToMove.length} com horário, ${allDayToMove.length} dia inteiro (filtro concluídas=${filter.includeCompletedTimed}, allDay=${filter.includeAllDay}, adiados p/ dia útil=${deferredToBusinessDay})`,
     timedToMove.map((e) => `"${e.title}" [${e.calendarId}]`)
   );
   console.log("[FLOW MIGRATION] Diagnóstico:", diagnostics);
@@ -163,7 +188,9 @@ export async function runMigration(
       const duration = differenceInMinutes(originalEnd, originalStart);
       const { hour, minute } = getTimePartsInTimeZone(originalStart, timeZone);
 
-      const newStart = zonedDateTimeToUtc(targetDateKey, timeZone, hour, minute, 0, 0);
+      const eventTargetDateKey = resolveTargetDateKey(sourceDateKey, targetDateKey, event.calendarName);
+      const deferred = eventTargetDateKey !== targetDateKey;
+      const newStart = zonedDateTimeToUtc(eventTargetDateKey, timeZone, hour, minute, 0, 0);
       const newEnd = new Date(newStart.getTime() + duration * 60_000);
 
       const preserveComplete = filter.includeCompletedTimed && event.isComplete;
@@ -182,7 +209,12 @@ export async function runMigration(
         }
       );
 
-      details.push(`✓ "${event.title}" → ${newStart.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`);
+      const timeLabel = newStart.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      details.push(
+        deferred
+          ? `✓ "${event.title}" → ${timeLabel} (dia útil, ${eventTargetDateKey})`
+          : `✓ "${event.title}" → ${timeLabel}`
+      );
       migrated++;
       console.log(`[FLOW MIGRATION] Migrado: "${event.title}" para ${newStart.toISOString()}`);
     } catch (err) {
@@ -201,19 +233,26 @@ export async function runMigration(
     }
     try {
       const preserveComplete = filter.includeAllDay && event.isComplete;
+      const eventTargetDateKey = resolveTargetDateKey(sourceDateKey, targetDateKey, event.calendarName);
+      const deferred = eventTargetDateKey !== targetDateKey;
+      const eventDayDelta = diffDateKeysInDays(sourceDateKey, eventTargetDateKey);
       await moveAllDayEvent(
         accessToken,
         event.id,
         event.calendarId ?? "primary",
         bounds.start,
         bounds.endExclusive,
-        dayDelta,
+        eventDayDelta,
         {
           preserveComplete,
           openSince: event.openSince ? undefined : sourceDateKey,
         }
       );
-      details.push(`✓ "${event.title}" → dia inteiro`);
+      details.push(
+        deferred
+          ? `✓ "${event.title}" → dia inteiro (dia útil, ${eventTargetDateKey})`
+          : `✓ "${event.title}" → dia inteiro`
+      );
       migrated++;
       console.log(`[FLOW MIGRATION] Migrado (dia inteiro): "${event.title}"`);
     } catch (err) {

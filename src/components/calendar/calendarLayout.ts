@@ -1,6 +1,7 @@
 "use client";
 
 import { FlowTask } from "@/types/task";
+import { isBusinessHoursCalendar } from "@/lib/pillar-config";
 
 export const CALENDAR_DIMENSIONS = {
   DAY_START: 0,
@@ -196,11 +197,6 @@ const WORK_DAY_START_HOUR = 6;
 /** Janela comercial (08h–18h) para calendários restritos, ex.: TI CF Contabilidade. */
 const BUSINESS_START_HOUR = 8;
 const BUSINESS_END_HOUR = 18;
-
-/** Calendários restritos a horário comercial (08h–18h). Match case-insensitive. */
-function isBusinessHoursCalendar(calendarName?: string): boolean {
-  return (calendarName ?? "").toLowerCase().includes("cf contabilidade");
-}
 
 /** Piso/teto (ms) do dia de `refIso`, conforme a regra do calendário. */
 function getDayBounds(refIso: string, businessHours: boolean): { floorMs: number; ceilingMs: number } {
