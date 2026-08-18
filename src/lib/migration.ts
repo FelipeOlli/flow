@@ -28,16 +28,23 @@ function resolveTargetDateKey(
   return toNextBusinessDateKey(baseTargetDateKey);
 }
 
-function extractErrorReason(err: unknown): string {
+/** Extrai o status HTTP de um erro da googleapis (403 = sem permissão de escrita, etc.). */
+export function extractErrorStatus(err: unknown): number | undefined {
+  if (err && typeof err === "object") {
+    const o = err as { code?: number; status?: number; response?: { status?: number } };
+    return o.code ?? o.status ?? o.response?.status;
+  }
+  return undefined;
+}
+
+/** Extrai status HTTP + mensagem de um erro da googleapis, pra log/diagnóstico. */
+export function extractErrorReason(err: unknown): string {
   if (err && typeof err === "object") {
     const o = err as {
-      code?: number;
-      status?: number;
-      response?: { status?: number };
       errors?: { message?: string }[];
       message?: string;
     };
-    const status = o.code ?? o.status ?? o.response?.status;
+    const status = extractErrorStatus(err);
     const msg = o.errors?.[0]?.message ?? o.message ?? "";
     if (status) return `${status}: ${msg || "erro"}`;
     if (msg) return msg.slice(0, 100);

@@ -15,6 +15,7 @@ import {
   getEventById,
 } from "@/lib/google-calendar";
 import { getValidAccessToken } from "@/lib/token-store";
+import { extractErrorReason, extractErrorStatus } from "@/lib/migration";
 import { NextRequest, NextResponse } from "next/server";
 import { UpdateTaskInput } from "@/types/task";
 
@@ -109,8 +110,12 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
     }
     return NextResponse.json(task);
   } catch (err) {
-    console.error("[API tasks PATCH]", err);
-    return NextResponse.json({ error: "Failed to update task" }, { status: 500 });
+    console.error("[API tasks PATCH]", eventId, extractErrorReason(err), err);
+    const googleStatus = extractErrorStatus(err);
+    // 403 do Google costuma indicar calendário compartilhado só como leitor
+    // (ex.: TI CF Contabilidade) — sem permissão de escrita para editar o evento.
+    const error = googleStatus === 403 ? "InsufficientCalendarPermission" : "Failed to update task";
+    return NextResponse.json({ error }, { status: googleStatus === 403 ? 403 : 500 });
   }
 }
 
@@ -132,7 +137,9 @@ export async function DELETE(req: NextRequest, context: { params: Params }) {
     await deleteEvent(accessToken, eventId, calendarId, scope);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
-    console.error("[API tasks DELETE]", err);
-    return NextResponse.json({ error: "Failed to delete task" }, { status: 500 });
+    console.error("[API tasks DELETE]", eventId, extractErrorReason(err), err);
+    const googleStatus = extractErrorStatus(err);
+    const error = googleStatus === 403 ? "InsufficientCalendarPermission" : "Failed to delete task";
+    return NextResponse.json({ error }, { status: googleStatus === 403 ? 403 : 500 });
   }
 }

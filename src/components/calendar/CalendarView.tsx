@@ -510,7 +510,12 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...body, calendarId }),
       });
-      if (!res.ok) throw new Error("Failed to update event");
+      if (!res.ok) {
+        // Propaga o código de erro da API (ex.: "InsufficientCalendarPermission")
+        // pra o popover conseguir mostrar uma mensagem específica em vez de genérica.
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "Failed to update event");
+      }
     };
 
     await patch(baseUpdates);

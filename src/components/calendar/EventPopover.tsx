@@ -29,6 +29,24 @@ interface EventPopoverProps {
   onSetPillar?: (task: FlowTask, pillar: Pillar | null, scope?: "this" | "all") => void;
 }
 
+/**
+ * Descrições vindas de import/extração por IA às vezes trazem HTML cru
+ * (`<br>` e entities numéricas tipo `&#128205;`). Decodifica pra texto puro
+ * antes de exibir — sem dangerouslySetInnerHTML, então sem risco de XSS.
+ */
+function formatEventDescription(text: string): string {
+  return text
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/&#(\d+);/g, (_, dec: string) => String.fromCodePoint(Number(dec)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
 const QUICK_DURATIONS = [
   { mins: 5, label: "5m" },
   { mins: 10, label: "10m" },
@@ -293,8 +311,12 @@ export function EventPopover({
         scope,
       });
       setFeedback("Presença atualizada.");
-    } catch {
-      setError("Erro ao atualizar presença");
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message === "InsufficientCalendarPermission"
+          ? "Sem permissão de escrita neste calendário. Verifique o compartilhamento."
+          : "Erro ao atualizar presença"
+      );
     } finally {
       setSaving(false);
     }
@@ -346,8 +368,12 @@ export function EventPopover({
       await onSaveEdit(task, updates);
       setEditing(false);
       setFeedback("Evento atualizado com sucesso.");
-    } catch {
-      setError("Erro ao salvar alterações");
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message === "InsufficientCalendarPermission"
+          ? "Sem permissão de escrita neste calendário. Verifique o compartilhamento."
+          : "Erro ao salvar alterações"
+      );
     } finally {
       setSaving(false);
     }
@@ -551,7 +577,7 @@ export function EventPopover({
               <div className="rounded-xl border border-[#3c4043] bg-[#2a2b2e]/60 p-3 space-y-1.5">
                 <p className="text-xs uppercase tracking-wide text-[#9aa0a6]">Descrição</p>
                 {task.description ? (
-                  <p className="text-sm text-[#e8eaed] whitespace-pre-wrap break-words">{task.description}</p>
+                  <p className="text-sm text-[#e8eaed] whitespace-pre-wrap break-words">{formatEventDescription(task.description)}</p>
                 ) : (
                   <p className="text-sm text-[#9aa0a6] italic">Nenhuma descrição ainda.</p>
                 )}
