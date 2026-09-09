@@ -107,7 +107,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [view, setView] = useState<View>("day");
   const [showDashboard, setShowDashboard] = useState(false);
   const [showWeeklyReview, setShowWeeklyReview] = useState(false);
-  const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list" | "calendar" | "favorites">("list");
+  const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list" | "calendar" | "hyperfocus">("hyperfocus");
   const [multiDayDisplayMode, setMultiDayDisplayMode] = useState<"grid" | "list">("grid");
   const [currentDate, setCurrentDate] = useState(() =>
     initialDate ? new Date(initialDate) : new Date()
@@ -1460,7 +1460,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
               <div className="px-3 pb-2.5">
                 {view === "day" ? (
                   <div className="grid grid-cols-4 gap-1 rounded-md bg-[#2a2b2e] p-1 border border-[#3c4043]">
-                    {(["list", "favorites", "grid", "calendar"] as const).map((m) => (
+                    {(["hyperfocus", "list", "grid", "calendar"] as const).map((m) => (
                       <button
                         key={m}
                         type="button"
@@ -1469,7 +1469,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
                           dayDisplayMode === m ? "bg-[#3c4043] text-[#e8eaed]" : "text-[#9aa0a6] hover:text-[#e8eaed]"
                         }`}
                       >
-                        {{ list: "Lista", favorites: "Favoritos", grid: "Grade", calendar: "Agenda" }[m]}
+                        {{ hyperfocus: "HyperFocus", list: "Lista", grid: "Grade", calendar: "Agenda" }[m]}
                       </button>
                     ))}
                   </div>

@@ -433,7 +433,7 @@ interface DayViewProps {
   tasks: FlowTask[];
   currentDate: Date;
   pendingIds: Set<string>;
-  displayMode?: "grid" | "list" | "calendar" | "priority" | "favorites";
+  displayMode?: "grid" | "list" | "calendar" | "priority" | "hyperfocus";
   conflictIds?: Set<string>;
   onConflictClick?: () => void;
   onComplete: (task: FlowTask) => void;
@@ -760,7 +760,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
     return <PriorityView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onConflictClick={onConflictClick} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
   }
 
-  if (displayMode === "favorites") {
+  if (displayMode === "hyperfocus") {
     return <FavoritesView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onConflictClick={onConflictClick} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
   }
 

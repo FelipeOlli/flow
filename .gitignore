@@ -35,3 +35,6 @@ next-env.d.ts
 
 # tokens persistidos para o cron (contém dados sensíveis)
 .token-store.json
+
+# dados persistentes (tokens, uploads)
+data/
