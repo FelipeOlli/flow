@@ -71,25 +71,30 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
         body.removeRecurrence !== undefined;
 
       if (targetCalendarId !== calendarId) {
+        // Editar antes de mover: o id devolvido pelo events.move() para uma
+        // instância de evento recorrente não é resolvível via PATCH no
+        // calendário de destino (404). Editando primeiro no calendário de
+        // origem (id sempre válido) e movendo por último, evitamos depender
+        // desse id intermediário.
+        const edited = hasUpdateFields
+          ? await updateEvent(accessToken, eventId, body, tz, calendarId, updateScope)
+          : null;
         const moved = await moveEventToCalendar(
           accessToken,
-          eventId,
+          edited?.id ?? eventId,
           calendarId,
           targetCalendarId
         );
-        const edited = hasUpdateFields
-          ? await updateEvent(accessToken, moved.id, body, tz, targetCalendarId, updateScope)
-          : moved;
         task = attendanceStatus
           ? await updateEventRsvp(
               accessToken,
-              edited.id,
+              moved.id,
               targetCalendarId,
               attendanceStatus,
               userEmail,
               rsvpScope
             )
-          : edited;
+          : moved;
       } else {
         const edited = hasUpdateFields
           ? await updateEvent(accessToken, eventId, body, tz, calendarId, updateScope)
