@@ -25,6 +25,8 @@ interface TaskFormProps {
   currentDate: string;
   defaults?: VoiceDefaults;
   existingTasks?: FlowTask[];
+  /** Quando true, pula a validação de conflito de horário (modo HyperFocus). */
+  skipConflictValidation?: boolean;
   /** Modo fila: um TaskForm por evento de um lote extraído por IA. */
   queue?: { index: number; total: number };
   onSkip?: () => void;
@@ -64,7 +66,7 @@ function buildDefaultEnd(start: string, defaultIso?: string): string {
   return format(d, "yyyy-MM-dd'T'HH:mm");
 }
 
-export function TaskForm({ task, currentDate, defaults, existingTasks, queue, onSkip, onClose, onSave, onComplete }: TaskFormProps) {
+export function TaskForm({ task, currentDate, defaults, existingTasks, skipConflictValidation, queue, onSkip, onClose, onSave, onComplete }: TaskFormProps) {
   const isEditing = !!task;
   const titleRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -101,7 +103,7 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, queue, on
 
   // Detecção de conflito de horário (apenas na criação)
   const conflictData = useMemo(() => {
-    if (isEditing || !existingTasks?.length) return { conflicts: [] as FlowTask[], suggestions: [] as { mins: number; label: string; startIso: string }[] };
+    if (isEditing || skipConflictValidation || !existingTasks?.length) return { conflicts: [] as FlowTask[], suggestions: [] as { mins: number; label: string; startIso: string }[] };
     try {
       const startIso = new Date(startTime).toISOString();
       const endIso   = new Date(endTime).toISOString();
@@ -111,7 +113,7 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, queue, on
     } catch {
       return { conflicts: [] as FlowTask[], suggestions: [] as { mins: number; label: string; startIso: string }[] };
     }
-  }, [isEditing, existingTasks, startTime, endTime]);
+  }, [isEditing, skipConflictValidation, existingTasks, startTime, endTime]);
 
   function applySlot(slot: { mins: number; startIso: string }) {
     const start = new Date(slot.startIso);
@@ -217,7 +219,7 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, queue, on
       setError("O horário de fim deve ser após o início");
       return;
     }
-    if (!isEditing && conflictData.conflicts.length > 0) {
+    if (!isEditing && !skipConflictValidation && conflictData.conflicts.length > 0) {
       setError("Horário ocupado. Escolha um dos horários sugeridos abaixo.");
       return;
     }

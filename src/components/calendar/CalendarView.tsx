@@ -1603,6 +1603,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           currentDate={currentDate.toISOString()}
           defaults={formDefaults}
           existingTasks={tasks}
+          skipConflictValidation={dayDisplayMode === "hyperfocus"}
           queue={eventQueue.length > 1 ? { index: queueIndex, total: eventQueue.length } : undefined}
           onSkip={eventQueue.length > 1 ? () => advanceQueue("skipped") : undefined}
           onClose={eventQueue.length > 1 ? cancelQueue : () => { setShowForm(false); setEditingTask(null); setFormDefaults({}); }}
