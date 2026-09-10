@@ -2,9 +2,10 @@ import fs from "fs";
 import path from "path";
 import webpush from "web-push";
 import { getEventsForDateKey } from "./google-calendar";
-import { getDateKeyInTimeZone } from "./timezone";
+import { getDateKeyInTimeZone, shiftDateKey } from "./timezone";
 import { listSubscriptions, removeSubscription } from "./push-store";
 import { sendTelegramMessage } from "./telegram";
+import { DEFAULT_REMINDER_MINUTES, formatReminderLead } from "./reminder";
 import type { FlowTask } from "@/types/task";
 
 const DATA_DIR =
@@ -68,29 +69,43 @@ export async function sendDueNotifications(accessToken: string, timeZone: string
   const todayKey = getDateKeyInTimeZone(now, timeZone);
   const notified = loadNotifiedToday(todayKey);
 
+  // Busca hoje e amanhã: lembrete de "1 dia antes" dispara na véspera, com o
+  // evento ainda listado no dia seguinte.
   let tasks: FlowTask[];
   try {
-    tasks = await getEventsForDateKey(accessToken, todayKey, timeZone);
+    const tomorrowKey = shiftDateKey(todayKey, 1);
+    const [todayTasks, tomorrowTasks] = await Promise.all([
+      getEventsForDateKey(accessToken, todayKey, timeZone),
+      getEventsForDateKey(accessToken, tomorrowKey, timeZone),
+    ]);
+    tasks = [...todayTasks, ...tomorrowTasks];
   } catch (err) {
     console.error("[NOTIFIER] Erro ao buscar eventos:", err);
     return;
   }
 
-  // Filtros comuns a ambos os gatilhos
+  // Filtros comuns
   const eligible = tasks.filter(
     (t) => !t.isComplete && !t.isCancelled && t.selfResponseStatus !== "declined" && t.startTime && !t.isAllDay,
   );
 
   if (eligible.length === 0) return;
 
-  // Janela pré-aviso: 4–6 min antes (disparo único ~5 min antes)
-  const preStart = new Date(now.getTime() + 4 * 60 * 1000);
-  const preEnd = new Date(now.getTime() + 6 * 60 * 1000);
+  // Janela de disparo: o cron roda a cada minuto, então ±1 min do instante exato do lembrete
+  const windowStart = new Date(now.getTime() - 60 * 1000);
+  const windowEnd = new Date(now.getTime() + 60 * 1000);
 
   let sent = false;
 
   for (const task of eligible) {
+    // reminderMinutes: undefined = default do Flow, null = lembrete desligado
+    if (task.reminderMinutes === null) continue;
+    const minutes = task.reminderMinutes ?? DEFAULT_REMINDER_MINUTES;
+
     const eventStart = new Date(task.startTime!);
+    const fireAt = new Date(eventStart.getTime() - minutes * 60 * 1000);
+    if (fireAt < windowStart || fireAt > windowEnd) continue;
+
     const timeStr = eventStart.toLocaleTimeString("pt-BR", {
       hour: "2-digit",
       minute: "2-digit",
@@ -98,22 +113,22 @@ export async function sendDueNotifications(accessToken: string, timeZone: string
     });
     const calendarSuffix = task.calendarName ? ` • ${task.calendarName}` : "";
 
-    // --- Pré-aviso (~5 min antes) ---
-    // Chave inclui startTime: rearma se o evento for movido para outro horário
-    const preKey = `${task.id}@${task.startTime}`;
-    if (!notified.has(preKey) && eventStart >= preStart && eventStart <= preEnd) {
-      const pushBody = `Começa às ${timeStr}${calendarSuffix}`;
-      const telegramText = `⏰ <b>Em 5 min:</b> ${task.title}\nComeça às ${timeStr}${calendarSuffix}`;
+    // Chave inclui startTime e minutos: rearma se o evento mudar de horário ou o lembrete mudar
+    const key = `${task.id}@${task.startTime}#${minutes}`;
+    if (notified.has(key)) continue;
 
-      if (pushEnabled) {
-        await sendPushNotification(subs, task.title, pushBody, `flow-event-${task.id}`);
-      }
-      await sendTelegramMessage(telegramText);
+    const lead = formatReminderLead(minutes);
+    const pushBody = `Começa às ${timeStr}${calendarSuffix}`;
+    const telegramText = `⏰ <b>Em ${lead}:</b> ${task.title}\nComeça às ${timeStr}${calendarSuffix}`;
 
-      notified.add(preKey);
-      sent = true;
-      console.log(`[NOTIFIER] Pré-aviso: "${task.title}" às ${timeStr}`);
+    if (pushEnabled) {
+      await sendPushNotification(subs, task.title, pushBody, `flow-event-${task.id}`);
     }
+    await sendTelegramMessage(telegramText);
+
+    notified.add(key);
+    sent = true;
+    console.log(`[NOTIFIER] Lembrete (${lead}): "${task.title}" às ${timeStr}`);
   }
 
   if (sent) {

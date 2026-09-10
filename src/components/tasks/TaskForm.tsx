@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { format } from "date-fns";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, Pillar } from "@/types/task";
 import { findConflicts, suggestFreeSlots } from "@/components/calendar/calendarLayout";
+import { DEFAULT_REMINDER_MINUTES, REMINDER_OPTIONS } from "@/lib/reminder";
 
 interface VoiceDefaults {
   startTime?: string;
@@ -97,6 +98,9 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, skipConfl
     defaults?.isDelegable ? "D" : defaults?.category === "strategic" ? "E" : defaults?.category === "operational" ? "O" : null
   );
   const [pillar, setPillar] = useState<Pillar | null>(defaults?.pillar ?? null);
+  const [reminderMinutes, setReminderMinutes] = useState<number | null>(DEFAULT_REMINDER_MINUTES);
+  const [customReminder, setCustomReminder] = useState(false);
+  const [customReminderValue, setCustomReminderValue] = useState("");
   const [attendeeInput, setAttendeeInput] = useState("");
   const [attendees, setAttendees] = useState<string[]>(defaults?.attendees ?? []);
   const [frequentAttendees, setFrequentAttendees] = useState<{ email: string; name?: string }[]>([]);
@@ -242,6 +246,12 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, skipConfl
         if (tag === "D") (payload as CreateTaskInput).isDelegable = true;
         if (pillar) (payload as CreateTaskInput).pillar = pillar;
         if (attendees.length) (payload as CreateTaskInput).attendees = attendees;
+        const effectiveReminder = customReminder
+          ? (Number(customReminderValue) || 0)
+          : reminderMinutes;
+        if (effectiveReminder !== DEFAULT_REMINDER_MINUTES) {
+          (payload as CreateTaskInput).reminderMinutes = effectiveReminder;
+        }
       }
       await onSave(payload);
       // No modo fila quem decide o próximo passo (avançar ou encerrar) é o pai;
@@ -419,6 +429,55 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, skipConfl
                       </button>
                     ))}
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* Lembrete — só na criação */}
+            {!isEditing && (
+              <div className="rounded-xl border border-[#3c4043] bg-[#2a2b2e] overflow-hidden px-4 py-3">
+                <div className="flex items-center gap-2.5 text-sm text-[#e8eaed] mb-2.5">
+                  <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#9aa0a6]" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  Lembrete
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {REMINDER_OPTIONS.map(({ value, label }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => { setReminderMinutes(value); setCustomReminder(false); }}
+                      className={`py-2 rounded-lg text-xs font-medium transition-colors border ${
+                        !customReminder && reminderMinutes === value
+                          ? "bg-[#8ab4f8]/20 border-[#8ab4f8]/60 text-[#8ab4f8]"
+                          : "bg-[#202124] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setCustomReminder(true)}
+                    className={`py-2 rounded-lg text-xs font-medium transition-colors border ${
+                      customReminder
+                        ? "bg-[#8ab4f8]/20 border-[#8ab4f8]/60 text-[#8ab4f8]"
+                        : "bg-[#202124] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"
+                    }`}
+                  >
+                    Outro…
+                  </button>
+                </div>
+                {customReminder && (
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Minutos antes"
+                    value={customReminderValue}
+                    onChange={(e) => setCustomReminderValue(e.target.value)}
+                    className="mt-2 w-full bg-[#202124] text-[#e8eaed] placeholder-[#9aa0a6] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043]"
+                  />
                 )}
               </div>
             )}

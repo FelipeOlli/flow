@@ -3,6 +3,7 @@ import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, AttendanceS
 import { getDateKeyInTimeZone, getUtcRangeForDateKey, shiftDateKey } from "./timezone";
 import { formatGoogleRecurrence, rruleShortCode } from "./recurrence-format";
 import { CALENDAR_PILLAR_OVERRIDES } from "./pillar-config";
+import { parseReminderProp, serializeReminder } from "./reminder";
 
 const COMPLETE_COLOR_ID = "2";
 const IMPORTANT_COLOR_ID = "5";
@@ -91,6 +92,7 @@ function mapEvent(
     createdAt: event.created ?? undefined,
     completedAt: event.extendedProperties?.private?.["flowCompletedAt"] || undefined,
     openSince: event.extendedProperties?.private?.["flowOpenSince"] || undefined,
+    reminderMinutes: parseReminderProp(event.extendedProperties?.private?.["flowReminderMinutes"]),
   };
 }
 
@@ -324,6 +326,9 @@ export async function createEvent(
   if (input.isDelegable) extraPrivate.flowDelegable = "true";
   if (input.category) extraPrivate.flowCategory = input.category;
   if (input.pillar) extraPrivate.flowPillar = input.pillar;
+  if (input.reminderMinutes !== undefined) {
+    extraPrivate.flowReminderMinutes = serializeReminder(input.reminderMinutes)!;
+  }
   if (Object.keys(extraPrivate).length > 0) {
     requestBody.extendedProperties = {
       private: { ...(requestBody.extendedProperties?.private ?? {}), ...extraPrivate },
@@ -423,6 +428,11 @@ export async function updateEvent(
     if (endISO !== undefined) body.end = { dateTime: endISO, timeZone };
     if (updates.attendees !== undefined) body.attendees = updates.attendees.map((email) => ({ email }));
     if (updates.recurrence !== undefined) body.recurrence = updates.recurrence;
+    if (updates.reminderMinutes !== undefined) {
+      body.extendedProperties = {
+        private: { flowReminderMinutes: serializeReminder(updates.reminderMinutes)! },
+      };
+    }
     return body;
   }
 
@@ -552,7 +562,14 @@ export async function updateEvent(
     attendees: updates.attendees !== undefined
       ? updates.attendees.map((email) => ({ email }))
       : (master.attendees ?? undefined),
-    extendedProperties: master.extendedProperties,
+    extendedProperties: updates.reminderMinutes !== undefined
+      ? {
+          private: {
+            ...(master.extendedProperties?.private ?? {}),
+            flowReminderMinutes: serializeReminder(updates.reminderMinutes)!,
+          },
+        }
+      : master.extendedProperties,
   };
   if (updates.description !== undefined) {
     newEventBody.description = updates.description;

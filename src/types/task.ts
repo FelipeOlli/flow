@@ -34,6 +34,8 @@ export interface FlowTask {
   completedAt?: string;
   /** DateKey YYYY-MM-DD — dia em que o evento foi migrado pela primeira vez (flowOpenSince). Usado para calcular dias em aberto sem resetar a cada migração. */
   openSince?: string;
+  /** Minutos antes do início para o aviso do notificador do Flow. undefined = default (5min), null = sem lembrete. */
+  reminderMinutes?: number | null;
 }
 
 export type AttendanceStatus = "needsAction" | "declined" | "tentative" | "accepted";
@@ -63,6 +65,8 @@ export interface CreateTaskInput {
   pillar?: Pillar;
   /** Lista de e-mails dos convidados */
   attendees?: string[];
+  /** Minutos antes do início para o aviso do notificador do Flow. null = sem lembrete. */
+  reminderMinutes?: number | null;
 }
 
 export interface UpdateTaskInput {
@@ -84,6 +88,8 @@ export interface UpdateTaskInput {
   removeRecurrence?: boolean;
   completeScope?: "this" | "thisAndFollowing" | "all";
   scope?: "this" | "thisAndFollowing" | "all";
+  /** Minutos antes do início para o aviso do notificador do Flow. null = sem lembrete. */
+  reminderMinutes?: number | null;
 }
 
 export interface CalendarOption {

@@ -68,7 +68,8 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
         body.description !== undefined ||
         body.attendees !== undefined ||
         body.recurrence !== undefined ||
-        body.removeRecurrence !== undefined;
+        body.removeRecurrence !== undefined ||
+        body.reminderMinutes !== undefined;
 
       if (targetCalendarId !== calendarId) {
         // Editar antes de mover: o id devolvido pelo events.move() para uma

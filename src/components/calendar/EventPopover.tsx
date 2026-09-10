@@ -8,6 +8,7 @@ import { computeDaysOpen, agingBadgeColor, categoryLetters } from "@/lib/aging";
 import { Pillar } from "@/types/task";
 import { suggestFreeSlots } from "@/components/calendar/calendarLayout";
 import { formatGoogleRecurrence } from "@/lib/recurrence-format";
+import { DEFAULT_REMINDER_MINUTES, REMINDER_OPTIONS, formatReminderLead } from "@/lib/reminder";
 
 export interface EventAnchorPoint {
   x: number;
@@ -112,6 +113,14 @@ export function EventPopover({
   const [recurrenceDirty, setRecurrenceDirty] = useState(false);
   const [customRecurrenceRule, setCustomRecurrenceRule] = useState(false);
   const [fetchedRecurrenceSummary, setFetchedRecurrenceSummary] = useState("");
+  const initialReminder = task.reminderMinutes === undefined ? DEFAULT_REMINDER_MINUTES : task.reminderMinutes;
+  const [editReminderMinutes, setEditReminderMinutes] = useState<number | null>(initialReminder);
+  const [customReminder, setCustomReminder] = useState(
+    initialReminder !== null && !REMINDER_OPTIONS.some((o) => o.value === initialReminder)
+  );
+  const [customReminderValue, setCustomReminderValue] = useState(
+    customReminder ? String(initialReminder) : ""
+  );
 
   // Sugestões de horário livre quando há conflito
   const conflictSuggestions = useMemo(() => {
@@ -200,6 +209,11 @@ export function EventPopover({
     setRecurrenceDirty(false);
     setCustomRecurrenceRule(false);
     setFetchedRecurrenceSummary("");
+    const reminder = task.reminderMinutes === undefined ? DEFAULT_REMINDER_MINUTES : task.reminderMinutes;
+    setEditReminderMinutes(reminder);
+    const isCustom = reminder !== null && !REMINDER_OPTIONS.some((o) => o.value === reminder);
+    setCustomReminder(isCustom);
+    setCustomReminderValue(isCustom ? String(reminder) : "");
   }, [task]);
 
   // Recorrentes: instâncias expandidas não trazem a RRULE (só a master tem).
@@ -343,6 +357,10 @@ export function EventPopover({
       pillar: editPillar,
       attendees: editAttendees,
     };
+    const effectiveReminder = customReminder ? (Number(customReminderValue) || 0) : editReminderMinutes;
+    if (effectiveReminder !== initialReminder) {
+      updates.reminderMinutes = effectiveReminder;
+    }
     if (editRecurring && (!task.isRecurring || recurrenceDirty)) {
       const rrule = buildRRule();
       if (rrule.length) updates.recurrence = rrule;
@@ -526,6 +544,11 @@ export function EventPopover({
                 {task.isRecurring && fetchedRecurrenceSummary && (
                   <p className="mt-0.5 text-white/70">{fetchedRecurrenceSummary}</p>
                 )}
+                <p className="mt-0.5 text-[#9aa0a6] text-xs">
+                  {task.reminderMinutes === null
+                    ? "🔔 Sem lembrete"
+                    : `🔔 ${formatReminderLead(task.reminderMinutes ?? DEFAULT_REMINDER_MINUTES)} antes`}
+                </p>
                 {(() => {
                   const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/Sao_Paulo";
                   const d = computeDaysOpen(task, tz);
@@ -942,6 +965,47 @@ export function EventPopover({
                   )}
                 </div>
               )}
+              {/* Lembrete */}
+              <div>
+                <label className="text-xs text-[#9aa0a6] mb-1.5 block">Lembrete</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {REMINDER_OPTIONS.map(({ value, label }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => { setEditReminderMinutes(value); setCustomReminder(false); }}
+                      className={`py-2 rounded-xl text-xs font-medium transition-colors border ${
+                        !customReminder && editReminderMinutes === value
+                          ? "bg-[#8ab4f8]/15 border-[#8ab4f8]/60 text-[#8ab4f8]"
+                          : "bg-[#2a2b2e] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setCustomReminder(true)}
+                    className={`py-2 rounded-xl text-xs font-medium transition-colors border ${
+                      customReminder
+                        ? "bg-[#8ab4f8]/15 border-[#8ab4f8]/60 text-[#8ab4f8]"
+                        : "bg-[#2a2b2e] border-[#3c4043] text-[#9aa0a6] hover:text-[#e8eaed]"
+                    }`}
+                  >
+                    Outro…
+                  </button>
+                </div>
+                {customReminder && (
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Minutos antes"
+                    value={customReminderValue}
+                    onChange={(e) => setCustomReminderValue(e.target.value)}
+                    className="mt-2 w-full bg-[#2a2b2e] text-[#e8eaed] placeholder-[#9aa0a6] rounded-xl px-3 py-2 text-sm border border-[#3c4043] focus:outline-none focus:ring-2 focus:ring-[#8ab4f8]"
+                  />
+                )}
+              </div>
               {/* Convidados */}
               <div>
                 <label className="text-xs text-[#9aa0a6] mb-1.5 block">Convidados</label>
