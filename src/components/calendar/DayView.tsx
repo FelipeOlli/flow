@@ -141,10 +141,11 @@ function AgendaView({ tasks, currentDate, conflictIds, onConflictClick, onComple
                   <div
                     key={task.id}
                     onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
-                    className="rounded-lg border px-3 py-2 cursor-pointer"
+                    className="rounded-lg border border-l-[3px] px-3 py-2 cursor-pointer"
                     style={{
-                      backgroundColor: getEventSurfaceColor(task.calendarBgColor, task.isComplete, task.selfResponseStatus, task.isCancelled, task.isImportant),
-                      borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
+                      backgroundColor: "#2a2b2e",
+                      borderColor: "#3c4043",
+                      borderLeftColor: task.isCancelled ? "#5f6368" : (task.calendarBgColor ?? "#4285f4"),
                     }}
                   >
                     <div className="flex items-start gap-2">
@@ -161,36 +162,36 @@ function AgendaView({ tasks, currentDate, conflictIds, onConflictClick, onComple
                         )}
                       </button>
                       <div className="min-w-0 flex-1">
-                        {(() => { const cats = categoryLetters(task); return cats.length > 0 ? <div className="flex gap-1 mb-0.5">{cats.map(({letter,color}) => <span key={letter} className={`text-[9px] font-bold leading-none px-1 py-0.5 rounded bg-black/20 ${color}`}>{letter}</span>)}</div> : null; })()}
+                        {(() => { const cats = categoryLetters(task); return cats.length > 0 ? <div className="flex gap-1 mb-0.5">{cats.map(({letter}) => <span key={letter} className="text-[9px] font-bold leading-none px-1 py-0.5 rounded bg-white/10 text-[#9aa0a6]">{letter}</span>)}</div> : null; })()}
                         <div className={`flex items-center gap-1.5 text-sm font-semibold leading-tight text-[#e8eaed] ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>
                           <span className="truncate">{task.title}</span>
                           {task.attendees && task.attendees.length > 0 && (
-                            <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0 text-white" fill="currentColor">
+                            <svg viewBox="0 0 24 24" className="w-3 h-3 flex-shrink-0 text-[#9aa0a6]" fill="currentColor">
                               <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
                             </svg>
                           )}
                           {task.isRecurring && (
                             <span className="inline-flex items-center gap-0.5 flex-shrink-0">
-                              <svg viewBox="0 0 24 24" className="w-3 h-3 text-white/70" fill="currentColor">
+                              <svg viewBox="0 0 24 24" className="w-3 h-3 text-[#9aa0a6]" fill="currentColor">
                                 <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
                               </svg>
                               {task.recurrenceCode && (
-                                <span className="text-[8px] font-bold leading-none text-white/70">{task.recurrenceCode}</span>
+                                <span className="text-[8px] font-bold leading-none text-[#9aa0a6]">{task.recurrenceCode}</span>
                               )}
                             </span>
                           )}
-                          {conflictIds?.has(task.id) && <ConflictIcon />}
+                          {conflictIds?.has(task.id) && <ConflictIcon muted />}
                         </div>
-                        <p className={`text-xs text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>
+                        <p className={`text-xs text-[#9aa0a6] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>
                           {task.isAllDay ? "Dia inteiro" : `${format(new Date(task.startTime), "HH:mm")} - ${format(new Date(task.endTime), "HH:mm")}`}
                         </p>
-                        {(() => { const d = computeDaysOpen(task, CLIENT_TZ); return d >= 1 ? <p className={`text-xs mt-0.5 ${agingBadgeColor(d)}`}>{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p> : null; })()}
+                        {(() => { const d = computeDaysOpen(task, CLIENT_TZ); return d >= 1 ? <p className="text-xs mt-0.5 text-[#9aa0a6]">{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p> : null; })()}
                       </div>
                       {onImportant && (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onImportant(task); }}
-                          className={`flex-shrink-0 transition-colors ${task.isImportant ? "text-white" : "text-white/30 hover:text-white/60"}`}
+                          className={`flex-shrink-0 transition-colors ${task.isImportant ? "text-[#F6BF26]" : "text-[#5f6368] hover:text-[#9aa0a6]"}`}
                           aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
                         >
                           <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>
@@ -411,7 +412,7 @@ function FavoritesView({ tasks, currentDate, conflictIds, onConflictClick, onCom
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onImportant(task); }}
-                  className={`flex-shrink-0 transition-colors ${task.isImportant ? "text-[#e8eaed]" : "text-[#5f6368] hover:text-[#9aa0a6]"}`}
+                  className={`flex-shrink-0 transition-colors ${task.isImportant ? "text-[#F6BF26]" : "text-[#5f6368] hover:text-[#9aa0a6]"}`}
                   aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
                 >
                   <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>
@@ -628,16 +629,11 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
               <div
                 key={task.id}
                 onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
-                className="rounded-lg border px-3 py-2 cursor-pointer"
+                className="rounded-lg border border-l-[3px] px-3 py-2 cursor-pointer"
                 style={{
-                  backgroundColor: getEventSurfaceColor(
-                    task.calendarBgColor,
-                    task.isComplete,
-                    task.selfResponseStatus,
-                    task.isCancelled,
-                    task.isImportant
-                  ),
-                  borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
+                  backgroundColor: "#2a2b2e",
+                  borderColor: "#3c4043",
+                  borderLeftColor: task.isCancelled ? "#5f6368" : (task.calendarBgColor ?? "#4285f4"),
                 }}
               >
                 <div className="flex items-start gap-2">
@@ -657,7 +653,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                     <p className={`text-base font-semibold leading-tight text-[#e8eaed] truncate ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>
                       {task.title}
                     </p>
-                    <p className={`text-sm text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>Dia inteiro</p>
+                    <p className={`text-sm text-[#9aa0a6] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>Dia inteiro</p>
                   </div>
                 </div>
               </div>
@@ -673,16 +669,11 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
               {isCurrentDay && index === separatorInsertIndex && renderNowSeparator(`now-separator-${index}`)}
               <div
                 onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
-                className="rounded-lg border px-3 py-2 cursor-pointer"
+                className="rounded-lg border border-l-[3px] px-3 py-2 cursor-pointer"
                 style={{
-                  backgroundColor: getEventSurfaceColor(
-                    task.calendarBgColor,
-                    task.isComplete,
-                    task.selfResponseStatus,
-                    task.isCancelled,
-                    task.isImportant
-                  ),
-                  borderColor: task.isCancelled ? "rgba(95,99,104,0.75)" : "rgba(12,14,16,0.56)",
+                  backgroundColor: "#2a2b2e",
+                  borderColor: "#3c4043",
+                  borderLeftColor: task.isCancelled ? "#5f6368" : (task.calendarBgColor ?? "#4285f4"),
                 }}
               >
                 <div className="flex items-start gap-2">
@@ -699,39 +690,39 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
                     )}
                   </button>
                   <div className="min-w-0 flex-1">
-                    {(() => { const cats = categoryLetters(task); return cats.length > 0 ? <div className="flex gap-1 mb-0.5">{cats.map(({letter,color}) => <span key={letter} className={`text-[9px] font-bold leading-none px-1 py-0.5 rounded bg-black/20 ${color}`}>{letter}</span>)}</div> : null; })()}
+                    {(() => { const cats = categoryLetters(task); return cats.length > 0 ? <div className="flex gap-1 mb-0.5">{cats.map(({letter}) => <span key={letter} className="text-[9px] font-bold leading-none px-1 py-0.5 rounded bg-white/10 text-[#9aa0a6]">{letter}</span>)}</div> : null; })()}
                     <div className={`flex items-center gap-1.5 text-base font-semibold leading-tight text-[#e8eaed] ${task.isComplete || task.isCancelled ? "line-through opacity-80" : ""}`}>
                       <span className="truncate">{task.title}</span>
                       {task.attendees && task.attendees.length > 0 && (
-                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 flex-shrink-0 text-white" fill="currentColor">
+                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 flex-shrink-0 text-[#9aa0a6]" fill="currentColor">
                           <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
                         </svg>
                       )}
                       {task.isRecurring && (
                         <span className="inline-flex items-center gap-0.5 flex-shrink-0">
-                          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-white/70" fill="currentColor">
+                          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-[#9aa0a6]" fill="currentColor">
                             <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
                           </svg>
                           {task.recurrenceCode && (
-                            <span className="text-[9px] font-bold leading-none text-white/70">{task.recurrenceCode}</span>
+                            <span className="text-[9px] font-bold leading-none text-[#9aa0a6]">{task.recurrenceCode}</span>
                           )}
                         </span>
                       )}
-                      {conflictIds?.has(task.id) && <ConflictIcon />}
+                      {conflictIds?.has(task.id) && <ConflictIcon muted />}
                     </div>
-                    <p className={`text-sm text-[#d2d6da] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>
+                    <p className={`text-sm text-[#9aa0a6] mt-0.5 ${task.isCancelled ? "line-through" : ""}`}>
                       {format(new Date(task.startTime), "HH:mm")} - {format(new Date(task.endTime), "HH:mm")}
                     </p>
                     {task.calendarName && (
-                      <p className="text-xs mt-0.5 truncate text-white/70">{task.calendarName}</p>
+                      <p className="text-xs mt-0.5 truncate text-[#9aa0a6]">{task.calendarName}</p>
                     )}
-                    {(() => { const d = computeDaysOpen(task, CLIENT_TZ); return d >= 1 ? <p className={`text-xs mt-0.5 ${agingBadgeColor(d)}`}>{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p> : null; })()}
+                    {(() => { const d = computeDaysOpen(task, CLIENT_TZ); return d >= 1 ? <p className="text-xs mt-0.5 text-[#9aa0a6]">{d === 1 ? "1 dia em aberto" : `${d} dias em aberto`}</p> : null; })()}
                   </div>
                   {onImportant && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); onImportant(task); }}
-                      className={`flex-shrink-0 mt-0.5 transition-colors ${task.isImportant ? "text-white" : "text-white/30 hover:text-white/60"}`}
+                      className={`flex-shrink-0 mt-0.5 transition-colors ${task.isImportant ? "text-[#F6BF26]" : "text-[#5f6368] hover:text-[#9aa0a6]"}`}
                       aria-label={task.isImportant ? "Remover destaque" : "Marcar como importante"}
                     >
                       <svg viewBox="0 0 24 24" className="w-4 h-4" fill={task.isImportant ? "currentColor" : "none"} stroke="currentColor" strokeWidth={task.isImportant ? 0 : 1.5}>
