@@ -256,7 +256,49 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
-### 2026-09-10
+### 2026-10-13
+
+**O que foi feito:**
+
+1. **Bot Telegram com caminho de ENTRADA** — Webhook em `/api/telegram/webhook` (POST) que recebe updates do Telegram, valida `X-Telegram-Bot-Api-Secret-Token` + `TELEGRAM_USER_ID`, e despacha `message`/`callback_query`. O bot pode ler agenda (`/hoje`, `/amanha`, `/semana`, `/buscar`), criar eventos (`/criar` literal ou frase livre via Claude), confirmar criação com botões inline (`[✅ Criar] [✏ Editar] [❌ Cancelar]`), concluir (`/concluir` ou "já fiz X") e apagar (`/cancelar` ou "apaga X"). `/undo` desfaz o último batch (TTL 60s, em memória).
+2. **NLP via Claude (`parseChatIntent`)** — Wrapper separado do `extractEventFieldsFromMedia` com prompt otimizado pra frases curtas de chat. Modelo `claude-opus-5` com `output_config.effort: "low"`, schema JSON estruturado retornando `kind ∈ {create, query, complete, delete, unknown}`. Manda `sendChatAction("typing")` antes pra dar feedback enquanto processa.
+3. **Auto-setWebhook idempotente no `instrumentation.ts`** — `ensureTelegramWebhook` só chama `setWebhook` se `getWebhookInfo.url` divergir da `TELEGRAM_WEBHOOK_URL`. `ensureMyCommands` registra o menu de comandos (uma vez).
+4. **`src/lib/telegram.ts` estendido** — `sendTelegramMessage` aceita `reply_markup` (InlineKeyboardMarkup), adicionados `editTelegramMessage`, `answerTelegramCallbackQuery`, `sendTelegramChatAction`, `ensureTelegramWebhook`, `ensureMyCommands`. API única via `callTelegram(method, body)`, sem dependência nova.
+5. **Segurança** — `TELEGRAM_USER_ID` obrigatório (se ausente, bot rejeita TUDO). Dedup de `update_id` em `Set` com cap 1000 (replay defense). Resposta 200 imediata, processamento em background.
+6. **Allowlist no middleware** — `api/telegram` adicionado ao matcher para o webhook não ser barrado pelo NextAuth.
+
+**Arquivos modificados:**
+- `src/lib/telegram.ts` — reescrito: `callTelegram`, `sendTelegramMessage` (com `replyMarkup`), `editTelegramMessage`, `answerTelegramCallbackQuery`, `sendTelegramChatAction`, `ensureTelegramWebhook`, `ensureMyCommands`
+- `src/middleware.ts` — `api/telegram` na allowlist
+- `src/instrumentation.ts` — `ensureTelegramWebhook` + `ensureMyCommands` no boot
+- `.env.example` — documentadas `TELEGRAM_USER_ID`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_WEBHOOK_URL`
+- **Criados** (bot):
+  - `src/app/api/telegram/webhook/route.ts` — POST handler com validação de secret
+  - `src/lib/telegram-bot/types.ts` — `TgUpdate`, `TgMessage`, `TgCallbackQuery`, `ChatIntent`, `UndoBatch`, `PendingCreate`
+  - `src/lib/telegram-bot/security.ts` — `isAuthorizedUpdate` (user_id + dedup)
+  - `src/lib/telegram-bot/formatter.ts` — `escapeHtml`, `formatDateBr`, `formatTimeRange`, `formatTaskLine`, `formatTaskList`
+  - `src/lib/telegram-bot/undo.ts` — `undoStore` + `pendingCreates` em memória com cleanup
+  - `src/lib/telegram-bot/intent.ts` — `parseChatIntent` (Claude com prompt próprio)
+  - `src/lib/telegram-bot/commands.ts` — handlers de `/hoje`, `/amanha`, `/semana`, `/buscar`, `/criar`, `/concluir`, `/cancelar`, `/undo`, `/help`, `/start`
+  - `src/lib/telegram-bot/index.ts` — dispatcher + handler de `callback_query` (preview inline)
+
+**Decisões tomadas:**
+- **Fetch puro, sem telegraf** — já tínhamos `fetch` em `telegram.ts`; manter consistência e zero dep nova
+- **NLP com Claude em vez de regex/keywords** — coerente com a stack (já usado em file/voice event); `parseChatIntent` é separado de `extractEventFieldsFromMedia` porque prompt otimizado pra conteúdo colado não serve pra frases curtas de chat
+- **Preview com botões inline** — `callback_query` handler adicionado no v1 a pedido do Felipe (em vez de criar-direto + /undo)
+- **`TELEGRAM_USER_ID` obrigatório** — se a env sumir, bot para tudo (default seguro)
+- **`X-Telegram-Bot-Api-Secret-Token` nativo** — header padrão do `setWebhook`, em vez de inventar header custom
+- **Estado de undo/pending em memória** — TTL curto (60s/5min), restart perde (aceitável)
+- **`createEvent` sem `isAllDay`** — campo derivado do `startTime`/`endTime` (date vs dateTime) em `CreateTaskInput`; removido na chamada
+- **Set/Map iter trocados por `forEach`** — tsconfig do Next sem `target` (defaulta es5); iteração direta falhava type-check
+
+**Próximos passos:**
+- Testar localmente com `ngrok` + `npm run dev` (validar `/hoje`, criação por NLP, undo)
+- Em produção: adicionar envs no EasyPanel, fazer commit+push, verificar `[TELEGRAM] webhook registrado: <url>` nos logs do boot
+- Pegar `TEGRAM_USER_ID` via `https://api.telegram.org/bot<TOKEN>/getUpdates` antes do primeiro `setWebhook`
+- Possíveis melhorias (segundo corte): edição via NLP depois do preview, paginação de listas grandes, mover entre calendários, recorrência via chat, undo persistente em arquivo
+
+---
 
 **O que foi feito:**
 
