@@ -5,6 +5,7 @@ import { getEventsForDateKey } from "./google-calendar";
 import { getDateKeyInTimeZone, shiftDateKey } from "./timezone";
 import { listSubscriptions, removeSubscription } from "./push-store";
 import { sendTelegramMessage } from "./telegram";
+import { pushEventContext } from "./telegram-bot/undo";
 import { DEFAULT_REMINDER_MINUTES, formatReminderLead } from "./reminder";
 import type { FlowTask } from "@/types/task";
 
@@ -119,12 +120,31 @@ export async function sendDueNotifications(accessToken: string, timeZone: string
 
     const lead = formatReminderLead(minutes);
     const pushBody = `Começa às ${timeStr}${calendarSuffix}`;
-    const telegramText = `⏰ <b>Em ${lead}:</b> ${task.title}\nComeça às ${timeStr}${calendarSuffix}`;
+    // Hashtag invisível no final: Telegram renderiza entre <i></i> como nada
+    // visível (zero-width), mas o bot extrai via regex pra resolver o evento
+    // quando o usuário responde "feito" / "concluir" / "já fiz".
+    const eventTag = `ev_${task.id}`;
+    const telegramText =
+      `⏰ <b>Em ${lead}:</b> ${task.title}\n` +
+      `Começa às ${timeStr}${calendarSuffix}\n` +
+      `<i>#${eventTag}</i>`;
 
     if (pushEnabled) {
       await sendPushNotification(subs, task.title, pushBody, `flow-event-${task.id}`);
     }
     await sendTelegramMessage(telegramText);
+
+    // Grava contexto do último lembrete pra o bot resolver "feito" sem o user
+    // precisar colar o ID. Import dinâmico pra evitar ciclo (notifier ↔ bot).
+    const chatIdNum = Number(process.env.TELEGRAM_CHAT_ID);
+    if (Number.isFinite(chatIdNum) && task.startTime) {
+      pushEventContext(chatIdNum, {
+        eventId: task.id,
+        calendarId: task.calendarId ?? "primary",
+        title: task.title,
+        startTime: task.startTime,
+      });
+    }
 
     notified.add(key);
     sent = true;

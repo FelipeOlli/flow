@@ -25,7 +25,7 @@ import {
   HELP_TEXT,
 } from "./commands";
 import { parseChatIntent } from "./intent";
-import { pushUndo, pushPending, getPending, deletePending } from "./undo";
+import { pushUndo, pushPending, getPending, deletePending, pushEventContext, peekEventContext, clearEventContext } from "./undo";
 import { formatDateBr, formatTimeRange, escapeHtml } from "./formatter";
 import { getValidAccessToken } from "@/lib/token-store";
 import { createEvent, getEventById, deleteEvent, markEventComplete } from "@/lib/google-calendar";
@@ -42,6 +42,41 @@ import type { ParsedEvent } from "@/lib/openai-event-parser";
 
 const MAX_EVENTS_PER_BATCH = 10;
 const PENDING_TTL_MS = 5 * 60_000;
+
+/** Match da hashtag invisível que o notifier embute na notificação. */
+const EVENT_TAG_RE = /#ev_([A-Za-z0-9_-]{16,})/;
+
+interface EventRef {
+  eventId: string;
+  calendarId: string;
+  title: string;
+}
+
+/**
+ * Tenta resolver um evento a partir de uma hashtag #ev_<id> no texto ou do
+ * contexto do último lembrete enviado pra esse chat. Retorna null se nada bate.
+ */
+function resolveEventRef(text: string, chatId: number): EventRef | null {
+  const match = text.match(EVENT_TAG_RE);
+  if (match) {
+    const ctx = peekEventContext(chatId);
+    if (ctx && ctx.eventId === match[1]) {
+      return { eventId: ctx.eventId, calendarId: ctx.calendarId, title: ctx.title };
+    }
+    // Hashtag conhecida mas sem contexto local — recupera via getEventById
+    // (feito lazy no caller porque precisa de access token).
+    return { eventId: match[1], calendarId: "primary", title: "" };
+  }
+  const ctx = peekEventContext(chatId);
+  if (ctx) {
+    return { eventId: ctx.eventId, calendarId: ctx.calendarId, title: ctx.title };
+  }
+  return null;
+}
+
+/** Frases curtas que o usuário pode mandar como resposta à notificação. */
+const QUICK_COMPLETE_RE = /^(feito|conclu[ií]do|conclu[ií]|j[aá]\s*fiz|terminei|ok|pronto|finalizei|mark\s*done)/i;
+const QUICK_DELETE_RE = /^(cancelar|cancela|apaga|remove|desmarca|esquece|delete)/i;
 
 function getTimeZone(): string {
   return process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
@@ -95,6 +130,43 @@ async function handleMessage(msg: TgMessage): Promise<void> {
   const chatId = msg.chat.id;
   const text = msg.text.trim();
   const timeZone = getTimeZone();
+
+  // Quick reply: "feito" / "cancelar" respondendo à última notificação.
+  // Tem prioridade sobre NLP pra evitar ida desnecessária ao Claude.
+  if (QUICK_COMPLETE_RE.test(text) || QUICK_DELETE_RE.test(text)) {
+    const ref = resolveEventRef(text, chatId);
+    if (ref && ref.eventId) {
+      await sendTelegramChatAction("typing", chatId);
+      const token = await getValidAccessToken();
+      if (!token) {
+        await sendTelegramMessage("Google não autorizado. Abra o Flow e reautorize.", { chatId });
+        return;
+      }
+      // Se só temos o eventId sem título (caso da hashtag encaminhada sem
+      // contexto local), recupera o evento pra validar.
+      let title = ref.title;
+      if (!title) {
+        try {
+          const ev = await getEventById(token, ref.eventId, ref.calendarId);
+          title = ev.title;
+        } catch {
+          await sendTelegramMessage("Não achei esse evento. Pode ter sido apagado.", { chatId });
+          return;
+        }
+      }
+      if (QUICK_DELETE_RE.test(text)) {
+        await deleteEvent(token, ref.eventId, ref.calendarId);
+        clearEventContext(chatId);
+        await sendTelegramMessage(`🗑 Removido: <b>${escapeHtml(title)}</b>`, { chatId });
+      } else {
+        await markEventComplete(token, ref.eventId, ref.calendarId);
+        clearEventContext(chatId);
+        await sendTelegramMessage(`✅ Concluído: <b>${escapeHtml(title)}</b>`, { chatId });
+      }
+      return;
+    }
+    // Sem contexto: cai pro NLP abaixo
+  }
 
   // Comandos literais
   if (text.startsWith("/")) {
