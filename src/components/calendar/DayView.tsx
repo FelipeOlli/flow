@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { format, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
@@ -8,6 +8,7 @@ import { TaskBlock } from "@/components/tasks/TaskBlock";
 import { getEventSurfaceColor } from "@/lib/colors";
 import { EventAnchorPoint } from "./EventPopover";
 import { computeDaysOpen, agingBadgeColor, categoryLetters } from "@/lib/aging";
+import { CompletedTodayPanel } from "./CompletedTodayPanel";
 import {
   CALENDAR_DIMENSIONS,
   CURRENT_TIME_LINE_Z_INDEX,
@@ -48,7 +49,7 @@ function ConflictBanner({ count, onClick, className = "" }: { count: number; onC
   );
 }
 
-function AgendaView({ tasks, currentDate, conflictIds, onConflictClick, onComplete, onEdit, onImportant, getAnchorFromElement }: {
+function AgendaView({ tasks, currentDate, conflictIds, onConflictClick, onComplete, onEdit, onImportant, getAnchorFromElement, completedTodayTasks }: {
   tasks: FlowTask[];
   currentDate: Date;
   conflictIds?: Set<string>;
@@ -57,6 +58,7 @@ function AgendaView({ tasks, currentDate, conflictIds, onConflictClick, onComple
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onImportant?: (task: FlowTask) => void;
   getAnchorFromElement: (el: HTMLElement) => EventAnchorPoint;
+  completedTodayTasks?: FlowTask[];
 }) {
   const calendarMap = new Map<string, { name: string; color: string; tasks: FlowTask[] }>();
   for (const task of tasks) {
@@ -95,7 +97,15 @@ function AgendaView({ tasks, currentDate, conflictIds, onConflictClick, onComple
 
       <ConflictBanner count={dayConflictCount} onClick={onConflictClick} />
 
-      {calendars.length === 0 && (
+      {completedTodayTasks && completedTodayTasks.length > 0 && (
+        <CompletedTodayPanel
+          tasks={completedTodayTasks}
+          onToggleComplete={onComplete}
+          onEdit={onEdit}
+        />
+      )}
+
+      {calendars.length === 0 && completedTodayTasks?.length === 0 && (
         <p className="text-sm text-[#9aa0a6] text-center py-6">Nenhum evento para este dia.</p>
       )}
 
@@ -216,7 +226,7 @@ function AgendaView({ tasks, currentDate, conflictIds, onConflictClick, onComple
   );
 }
 
-function PriorityView({ tasks, currentDate, conflictIds, onConflictClick, onComplete, onEdit, onImportant, getAnchorFromElement }: {
+function PriorityView({ tasks, currentDate, conflictIds, onConflictClick, onComplete, onEdit, onImportant, getAnchorFromElement, completedTodayTasks }: {
   tasks: FlowTask[];
   currentDate: Date;
   conflictIds?: Set<string>;
@@ -225,6 +235,7 @@ function PriorityView({ tasks, currentDate, conflictIds, onConflictClick, onComp
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onImportant?: (task: FlowTask) => void;
   getAnchorFromElement: (el: HTMLElement) => EventAnchorPoint;
+  completedTodayTasks?: FlowTask[];
 }) {
   const open = tasks
     .filter((t) => !t.isComplete && !t.isCancelled)
@@ -246,7 +257,15 @@ function PriorityView({ tasks, currentDate, conflictIds, onConflictClick, onComp
 
       <ConflictBanner count={dayConflictCount} onClick={onConflictClick} />
 
-      {open.length === 0 && (
+      {completedTodayTasks && completedTodayTasks.length > 0 && (
+        <CompletedTodayPanel
+          tasks={completedTodayTasks}
+          onToggleComplete={onComplete}
+          onEdit={onEdit}
+        />
+      )}
+
+      {open.length === 0 && completedTodayTasks?.length === 0 && (
         <p className="text-sm text-[#9aa0a6] text-center py-6">Nenhuma tarefa em aberto para este dia.</p>
       )}
 
@@ -323,7 +342,7 @@ function PriorityView({ tasks, currentDate, conflictIds, onConflictClick, onComp
   );
 }
 
-function FavoritesView({ tasks, currentDate, conflictIds, onConflictClick, onComplete, onEdit, onImportant, getAnchorFromElement }: {
+function FavoritesView({ tasks, currentDate, conflictIds, onConflictClick, onComplete, onEdit, onImportant, getAnchorFromElement, completedTodayTasks }: {
   tasks: FlowTask[];
   currentDate: Date;
   conflictIds?: Set<string>;
@@ -332,6 +351,7 @@ function FavoritesView({ tasks, currentDate, conflictIds, onConflictClick, onCom
   onEdit: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onImportant?: (task: FlowTask) => void;
   getAnchorFromElement: (el: HTMLElement) => EventAnchorPoint;
+  completedTodayTasks?: FlowTask[];
 }) {
   const open = tasks
     .filter((t) => t.isImportant && !t.isComplete && !t.isCancelled)
@@ -353,7 +373,15 @@ function FavoritesView({ tasks, currentDate, conflictIds, onConflictClick, onCom
 
       <ConflictBanner count={dayConflictCount} onClick={onConflictClick} />
 
-      {open.length === 0 && (
+      {completedTodayTasks && completedTodayTasks.length > 0 && (
+        <CompletedTodayPanel
+          tasks={completedTodayTasks}
+          onToggleComplete={onComplete}
+          onEdit={onEdit}
+        />
+      )}
+
+      {open.length === 0 && completedTodayTasks?.length === 0 && (
         <p className="text-sm text-[#9aa0a6] text-center py-6">Nenhum evento favoritado para este dia.</p>
       )}
 
@@ -444,9 +472,11 @@ interface DayViewProps {
   onTimeClick: (time: Date) => void;
   onMove?: (task: FlowTask, newStart: Date, newEnd: Date) => void;
   onImportant?: (task: FlowTask) => void;
+  completedTodayTasks?: FlowTask[];
+  completedTodayIdSet?: Set<string>;
 }
 
-export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", conflictIds, onConflictClick, onComplete, onEdit, onDelete, onTimeClick, onMove, onImportant }: DayViewProps) {
+export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", conflictIds, onConflictClick, onComplete, onEdit, onDelete, onTimeClick, onMove, onImportant, completedTodayTasks = [], completedTodayIdSet }: DayViewProps) {
   const [nowY, setNowY] = useState(currentTimeY());
   const scrollRef = useRef<HTMLDivElement>(null);
   const listScrollRef = useRef<HTMLDivElement>(null);
@@ -485,6 +515,8 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
   const listScrolledKeyRef = useRef<string>("");
   useEffect(() => {
     if (displayMode !== "list" || !isCurrentDay) return;
+    // Com concluídos de hoje o painel do topo tem prioridade — não rola até o "Agora".
+    if (completedTodayTasks.length > 0) return;
     const key = `${displayMode}|${currentDate.toISOString().slice(0, 10)}`;
     const scroll = () => {
       const sep = listNowSepRef.current;
@@ -500,7 +532,7 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayMode, isCurrentDay, currentDate, tasks.length]);
+  }, [displayMode, isCurrentDay, currentDate, tasks.length, completedTodayTasks.length]);
 
   // Global pointer events for drag
   useEffect(() => {
@@ -545,8 +577,15 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
     };
   }, []);
 
-  const timedTasks = tasks.filter((t) => !t.isAllDay);
-  const allDayTasks = tasks.filter((t) => t.isAllDay);
+  // Concluídos do dia corrente foram movidos pro painel do topo — escondidos da timeline/lista/agenda.
+  // Datas passadas e futuras: completedTodayIdSet fica vazio, comportamento atual preservado.
+  const visTasks = useMemo(
+    () => (completedTodayIdSet ? tasks.filter((t) => !completedTodayIdSet.has(t.id)) : tasks),
+    [tasks, completedTodayIdSet]
+  );
+
+  const timedTasks = visTasks.filter((t) => !t.isAllDay);
+  const allDayTasks = visTasks.filter((t) => t.isAllDay);
   const orderedTimedTasks = [...timedTasks].sort(
     (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
   );
@@ -622,6 +661,13 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
         </div>
 
         <ConflictBanner count={listConflictCount} onClick={onConflictClick} className="mb-2" />
+
+        <CompletedTodayPanel
+          tasks={completedTodayTasks}
+          onToggleComplete={onComplete}
+          onEdit={onEdit}
+          className="mb-2"
+        />
 
         {allDayTasks.length > 0 && (
           <div className="space-y-2 mb-3">
@@ -745,19 +791,30 @@ export function DayView({ tasks, currentDate, pendingIds, displayMode = "grid", 
   }
 
   if (displayMode === "calendar") {
-    return <AgendaView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onConflictClick={onConflictClick} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
+    return <AgendaView tasks={visTasks} currentDate={currentDate} conflictIds={conflictIds} onConflictClick={onConflictClick} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} completedTodayTasks={completedTodayTasks} />;
   }
 
   if (displayMode === "priority") {
-    return <PriorityView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onConflictClick={onConflictClick} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
+    return <PriorityView tasks={visTasks} currentDate={currentDate} conflictIds={conflictIds} onConflictClick={onConflictClick} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} completedTodayTasks={completedTodayTasks} />;
   }
 
   if (displayMode === "hyperfocus") {
-    return <FavoritesView tasks={tasks} currentDate={currentDate} conflictIds={conflictIds} onConflictClick={onConflictClick} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} />;
+    return <FavoritesView tasks={visTasks} currentDate={currentDate} conflictIds={conflictIds} onConflictClick={onConflictClick} onComplete={onComplete} onEdit={onEdit} onImportant={onImportant} getAnchorFromElement={getAnchorFromElement} completedTodayTasks={completedTodayTasks} />;
   }
 
   return (
     <div className="flex flex-col flex-1">
+      {/* Painel de concluídos do dia (só quando viewing today e há concluídos) */}
+      {completedTodayTasks.length > 0 && (
+        <div className="px-4 pt-2">
+          <CompletedTodayPanel
+            tasks={completedTodayTasks}
+            onToggleComplete={onComplete}
+            onEdit={onEdit}
+          />
+        </div>
+      )}
+
       {/* All-day + progress */}
       <div className="px-4 pt-2 pb-2 space-y-2">
         {allDayTasks.map((t) => (

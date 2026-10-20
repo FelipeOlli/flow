@@ -20,6 +20,7 @@ import {
 } from "./calendarLayout";
 import { getDateKeyInTimeZone, getTaskGridDateKey } from "@/lib/timezone";
 import { computeDaysOpen, agingBadgeColor, categoryLetters } from "@/lib/aging";
+import { CompletedTodayPanel } from "./CompletedTodayPanel";
 
 interface WeekViewProps {
   tasks: FlowTask[];
@@ -32,9 +33,11 @@ interface WeekViewProps {
   onTimeClick: (time: Date) => void;
   onDayClick: (date: Date) => void;
   onImportant?: (task: FlowTask) => void;
+  completedTodayTasks?: FlowTask[];
+  completedTodayIdSet?: Set<string>;
 }
 
-export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid", onComplete, onEdit, onDelete, onTimeClick, onDayClick, onImportant }: WeekViewProps) {
+export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid", onComplete, onEdit, onDelete, onTimeClick, onDayClick, onImportant, completedTodayTasks = [], completedTodayIdSet }: WeekViewProps) {
   const [nowY, setNowY] = useState(currentTimeY());
   const scrollRef = useRef<HTMLDivElement>(null);
   const listScrollRef = useRef<HTMLDivElement>(null);
@@ -43,6 +46,11 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
 
   const weekStart = startOfDay(startOfWeek(currentDate, { weekStartsOn: 1 }));
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+  // Concluídos do dia de hoje são tirados dos subviews — vão pro painel do topo.
+  const visTasks = completedTodayIdSet
+    ? tasks.filter((t) => !completedTodayIdSet.has(t.id))
+    : tasks;
 
   useEffect(() => {
     const t = setInterval(() => setNowY(currentTimeY()), 30000);
@@ -60,6 +68,8 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
   const listScrolledKeyRef = useRef<string>("");
   useEffect(() => {
     if (displayMode !== "list") return;
+    // Com concluídos de hoje o painel do topo tem prioridade — não rola até o "Agora".
+    if (completedTodayTasks.length > 0) return;
     const key = `${displayMode}|${currentDate.toISOString().slice(0, 10)}`;
     const scroll = () => {
       const sep = listNowSepRef.current;
@@ -75,11 +85,11 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayMode, currentDate, tasks.length]);
+  }, [displayMode, currentDate, tasks.length, completedTodayTasks.length]);
 
   function getLayoutForDay(day: Date) {
     const colKey = getDateKeyInTimeZone(day, tz);
-    const dayTasks = tasks.filter(
+    const dayTasks = visTasks.filter(
       (t) =>
         !t.isAllDay &&
         t.startTime &&
@@ -97,12 +107,19 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
     const nowTs = Date.now();
     return (
       <div ref={listScrollRef} className="flex flex-col flex-1 overflow-y-auto px-3 pb-20 pt-2 space-y-4">
+        {completedTodayTasks.length > 0 && (
+          <CompletedTodayPanel
+            tasks={completedTodayTasks}
+            onToggleComplete={onComplete}
+            onEdit={onEdit}
+          />
+        )}
         {weekDays.map((day) => {
           const colKey = getDateKeyInTimeZone(day, tz);
-          const dayAllDay = tasks.filter(
+          const dayAllDay = visTasks.filter(
             (t) => t.isAllDay && t.startTime && getTaskGridDateKey(t.startTime, true, tz) === colKey
           );
-          const dayTimed = tasks
+          const dayTimed = visTasks
             .filter((t) => !t.isAllDay && t.startTime && getTaskGridDateKey(t.startTime, t.isAllDay, tz) === colKey)
             .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
           const isCurrentDay = isToday(day);
@@ -233,6 +250,15 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
 
   return (
     <div className="flex flex-col flex-1">
+      {completedTodayTasks.length > 0 && (
+        <div className="px-3 pt-2">
+          <CompletedTodayPanel
+            tasks={completedTodayTasks}
+            onToggleComplete={onComplete}
+            onEdit={onEdit}
+          />
+        </div>
+      )}
       {/* Day headers - sticky */}
       <div className="flex border-b border-[#3c4043] bg-[#202124]">
         <div className="w-11 flex-shrink-0" />
@@ -258,7 +284,7 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
         <div className="w-11 flex-shrink-0 px-1.5 py-2 text-[10px] uppercase tracking-wide text-[#9aa0a6]">dia</div>
         {weekDays.map((day) => {
           const colKey = getDateKeyInTimeZone(day, tz);
-          const allDayTasks = tasks.filter(
+          const allDayTasks = visTasks.filter(
             (t) =>
               t.isAllDay && t.startTime && getTaskGridDateKey(t.startTime, true, tz) === colKey
           );

@@ -123,6 +123,30 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       .filter((t) => !t.isAllDay && t.startTime.startsWith(dateKey) && conflictIds.has(t.id))
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   }, [tasks, conflictIds, currentDate]);
+  // Concluídos do dia corrente — vão pro painel do topo em vez de ficar na timeline.
+  // Recalculado a cada minuto (incluindo virada do dia) via tick do reloginho.
+  const [todayTick, setTodayTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTodayTick((v) => v + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const viewDateKey = useMemo(() => format(currentDate, "yyyy-MM-dd"), [currentDate]);
+  const todayDateKey = useMemo(() => format(new Date(), "yyyy-MM-dd"), [todayTick]);
+  const isViewingToday = viewDateKey === todayDateKey;
+  const completedTodayTasks = useMemo(
+    () =>
+      isViewingToday
+        ? tasks.filter(
+            (t) => t.isComplete && t.startTime.startsWith(todayDateKey)
+          )
+        : [],
+    [tasks, isViewingToday, todayDateKey]
+  );
+  // IDs a esconder da timeline do dia. Map para O(1).
+  const completedTodayIdSet = useMemo(
+    () => new Set(completedTodayTasks.map((t) => t.id)),
+    [completedTodayTasks]
+  );
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState<FlowTask | null>(null);
   const [formDefaults, setFormDefaults] = useState<Partial<ParsedEvent> & { startTime?: string; endTime?: string }>({});
@@ -1516,6 +1540,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           onImportant={handleImportant}
           displayMode={dayDisplayMode}
           conflictIds={conflictIds}
+          completedTodayTasks={isViewingToday ? completedTodayTasks : []}
+          completedTodayIdSet={completedTodayIdSet}
           onConflictClick={() => setConflictPanelOpen(true)} />
       )}
       {!showDashboard && !showWeeklyReview && !loading && view === "3days" && (
@@ -1523,18 +1549,24 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
           onImportant={handleImportant}
-          displayMode={multiDayDisplayMode} />
+          displayMode={multiDayDisplayMode}
+          completedTodayTasks={isViewingToday ? completedTodayTasks : []}
+          completedTodayIdSet={completedTodayIdSet} />
       )}
       {!showDashboard && !showWeeklyReview && !loading && view === "week" && (
         <WeekView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
           onImportant={handleImportant}
-          displayMode={multiDayDisplayMode} />
+          displayMode={multiDayDisplayMode}
+          completedTodayTasks={isViewingToday ? completedTodayTasks : []}
+          completedTodayIdSet={completedTodayIdSet} />
       )}
       {!showDashboard && !showWeeklyReview && !loading && view === "month" && (
         <MonthView tasks={tasks} currentDate={currentDate} onDayClick={goToDate}
-          onEventClick={openEventCard} onComplete={handleComplete} onImportant={handleImportant} />
+          onEventClick={openEventCard} onComplete={handleComplete} onImportant={handleImportant}
+          completedTodayTasks={isViewingToday ? completedTodayTasks : []}
+          completedTodayIdSet={completedTodayIdSet} />
       )}
 
       {/* FAB — hidden in dashboard/projects/review mode */}

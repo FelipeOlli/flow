@@ -5,6 +5,7 @@ import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
 import { EventAnchorPoint } from "./EventPopover";
 import { getEventSurfaceColor } from "@/lib/colors";
+import { CompletedTodayPanel } from "./CompletedTodayPanel";
 
 const DAY_NAMES = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
@@ -15,23 +16,40 @@ interface MonthViewProps {
   onEventClick: (task: FlowTask, anchor: EventAnchorPoint) => void;
   onComplete: (task: FlowTask) => void;
   onImportant?: (task: FlowTask) => void;
+  completedTodayTasks?: FlowTask[];
+  completedTodayIdSet?: Set<string>;
 }
 
-export function MonthView({ tasks, currentDate, onDayClick, onEventClick, onComplete, onImportant }: MonthViewProps) {
+export function MonthView({ tasks, currentDate, onDayClick, onEventClick, onComplete, onImportant, completedTodayTasks = [], completedTodayIdSet }: MonthViewProps) {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
   const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
 
+  // Concluídos do dia de hoje saem dos chips — vão pro painel do topo.
+  const visTasks = completedTodayIdSet
+    ? tasks.filter((t) => !completedTodayIdSet.has(t.id))
+    : tasks;
+
   function getTasksForDay(day: Date) {
-    return tasks.filter(
+    return visTasks.filter(
       (t) => t.startTime && isSameDay(new Date(t.startTime), day)
     );
   }
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
+      {completedTodayTasks.length > 0 && (
+        <div className="px-3 pt-2 shrink-0">
+          <CompletedTodayPanel
+            tasks={completedTodayTasks}
+            onToggleComplete={onComplete}
+            onEdit={(task, anchor) => onEventClick(task, anchor)}
+          />
+        </div>
+      )}
+
       {/* Day name headers */}
       <div className="grid grid-cols-7 border-b border-[#3c4043] bg-[#202124]">
         {DAY_NAMES.map((name) => (
