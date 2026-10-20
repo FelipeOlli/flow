@@ -168,6 +168,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
   const [searchResults, setSearchResults] = useState<FlowTask[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const searchAbortRef = useRef<AbortController | null>(null);
   const [searchDropdownPos, setSearchDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const searchDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -714,6 +715,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     if (conflictPanelOpen && dayConflictTasks.length === 0) setConflictPanelOpen(false);
   }, [conflictPanelOpen, dayConflictTasks]);
 
+  // Cache de busca por termo normalizado \u2014 evita refazer a mesma query ao voltar a uma letra.
+  const searchCacheRef = useRef<Map<string, FlowTask[]>>(new Map());
   useEffect(() => {
     const term = searchQuery.trim();
     if (!term) {
@@ -722,12 +725,28 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       return;
     }
 
+    const normalize = (s: string) =>
+      s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const cacheKey = normalize(term);
+    const cached = searchCacheRef.current.get(cacheKey);
+    if (cached) {
+      setSearchResults(cached);
+      setSearching(false);
+      return;
+    }
+
+    // Aborta o fetch anterior se uma tecla nova chegar antes da resposta.
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
     const timeout = setTimeout(async () => {
       setSearching(true);
       try {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const res = await fetch(
-          `/api/tasks?q=${encodeURIComponent(term)}&limit=80&tz=${encodeURIComponent(tz)}`
+          `/api/tasks?q=${encodeURIComponent(term)}&limit=80&tz=${encodeURIComponent(tz)}`,
+          { signal: controller.signal }
         );
         if (res.status === 401) {
           router.replace("/sign-in");
@@ -735,8 +754,6 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
         }
         if (!res.ok) throw new Error("Failed to search events");
         const data: FlowTask[] = await res.json();
-        const normalize = (s: string) =>
-          s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
         const words = normalize(term).split(/\s+/).filter(Boolean);
         const filtered = data.filter((t) => {
           const hay = normalize(`${t.title ?? ""} ${t.description ?? ""}`);
@@ -745,15 +762,22 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
         const ordered = filtered.sort(
           (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
         );
-        setSearchResults(ordered);
-      } catch {
+        // Cache limitado pra n\u00e3o crescer sem controle numa sess\u00e3o longa de busca.
+        if (searchCacheRef.current.size > 40) searchCacheRef.current.clear();
+        searchCacheRef.current.set(cacheKey, ordered);
+        if (normalize(searchQuery.trim()) === cacheKey) setSearchResults(ordered);
+      } catch (err) {
+        if ((err as Error)?.name === "AbortError") return;
         setSearchResults([]);
       } finally {
-        setSearching(false);
+        if (!controller.signal.aborted) setSearching(false);
       }
-    }, 300);
+    }, 250);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, [router, searchQuery]);
 
   useEffect(

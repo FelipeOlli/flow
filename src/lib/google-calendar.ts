@@ -96,10 +96,21 @@ function mapEvent(
   };
 }
 
+// Cache curto da lista de calendários — imutável na prática e pedido em toda busca.
+// TTL de 10min evita repetir 1 request por tecla digitada sem ficar stale demais.
+// keyed por minAccessRole: "reader" e "writer" devolvem conjuntos diferentes.
+const calendarListCache = new Map<
+  "reader" | "writer",
+  { entries: calendar_v3.Schema$CalendarListEntry[]; expiresAt: number }
+>();
+
 async function listCalendarEntries(
   client: ReturnType<typeof getClient>,
   minAccessRole: "reader" | "writer"
 ): Promise<calendar_v3.Schema$CalendarListEntry[]> {
+  const cached = calendarListCache.get(minAccessRole);
+  if (cached && Date.now() < cached.expiresAt) return cached.entries;
+
   const entries: calendar_v3.Schema$CalendarListEntry[] = [];
   let pageToken: string | undefined;
   do {
@@ -111,6 +122,7 @@ async function listCalendarEntries(
     entries.push(...(data.items ?? []));
     pageToken = data.nextPageToken ?? undefined;
   } while (pageToken);
+  calendarListCache.set(minAccessRole, { entries, expiresAt: Date.now() + 10 * 60_000 });
   return entries;
 }
 
@@ -177,6 +189,9 @@ async function fetchAllCalendarsEvents(
   type RawItem = { event: calendar_v3.Schema$Event; calId: string; calName: string; calColor: string };
 
   // Busca eventos expandidos E masters (para extrair RRULE/FREQ) em paralelo por calendário.
+  // Na busca global (q definido) os masters são dispensáveis — servem só pro código curto de
+  // recorrência (cosmético) e dobram o número de requests. Só busca por data/page inteira os usa.
+  const fetchMasters = options?.q === undefined;
   const [expandedResults, masterResults] = await Promise.all([
     Promise.allSettled(
       calendarItems.map(async (cal): Promise<RawItem[]> => {
@@ -197,19 +212,21 @@ async function fetchAllCalendarsEvents(
     ),
     // Masters (singleEvents:false) — retornam as séries com RRULE para extrair o código curto.
     // Erros são silenciados para não bloquear a listagem principal.
-    Promise.allSettled(
-      calendarItems.map(async (cal) => {
-        const id = cal.id!;
-        const { data } = await calendar.events.list({
-          calendarId: id,
-          timeMin: timeMinIso,
-          timeMax: timeMaxIso,
-          singleEvents: false,
-          maxResults: 250,
-        });
-        return (data.items ?? []).filter((e) => e.id && e.recurrence?.length);
-      })
-    ),
+    fetchMasters
+      ? Promise.allSettled(
+          calendarItems.map(async (cal) => {
+            const id = cal.id!;
+            const { data } = await calendar.events.list({
+              calendarId: id,
+              timeMin: timeMinIso,
+              timeMax: timeMaxIso,
+              singleEvents: false,
+              maxResults: 250,
+            });
+            return (data.items ?? []).filter((e) => e.id && e.recurrence?.length);
+          })
+        )
+      : Promise.resolve([]),
   ]);
 
   // Constrói mapa masterId → código curto

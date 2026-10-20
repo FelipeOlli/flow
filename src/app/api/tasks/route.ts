@@ -32,6 +32,8 @@ export async function GET(req: NextRequest) {
       const rawQuery = query.trim();
       const isAsciiQuery = rawQuery.toLowerCase() === normalizedQuery;
 
+      // Duas queries no máximo: original + normalizada (sem acento). Ambas filtradas por `q`,
+      // que o Google aplica server-side — evita varrer 10 anos de eventos sem filtro.
       const fetches: Promise<FlowTask[]>[] = [
         getEventsInRange(accessToken, startDate, endDate, tz, { q: rawQuery, maxResults: limit }),
       ];
@@ -39,13 +41,6 @@ export async function GET(req: NextRequest) {
         fetches.push(
           getEventsInRange(accessToken, startDate, endDate, tz, { q: normalizedQuery, maxResults: limit })
         );
-      }
-      if (isAsciiQuery) {
-        const broadStart = new Date(now);
-        broadStart.setFullYear(broadStart.getFullYear() - 2);
-        const broadEnd = new Date(now);
-        broadEnd.setFullYear(broadEnd.getFullYear() + 2);
-        fetches.push(getEventsInRange(accessToken, broadStart, broadEnd, tz));
       }
 
       const resultSets = await Promise.all(fetches);
