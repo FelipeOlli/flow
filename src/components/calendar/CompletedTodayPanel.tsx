@@ -21,7 +21,7 @@ function anchorFromElement(el: HTMLElement): EventAnchorPoint {
 export function CompletedTodayPanel({ tasks, onToggleComplete, onEdit, className = "" }: CompletedTodayPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrolledOnceRef = useRef(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   useEffect(() => {
     if (tasks.length === 0) {
@@ -37,9 +37,9 @@ export function CompletedTodayPanel({ tasks, onToggleComplete, onEdit, className
     });
   }, [tasks.length]);
 
-  // Sai de collapse quando a lista esvazia (todos reabertos) — nada a mostrar.
+  // Lista sempre começa retraída. Ao esvaziar (todos reabertos) volta ao padrão.
   useEffect(() => {
-    if (tasks.length === 0) setCollapsed(false);
+    if (tasks.length === 0) setCollapsed(true);
   }, [tasks.length]);
 
   if (tasks.length === 0) return null;
