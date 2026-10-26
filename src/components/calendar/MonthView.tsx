@@ -5,9 +5,10 @@ import { ptBR } from "date-fns/locale";
 import { FlowTask } from "@/types/task";
 import { EventAnchorPoint } from "./EventPopover";
 import { getEventSurfaceColor } from "@/lib/colors";
+import { WEEK_STARTS_ON } from "@/lib/timezone";
 import { CompletedTodayPanel } from "./CompletedTodayPanel";
 
-const DAY_NAMES = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 interface MonthViewProps {
   tasks: FlowTask[];
@@ -23,8 +24,8 @@ interface MonthViewProps {
 export function MonthView({ tasks, currentDate, onDayClick, onEventClick, onComplete, onImportant, completedTodayTasks = [], completedTodayIdSet }: MonthViewProps) {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
-  const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-  const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  const gridStart = startOfWeek(monthStart, { weekStartsOn: WEEK_STARTS_ON });
+  const gridEnd = endOfWeek(monthEnd, { weekStartsOn: WEEK_STARTS_ON });
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
 
   // Concluídos do dia de hoje saem dos chips — vão pro painel do topo.

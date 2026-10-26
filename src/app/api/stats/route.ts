@@ -89,12 +89,10 @@ export async function GET(req: NextRequest) {
       .map(([normalizedTitle, v]) => ({ normalizedTitle, title: v.title, weeks: v.weeks.size }))
       .sort((a, b) => b.weeks - a.weeks);
 
-    // Pilares da semana atual
+    // Pilares da semana atual (domingo → sábado, igual às views de calendário)
     const now = new Date();
-    const dayOfWeek = now.getDay();
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() + mondayOffset);
+    weekStart.setDate(now.getDate() - now.getDay());
     weekStart.setHours(0, 0, 0, 0);
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);

@@ -1,5 +1,11 @@
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * Primeiro dia da semana usado nas views de semana e mês.
+ * 0 = domingo (domingo numa ponta, sábado na outra).
+ */
+export const WEEK_STARTS_ON = 0;
+
 export function isDateKey(value: string): boolean {
   return DATE_KEY_RE.test(value);
 }

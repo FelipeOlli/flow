@@ -26,14 +26,12 @@ interface DashboardViewProps {
   onBack: () => void;
 }
 
-/** Returns 53 weeks as arrays of YYYY-MM-DD strings (Mon–Sun), starting from
- *  the Monday on or before Jan 1 of the given year. */
+/** Returns 53 weeks as arrays of YYYY-MM-DD strings (Sun–Sat), starting from
+ *  the Sunday on or before Jan 1 of the given year. */
 function getHeatmapWeeks(year: number): string[][] {
   const jan1 = new Date(year, 0, 1);
-  const dow = jan1.getDay(); // 0=Sun … 6=Sat
-  const daysToMonday = dow === 0 ? 6 : dow - 1;
   const start = new Date(jan1);
-  start.setDate(jan1.getDate() - daysToMonday);
+  start.setDate(jan1.getDate() - jan1.getDay());
 
   const weeks: string[][] = [];
   const d = new Date(start);
@@ -57,7 +55,7 @@ function getHeatColor(completed: number, inYear: boolean): string {
   return "bg-[#a78bfa]";
 }
 
-const DAY_INITIALS = ["S", "T", "Q", "Q", "S", "S", "D"]; // Seg–Dom
+const DAY_INITIALS = ["D", "S", "T", "Q", "Q", "S", "S"]; // Dom–Sáb
 
 export function DashboardView({ onBack }: DashboardViewProps) {
   const year = 2026;
@@ -93,7 +91,7 @@ export function DashboardView({ onBack }: DashboardViewProps) {
   {
     let lastMonth = -1;
     weeks.forEach((week, col) => {
-      // Use Monday (index 0) of the week to determine the month
+      // Use Sunday (index 0) of the week to determine the month
       const monthStr = week[0].slice(5, 7);
       const month = parseInt(monthStr, 10) - 1;
       if (week[0].startsWith(`${year}-`) && month !== lastMonth) {

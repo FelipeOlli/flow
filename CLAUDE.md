@@ -256,6 +256,33 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
+### 2026-10-26
+
+**O que foi feito:**
+
+1. **Calendário começa no domingo** — As views semanal e mensal passaram a ordenar as colunas de domingo a sábado (antes começavam na segunda). A grade do mês agora mostra os cabeçalhos `Dom Seg Ter Qua Qui Sex Sáb`, com os dias de overflow do mês anterior/Seguinte esmaecidos nas pontas.
+2. **Fim de semana da semana em uma constante** — Criado `WEEK_STARTS_ON = 0` em `src/lib/timezone.ts` (módulo que já é dono da semântica de data/dia-da-semana do projeto, com a convenção `0 = domingo`). A constante é usada em `MonthView`, `WeekView` e `CalendarView`, evitando `0` mágico espalhado — voltar pra segunda no futuro é uma edição de uma linha só.
+3. **Janela de fetch e cabeçalho sincronizados** — `CalendarView` passou a calcular a faixa de busca do mês/semana com o mesmo `weekStartsOn` da grade. Sem isso, mudar só as colunas visuais cortaria ou duplicaria eventos nas bordas da semana.
+4. **Consistência no dashboard e nas estatísticas** — O heatmap anual do dashboard (colunas D S T Q Q S S) e os "Pilares da semana atual" do endpoint `/api/stats` passaram a usar domingo como início da semana.
+5. **Verificação** — `npx tsc --noEmit` limpo e `npm run build` OK. Validação visual não foi feita (decidido pular): não há biblioteca de automação de browser no projeto e o `npm run dev` foi encerrado ao fim da sessão.
+
+**Arquivos modificados:**
+- `src/lib/timezone.ts` — nova constante exportada `WEEK_STARTS_ON`
+- `src/components/calendar/MonthView.tsx` — `DAY_NAMES` reordenado (Dom→Sáb) + `startOfWeek`/`endOfWeek` com `WEEK_STARTS_ON`
+- `src/components/calendar/WeekView.tsx` — `weekStart`/`weekDays` com `WEEK_STARTS_ON`
+- `src/components/calendar/CalendarView.tsx` — faixa de fetch e rótulo do header da semana/mês com `WEEK_STARTS_ON`
+- `src/app/api/stats/route.ts` — "Pilares da semana atual" agora começa no domingo
+- `src/components/dashboard/DashboardView.tsx` — heatmap anual em colunas Dom→Sáb
+
+**Decisões tomadas:**
+- Constante centralizada em `src/lib/timezone.ts` em vez de exportar de `calendarLayout.ts` — segue o mesmo raciocínio de `isBusinessHoursCalendar` (vindo de `pillar-config.ts`), que já virou export único compartilhado
+- Escopo além das duas views pedidas (dashboard + `/api/stats`) — a ordem de semana ficaria incoerente entre telas se só a grade mudasse
+- Nenhuma biblioteca nova instalada (regra do projeto); validação visual deixada para o usuário
+
+**Próximos passos:** conferir visualmente as views semanal e mensal no `npm run dev`; redeploy no EasyPanel.
+
+---
+
 ### 2026-10-13
 
 **O que foi feito:**
@@ -517,27 +544,11 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ---
 
-### 2026-06-11 (sessão 4)
-
-**O que foi feito:**
-
-1. **Fix: eventos de convite não apareciam no Flow** — A API do Google Calendar omite por padrão eventos onde o usuário foi convidado mas ainda não respondeu (`needsAction`) e eventos recusados (`declined`). Adicionado `showHiddenInvitations: true` em `listEventsExpandedPage`. Migração atualizada para excluir eventos com `selfResponseStatus === "declined"` e evitar tentar mover eventos de terceiros.
-
-**Arquivos modificados:**
-- `src/lib/google-calendar.ts` — `showHiddenInvitations: true` em `listEventsExpandedPage`
-- `src/lib/migration.ts` — filtro `selfResponseStatus !== "declined"` em `timedToMove` e `allDayToMove`
-
-**Decisões tomadas:**
-- `showHiddenInvitations: true` é necessário para qualquer evento onde o user não é organizador e ainda não aceitou o convite
-- Eventos `declined` excluídos da migração pois o usuário não é organizador — a API retornaria 403 ao tentar mover
-- Eventos `declined` continuam aparecendo no calendário (com cor cinza via `getEventSurfaceColor`)
-
-**Próximos passos:** redeploy no EasyPanel para entrar em produção.
-
 ---
 
 ## 7. Histórico de Sessões Anteriores
 
+- **2026-06-11 (s4)** — Fix: eventos de convite não apareciam (`showHiddenInvitations: true`); migração exclui `declined`.
 - **2026-06-11 (s3)** — Scope dialog para RSVP em recorrentes (este/seguintes/todos); divisão visual 12h na Lista.
 - **2026-06-11 (s2)** — Voz IA v2 (prompt enriquecido, FAB sparkle, endpoint em 2 fases); métricas de dias em aberto por `startTime`; escopo este/seguintes/todos na edição de recorrentes; divisão visual 12h no calendário.
 - **2026-06-11 (s1)** — Criação de evento por voz + IA (Whisper-1 + GPT-4o-mini), FAB roxo, `VoiceCaptureModal`.

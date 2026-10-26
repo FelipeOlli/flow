@@ -8,6 +8,7 @@ import { signOut, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, Pillar } from "@/types/task";
 import { CALENDAR_PILLAR_OVERRIDES } from "@/lib/pillar-config";
+import { WEEK_STARTS_ON } from "@/lib/timezone";
 import { getConflictIds, packDayEvents, suggestFreeSlots } from "@/components/calendar/calendarLayout";
 import { DayView } from "./DayView";
 import { ThreeDayView } from "./ThreeDayView";
@@ -216,11 +217,11 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       startDate = startOfDay(currentDate);
       endDate = endOfDay(addDays(currentDate, 2));
     } else if (view === "week") {
-      startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
-      endDate = endOfWeek(currentDate, { weekStartsOn: 1 });
+      startDate = startOfWeek(currentDate, { weekStartsOn: WEEK_STARTS_ON });
+      endDate = endOfWeek(currentDate, { weekStartsOn: WEEK_STARTS_ON });
     } else {
-      startDate = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
-      endDate = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 1 });
+      startDate = startOfWeek(startOfMonth(currentDate), { weekStartsOn: WEEK_STARTS_ON });
+      endDate = endOfWeek(endOfMonth(currentDate), { weekStartsOn: WEEK_STARTS_ON });
     }
 
     try {
@@ -930,8 +931,8 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       return `${format(currentDate, "EEE, d MMM", { locale: ptBR })} — ${format(end, "EEE, d MMM", { locale: ptBR })}`;
     }
     if (view === "week") {
-      const ws = startOfWeek(currentDate, { weekStartsOn: 1 });
-      const we = endOfWeek(currentDate, { weekStartsOn: 1 });
+      const ws = startOfWeek(currentDate, { weekStartsOn: WEEK_STARTS_ON });
+      const we = endOfWeek(currentDate, { weekStartsOn: WEEK_STARTS_ON });
       return `${format(ws, "d MMM")} — ${format(we, "d MMM", { locale: ptBR })}`;
     }
     return format(currentDate, "MMMM yyyy", { locale: ptBR });

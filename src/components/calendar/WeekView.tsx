@@ -18,7 +18,7 @@ import {
   timeToY,
   yToTime,
 } from "./calendarLayout";
-import { getDateKeyInTimeZone, getTaskGridDateKey } from "@/lib/timezone";
+import { getDateKeyInTimeZone, getTaskGridDateKey, WEEK_STARTS_ON } from "@/lib/timezone";
 import { computeDaysOpen, agingBadgeColor, categoryLetters } from "@/lib/aging";
 import { CompletedTodayPanel } from "./CompletedTodayPanel";
 
@@ -44,7 +44,7 @@ export function WeekView({ tasks, currentDate, pendingIds, displayMode = "grid",
   const listNowSepRef = useRef<HTMLDivElement>(null);
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  const weekStart = startOfDay(startOfWeek(currentDate, { weekStartsOn: 1 }));
+  const weekStart = startOfDay(startOfWeek(currentDate, { weekStartsOn: WEEK_STARTS_ON }));
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   // Concluídos do dia de hoje são tirados dos subviews — vão pro painel do topo.
