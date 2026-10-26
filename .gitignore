@@ -36,5 +36,8 @@ next-env.d.ts
 # tokens persistidos para o cron (contém dados sensíveis)
 .token-store.json
 
+# estado runtime do notificador (dedup de lembretes)
+.notified-today.json
+
 # dados persistentes (tokens, uploads)
 data/
