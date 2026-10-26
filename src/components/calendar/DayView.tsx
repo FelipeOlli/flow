@@ -364,50 +364,21 @@ function FavoritesView({ tasks, currentDate, conflictIds, onConflictClick, onCom
 
   const isCurrentDay = isToday(currentDate);
   const nowTs = Date.now();
-  // A lista é ordenada por "dias em aberto", não por horário — então a linha do tempo
-  // não pode seguir a ordem visual. Ela se ancora no card que representa "agora":
-  //   1. o evento em andamento (start <= agora < end);
-  //   2. senão, o próximo evento por horário (ainda não começou);
-  //   3. senão, o fim da lista (todos os eventos já passaram).
-  const anchorTaskId = useMemo(() => {
-    if (!isCurrentDay || open.length === 0) return undefined;
-    const inProgress = open.find(({ task }) => {
+  // Separador "Agora" — mesmo critério da view Lista: entra antes do primeiro evento
+  // que ainda não começou (ou que está em andamento). A lista do HyperFocus é ordenada
+  // por "dias em aberto", então o índice é o da posição visual, não o do horário.
+  const separatorIndex = useMemo(() => {
+    if (!isCurrentDay) return -1;
+    const inProgress = open.findIndex(({ task }) => {
       const start = new Date(task.startTime).getTime();
       const end = new Date(task.endTime).getTime();
       return start <= nowTs && nowTs < end;
     });
-    if (inProgress) return inProgress.task.id;
-    const upcoming = open
-      .filter(({ task }) => new Date(task.startTime).getTime() > nowTs)
-      .sort((a, b) => new Date(a.task.startTime).getTime() - new Date(b.task.startTime).getTime())[0];
-    return upcoming?.task.id;
+    if (inProgress !== -1) return inProgress;
+    return open.findIndex(({ task }) => new Date(task.startTime).getTime() > nowTs);
   }, [isCurrentDay, open, nowTs]);
 
-  const listRef = useRef<HTMLDivElement>(null);
-  const anchorRef = useRef<HTMLDivElement>(null);
-  const [nowLineTop, setNowLineTop] = useState<number | null>(null);
   const [nowLabel, setNowLabel] = useState<string>("");
-
-  useEffect(() => {
-    if (!isCurrentDay || !anchorTaskId) {
-      setNowLineTop(null);
-      return;
-    }
-    const measure = () => {
-      const list = listRef.current;
-      const card = anchorRef.current;
-      if (!list || !card) return;
-      // getBoundingClientRect é relativo ao viewport — subtrair a posição do
-      // container dá o offset interno, independente de qual elemento é o offsetParent.
-      const listRect = list.getBoundingClientRect();
-      const cardRect = card.getBoundingClientRect();
-      const top = cardRect.top - listRect.top + cardRect.height / 2;
-      setNowLineTop(top);
-    };
-    measure();
-    const t = setInterval(measure, 30000);
-    return () => clearInterval(t);
-  }, [isCurrentDay, anchorTaskId, open.length]);
 
   useEffect(() => {
     if (!isCurrentDay) return;
@@ -440,31 +411,25 @@ function FavoritesView({ tasks, currentDate, conflictIds, onConflictClick, onCom
         <p className="text-sm text-[#9aa0a6] text-center py-6">Nenhum evento favoritado para este dia.</p>
       )}
 
-      <div className="relative" ref={listRef}>
-        {/* Linha do tempo vertical — hora atual, ancorada no card que representa "agora" */}
-        {nowLineTop !== null && (
-          <div
-            className="absolute pointer-events-none flex items-center gap-1"
-            style={{ top: `${nowLineTop}px`, left: "-3px", transform: "translateY(-50%)", zIndex: 10 }}
-          >
-            <div className="w-0.5 h-8 rounded bg-[#ea4335]" />
-            <span className="text-[10px] font-semibold text-[#ea4335] tabular-nums whitespace-nowrap drop-shadow-[0_1px_3px_rgba(0,0,0,1)]">{nowLabel}</span>
-          </div>
-        )}
-
-        <div className="space-y-1.5">
-          {open.map(({ task, days }) => (
-          <div
-            key={task.id}
-            ref={task.id === anchorTaskId ? anchorRef : undefined}
-            onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
-            className="rounded-lg border border-l-[3px] px-3 py-2 cursor-pointer"
-            style={{
-              backgroundColor: "#2a2b2e",
-              borderColor: "#3c4043",
-              borderLeftColor: task.calendarBgColor ?? "#4285f4",
-            }}
-          >
+      <div className="space-y-1.5">
+        {open.map(({ task, days }, index) => (
+          <Fragment key={task.id}>
+            {index === separatorIndex && (
+              <div className="flex items-center gap-2 px-1 py-1">
+                <div className="h-[2px] w-3 rounded bg-[#ea4335]" />
+                <p className="text-[11px] font-medium text-[#ea4335]">Agora {nowLabel}</p>
+                <div className="h-px flex-1 bg-[#ea4335]/50" />
+              </div>
+            )}
+            <div
+              onClick={(e) => onEdit(task, getAnchorFromElement(e.currentTarget))}
+              className="rounded-lg border border-l-[3px] px-3 py-2 cursor-pointer"
+              style={{
+                backgroundColor: "#2a2b2e",
+                borderColor: "#3c4043",
+                borderLeftColor: task.calendarBgColor ?? "#4285f4",
+              }}
+            >
             <div className="flex items-start gap-2">
               <button
                 type="button"
@@ -521,8 +486,8 @@ function FavoritesView({ tasks, currentDate, conflictIds, onConflictClick, onCom
               )}
             </div>
           </div>
+          </Fragment>
         ))}
-        </div>
       </div>
     </div>
   );
