@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     const tasks = await getEventsInRange(accessToken, startDate, endDate, tz);
 
     const delegated = tasks.filter(
-      (t) => !t.isCancelled && !t.isComplete && !!t.delegateTo?.email
+      (t) => !t.isCancelled && !t.isComplete && !!(t.delegateTo?.name?.trim() || t.delegateTo?.email?.trim())
     );
 
     return NextResponse.json(delegated, {

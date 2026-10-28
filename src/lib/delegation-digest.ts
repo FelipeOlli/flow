@@ -54,7 +54,7 @@ export async function sendDelegationDigest(
 
   const tasks: FlowTask[] = await getEventsInRange(accessToken, startDate, endDate, timeZone);
   const delegated = tasks.filter(
-    (t) => !t.isCancelled && !t.isComplete && !!t.delegateTo?.email
+    (t) => !t.isCancelled && !t.isComplete && !!(t.delegateTo?.name?.trim() || t.delegateTo?.email?.trim())
   );
 
   const groups = groupDelegations(delegated, timeZone).filter((g) => g.overdue.length > 0);

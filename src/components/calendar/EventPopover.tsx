@@ -9,6 +9,7 @@ import { Pillar } from "@/types/task";
 import { suggestFreeSlots } from "@/components/calendar/calendarLayout";
 import { formatGoogleRecurrence } from "@/lib/recurrence-format";
 import { DEFAULT_REMINDER_MINUTES, REMINDER_OPTIONS, formatReminderLead } from "@/lib/reminder";
+import { normalizeDelegateName } from "@/lib/delegation";
 
 export interface EventAnchorPoint {
   x: number;
@@ -90,6 +91,7 @@ export function EventPopover({
   const [attendeeInput, setAttendeeInput] = useState("");
   const [editDelegate, setEditDelegate] = useState<TaskDelegate | null>(task.delegateTo ?? null);
   const [delegateInput, setDelegateInput] = useState("");
+  const [delegateContacts, setDelegateContacts] = useState<{ name: string; count: number }[]>([]);
   const [frequentAttendees, setFrequentAttendees] = useState<{ email: string; name?: string }[]>([]);
   const [calendars, setCalendars] = useState<CalendarOption[]>([]);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
@@ -288,6 +290,16 @@ export function EventPopover({
     return () => { active = false; };
   }, []);
 
+  // Nomes de quem você já delegou — atalho pra não redigitar o nome.
+  useEffect(() => {
+    let active = true;
+    fetch("/api/delegates")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: { name: string; count: number }[]) => { if (active) setDelegateContacts(data); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -350,10 +362,32 @@ export function EventPopover({
     doRsvp(status, "this");
   }
 
-  /** Nome de exibição de um convidado do evento (pra usar como responsável). */
-  function attendeeName(email: string): string | undefined {
-    return task.attendees?.find((a) => a.email?.toLowerCase() === email.toLowerCase())?.name?.trim() || undefined;
-  }
+  /**
+   * Sugestões do campo "Delegar para": convidados do próprio evento (pelo nome)
+   * e os nomes que você já usou. O texto digitado filtra as duas listas.
+   */
+  const delegateSuggestions = useMemo(() => {
+    const query = delegateInput.trim().toLowerCase();
+    const matches = (label: string) => !query || label.toLowerCase().includes(query);
+    const out: { key: string; label: string; email?: string }[] = [];
+    const seen = new Set<string>();
+
+    for (const attendee of task.attendees ?? []) {
+      const label = attendee.name?.trim() || attendee.email?.trim();
+      if (!label) continue;
+      const key = normalizeDelegateName(label);
+      if (seen.has(key) || !matches(label)) continue;
+      seen.add(key);
+      out.push({ key: `att-${key}`, label, email: attendee.email });
+    }
+    for (const contact of delegateContacts) {
+      const key = normalizeDelegateName(contact.name);
+      if (seen.has(key) || !matches(contact.name)) continue;
+      seen.add(key);
+      out.push({ key: `hist-${key}`, label: contact.name });
+    }
+    return out.slice(0, 10);
+  }, [task.attendees, delegateContacts, delegateInput]);
 
   function buildEditUpdates(): UpdateTaskInput {
     const updates: UpdateTaskInput = {
@@ -1127,34 +1161,32 @@ export function EventPopover({
                     </span>
                   </div>
                 )}
-                {editAttendees.filter((e) => e !== editDelegate?.email).length > 0 && (
+                {delegateSuggestions.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
-                    {editAttendees
-                      .filter((e) => e !== editDelegate?.email)
-                      .map((email) => (
-                        <button
-                          key={email}
-                          type="button"
-                          onClick={() => setEditDelegate({ email, name: attendeeName(email) })}
-                          className="px-2 py-1 rounded-full bg-[#2a2b2e] border border-[#3c4043] text-[11px] text-[#9aa0a6] hover:text-[#e8eaed] hover:border-[#4dd0e1]/60 transition-colors"
-                          title={email}
-                        >
-                          {attendeeName(email) || email}
-                        </button>
-                      ))}
+                    {delegateSuggestions.map((s) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => { setEditDelegate({ name: s.label, email: s.email }); setDelegateInput(""); }}
+                        className="px-2 py-1 rounded-full bg-[#2a2b2e] border border-[#3c4043] text-[11px] text-[#9aa0a6] hover:text-[#e8eaed] hover:border-[#4dd0e1]/60 transition-colors"
+                        title={s.email ?? s.label}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
                   </div>
                 )}
                 <div className="flex gap-2">
                   <input
-                    type="email"
-                    placeholder="email@exemplo.com"
+                    type="text"
+                    placeholder="Nome de quem vai entregar"
                     value={delegateInput}
                     onChange={(e) => setDelegateInput(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === ",") {
                         e.preventDefault();
-                        const email = delegateInput.trim().toLowerCase();
-                        if (email) setEditDelegate({ email });
+                        const name = delegateInput.trim();
+                        if (name) setEditDelegate({ name });
                         setDelegateInput("");
                       }
                     }}
@@ -1163,8 +1195,8 @@ export function EventPopover({
                   <button
                     type="button"
                     onClick={() => {
-                      const email = delegateInput.trim().toLowerCase();
-                      if (email) setEditDelegate({ email });
+                      const name = delegateInput.trim();
+                      if (name) setEditDelegate({ name });
                       setDelegateInput("");
                     }}
                     className="px-3 py-2 rounded-xl bg-[#3c4043] text-xs text-[#e8eaed] hover:bg-[#4c4f53] transition-colors"
@@ -1172,25 +1204,6 @@ export function EventPopover({
                     Definir
                   </button>
                 </div>
-                {frequentAttendees.filter((a) => a.email !== editDelegate?.email).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {frequentAttendees
-                      .filter((a) => a.email !== editDelegate?.email)
-                      .filter((a) => !delegateInput.trim() || a.email.includes(delegateInput.trim().toLowerCase()) || a.name?.toLowerCase().includes(delegateInput.trim().toLowerCase()))
-                      .slice(0, 8)
-                      .map((a) => (
-                        <button
-                          key={a.email}
-                          type="button"
-                          onClick={() => { setEditDelegate({ email: a.email, name: a.name }); setDelegateInput(""); }}
-                          className="px-2 py-1 rounded-full bg-[#2a2b2e] border border-[#3c4043] text-[11px] text-[#9aa0a6] hover:text-[#e8eaed] hover:border-[#4dd0e1]/60 transition-colors"
-                          title={a.email}
-                        >
-                          {a.name || a.email}
-                        </button>
-                      ))}
-                  </div>
-                )}
               </div>
               {error && <p className="text-xs text-[#f28b82]">{error}</p>}
               {feedback && <p className="text-xs text-emerald-400">{feedback}</p>}

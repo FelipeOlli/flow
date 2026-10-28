@@ -161,10 +161,12 @@ flow/
 - **Chave pública em runtime**: `push-client.ts` faz `GET /api/push/vapid` para obter a chave — não depende de build-time env vars.
 
 ### Delegação e cobrança
-- **`delegateTo` é o responsável pela entrega**: `{ email, name }`, gravado em `extendedProperties.private` (`flowDelegateEmail` / `flowDelegateName`). Independe de `isDelegable` (que significa "pode ser delegado").
-- **Marcação**: no `EventPopover` (edição) e no `TaskForm` (criação). A lista de responsáveis vem dos convidados do próprio evento; sem convidado, digita o e-mail (sugestões de `/api/attendees/frequent`).
+- **`delegateTo` é o responsável pela entrega**: `{ name, email }`, gravado em `extendedProperties.private` (`flowDelegateName` / `flowDelegateEmail`). **O nome é a chave**; o e-mail é opcional (só existe quando o responsável é um convidado do evento) e serve como info extra.
+- **`isDelegable` é independente** — significa "pode ser delegado", não "foi delegado para X".
+- **Marcação**: no `EventPopover` (edição) e no `TaskForm` (criação). Sugestões = convidados do evento (pelo nome) + os nomes já usados; o campo fica livre pra digitação.
+- **Nomes já usados ficam registrados** em `/app/data/.delegate-contacts.json` (`src/lib/delegate-contacts.ts`) — contagem + última vez. Alimentados por `rememberDelegateName()` no `setEventDelegate`/`createEvent`. Lidos por `GET /api/delegates`.
 - **Prazo = dia do início do evento**: evento de dia inteiro usa o prefixo literal da data, com hora usa o timezone (`getTaskGridDateKey`). Atrasado = `dueDateKey < hoje`; vence hoje = igual.
-- **Painel de Cobrança**: `src/components/dashboard/CobrancaView.tsx`, alimentado por `GET /api/tasks/delegated` (180 dias atrás → 60 à frente). Agrupamento por pessoa em `src/lib/delegation.ts`.
+- **Painel de Cobrança**: `src/components/dashboard/CobrancaView.tsx`, alimentado por `GET /api/tasks/delegated` (180 dias atrás → 60 à frente). Recarrega toda vez que a aba é aberta. Agrupamento por nome normalizado (sem acento, minúscula) em `src/lib/delegation.ts`.
 - **`extendedProperties.private` no `patch` do Google faz MERGE** (omitir mantém a chave; `null` remove). O helper `patchPrivateProps()` em `google-calendar.ts` faz GET e reenvia o mapa inteiro — não depender do merge.
 - **Resumo diário no Telegram**: 08:00 em `cron.ts` → `sendDelegationDigest()`; dedup por dia em `/app/data/.delegation-digest-state.json`.
 
@@ -296,6 +298,17 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 - Badge no header em vez de só o painel: o painel exige abrir o app, o badge te puxa pra cobrar
 
 **Verificação:** `npx tsc --noEmit` limpo e `npm run build` OK. Testado ao vivo contra o Google Calendar real (dev local com token válido): criação com `delegateTo` grava e devolve, `/api/tasks/delegated` lista, PATCH troca o responsável, marcar como importante não apaga a delegação, `delegateTo: null` remove (preservando o "importante"), evento de teste apagado no final.
+
+**Ajustes na mesma sessão (feedback do Felipe):**
+- **Painel de cobrança recarrega sozinho** ao abrir a aba (`useEffect` no `mode === "cobranca"`), não só no boot.
+- **Ícone da cobrança trocado** — era o triângulo de alerta, já usado pra evento em atraso/conflito. Agora é o ícone de pessoas (`user-group`), sem colisão com o triângulo nem com o clipboard da Revisão Semanal.
+- **Responsável passa a ser identificado pelo NOME**, não pelo e-mail. `TaskDelegate` continua com `name` + `email`, mas o nome é a chave: o e-mail vira informação extra (só existe quando o responsável é um convidado do evento). `delegateTo` sem e-mail é válido.
+- **Nomes já usados ficam registrados** em `/app/data/.delegate-contacts.json` (contagem + última vez), alimentados por `rememberDelegateName()` no `setEventDelegate`/`createEvent`. O seletor "Delegar para" sugere esses nomes + os convidados do evento (pelo nome), e o campo fica livre pra digitação quando a pessoa não estiver na lista.
+- **Agrupamento do painel por nome normalizado** (sem acento, minúsculo) — "Maria" e "maria silva" caem no mesmo grupo.
+
+**Arquivos modificados (ajustes):** `src/types/task.ts`, `src/lib/delegation.ts`, `src/lib/delegate-contacts.ts` (novo), `src/lib/google-calendar.ts`, `src/lib/delegation-digest.ts`, `src/app/api/delegates/route.ts` (novo), `src/app/api/tasks/delegated/route.ts`, `src/components/calendar/CalendarView.tsx`, `src/components/calendar/EventPopover.tsx`, `src/components/tasks/TaskForm.tsx`, `.gitignore`
+
+**Verificação (ajustes):** `npx tsc --noEmit` limpo e `npm run build` OK. Ao vivo: evento criado com `delegateTo` só com nome (sem e-mail) é gravado e listado; `/api/delegates` registra "Maria Silva"; trocar a caixa do nome ("maria silva") mantém a mesma pessoa no contador; evento de teste apagado no fim.
 
 **Próximos passos:** conferir visualmente o painel de cobrança e o bloco "Delegar para" no `npm run dev`; redeploy no EasyPanel.
 

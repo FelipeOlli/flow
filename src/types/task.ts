@@ -2,8 +2,10 @@ export type Pillar = "trabalho" | "saude" | "familia" | "espiritualidade";
 
 /** Responsável pela execução do evento (quem você delegou). */
 export interface TaskDelegate {
-  email?: string;
+  /** Nome da pessoa — é o identificador principal. */
   name?: string;
+  /** E-mail, quando conhecido (convidado do evento). */
+  email?: string;
 }
 
 export interface FlowTask {

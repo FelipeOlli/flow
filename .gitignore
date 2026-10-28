@@ -39,5 +39,11 @@ next-env.d.ts
 # estado runtime do notificador (dedup de lembretes)
 .notified-today.json
 
+# contatos de delegação (nomes de quem já recebeu tarefas)
+.delegate-contacts.json
+
+# estado do resumo diário de cobranças
+.delegation-digest-state.json
+
 # dados persistentes (tokens, uploads)
 data/

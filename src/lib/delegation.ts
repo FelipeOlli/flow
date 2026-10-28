@@ -1,5 +1,14 @@
-import { FlowTask } from "@/types/task";
+import { FlowTask, TaskDelegate } from "@/types/task";
 import { diffDateKeysInDays, getDateKeyInTimeZone, getTaskGridDateKey } from "./timezone";
+
+/** Chave de comparação de nomes: sem acento, minúscula. */
+export function normalizeDelegateName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
 
 export type DelegationStatus = "overdue" | "today" | "upcoming";
 
@@ -13,7 +22,7 @@ export interface DelegationItem {
 }
 
 export interface DelegationGroup {
-  /** E-mail do responsável (fallback: nome). */
+  /** Chave de agrupamento: nome normalizado (fallback: e-mail). */
   key: string;
   email?: string;
   name: string;
@@ -21,6 +30,20 @@ export interface DelegationGroup {
   overdue: DelegationItem[];
   today: DelegationItem[];
   upcoming: DelegationItem[];
+}
+
+/**
+ * Identidade do responsável: o nome é a chave. O e-mail só entra como
+ * informação extra (quando o responsável é um convidado do evento).
+ */
+export function getDelegateKey(delegate: TaskDelegate): string {
+  const name = delegate.name?.trim();
+  if (name) return normalizeDelegateName(name);
+  return delegate.email?.trim().toLowerCase() ?? "";
+}
+
+export function getDelegateLabel(delegate: TaskDelegate): string {
+  return delegate.name?.trim() || delegate.email?.trim() || "";
 }
 
 /**
@@ -58,17 +81,18 @@ export function groupDelegations(tasks: FlowTask[], timeZone: string): Delegatio
 
   for (const task of tasks) {
     const delegate = task.delegateTo;
-    if (!delegate?.email) continue;
+    if (!delegate?.name?.trim() && !delegate?.email?.trim()) continue;
     const item = getDelegationStatus(task, todayKey, timeZone);
     if (!item) continue;
 
-    const key = delegate.email.toLowerCase();
+    const key = getDelegateKey(delegate);
+    if (!key) continue;
     let group = groups.get(key);
     if (!group) {
       group = {
         key,
         email: delegate.email,
-        name: delegate.name?.trim() || delegate.email,
+        name: getDelegateLabel(delegate),
         items: [],
         overdue: [],
         today: [],
@@ -76,10 +100,11 @@ export function groupDelegations(tasks: FlowTask[], timeZone: string): Delegatio
       };
       groups.set(key, group);
     }
-    if (!group.name || group.name === group.email) {
-      const knownName = delegate.name?.trim();
-      if (knownName) group.name = knownName;
+    // Um nome mais completo registrado depois substitui o que estava no grupo.
+    if (delegate.name?.trim() && (!group.name || group.name === group.email)) {
+      group.name = delegate.name.trim();
     }
+    if (!group.email && delegate.email) group.email = delegate.email;
 
     group.items.push(item);
     if (item.status === "overdue") group.overdue.push(item);
@@ -108,7 +133,7 @@ export function countOverdue(tasks: FlowTask[], timeZone: string): number {
   const todayKey = getDateKeyInTimeZone(new Date(), timeZone);
   let count = 0;
   for (const task of tasks) {
-    if (!task.delegateTo?.email) continue;
+    if (!task.delegateTo?.name?.trim() && !task.delegateTo?.email?.trim()) continue;
     const item = getDelegationStatus(task, todayKey, timeZone);
     if (item?.status === "overdue") count++;
   }

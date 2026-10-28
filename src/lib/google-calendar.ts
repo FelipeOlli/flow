@@ -4,6 +4,7 @@ import { getDateKeyInTimeZone, getUtcRangeForDateKey, shiftDateKey } from "./tim
 import { formatGoogleRecurrence, rruleShortCode } from "./recurrence-format";
 import { CALENDAR_PILLAR_OVERRIDES } from "./pillar-config";
 import { parseReminderProp, serializeReminder } from "./reminder";
+import { rememberDelegateName } from "./delegate-contacts";
 
 const COMPLETE_COLOR_ID = "2";
 const IMPORTANT_COLOR_ID = "5";
@@ -367,6 +368,7 @@ export async function createEvent(
   if (input.isDelegable) extraPrivate.flowDelegable = "true";
   if (input.delegateTo?.email || input.delegateTo?.name) {
     Object.assign(extraPrivate, writeDelegate(input.delegateTo));
+    rememberDelegateName(input.delegateTo?.name);
   }
   if (input.category) extraPrivate.flowCategory = input.category;
   if (input.pillar) extraPrivate.flowPillar = input.pillar;
@@ -903,6 +905,7 @@ export async function setEventDelegate(
     [DELEGATE_EMAIL_KEY]: delegate?.email?.trim().toLowerCase() || null,
     [DELEGATE_NAME_KEY]: delegate?.name?.trim() || null,
   });
+  rememberDelegateName(delegate?.name);
   return mapEvent(data, calendarId);
 }
 

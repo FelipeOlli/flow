@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, Pillar, TaskDelegate } from "@/types/task";
 import { findConflicts, suggestFreeSlots } from "@/components/calendar/calendarLayout";
 import { DEFAULT_REMINDER_MINUTES, REMINDER_OPTIONS } from "@/lib/reminder";
+import { normalizeDelegateName } from "@/lib/delegation";
 
 interface VoiceDefaults {
   startTime?: string;
@@ -106,6 +107,7 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, skipConfl
   const [frequentAttendees, setFrequentAttendees] = useState<{ email: string; name?: string }[]>([]);
   const [delegate, setDelegate] = useState<TaskDelegate | null>(null);
   const [delegateInput, setDelegateInput] = useState("");
+  const [delegateContacts, setDelegateContacts] = useState<{ name: string; count: number }[]>([]);
 
   // Detecção de conflito de horário (apenas na criação)
   const conflictData = useMemo(() => {
@@ -120,6 +122,33 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, skipConfl
       return { conflicts: [] as FlowTask[], suggestions: [] as { mins: number; label: string; startIso: string }[] };
     }
   }, [isEditing, skipConflictValidation, existingTasks, startTime, endTime]);
+
+  /**
+   * Sugestões do campo "Delegar para": quem você já gravou como delegado
+   * (com e-mail, quando conhecido) e os nomes que você já usou.
+   */
+  const delegateSuggestions = useMemo(() => {
+    const query = delegateInput.trim().toLowerCase();
+    const matches = (label: string) => !query || label.toLowerCase().includes(query);
+    const out: { key: string; label: string; email?: string }[] = [];
+    const seen = new Set<string>();
+
+    for (const contact of delegateContacts) {
+      const key = normalizeDelegateName(contact.name);
+      if (seen.has(key) || !matches(contact.name)) continue;
+      seen.add(key);
+      out.push({ key: `hist-${key}`, label: contact.name });
+    }
+    for (const attendee of frequentAttendees) {
+      const label = attendee.name?.trim() || attendee.email;
+      if (!label) continue;
+      const key = normalizeDelegateName(label);
+      if (seen.has(key) || !matches(label)) continue;
+      seen.add(key);
+      out.push({ key: `att-${key}`, label, email: attendee.email });
+    }
+    return out.slice(0, 10);
+  }, [delegateContacts, frequentAttendees, delegateInput]);
 
   function applySlot(slot: { mins: number; startIso: string }) {
     const start = new Date(slot.startIso);
@@ -140,6 +169,17 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, skipConfl
     fetch("/api/attendees/frequent")
       .then((res) => (res.ok ? res.json() : []))
       .then((data: { email: string; name?: string }[]) => { if (active) setFrequentAttendees(data); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [isEditing]);
+
+  // Nomes de quem você já delegou — atalho pra não redigitar o nome.
+  useEffect(() => {
+    if (isEditing) return;
+    let active = true;
+    fetch("/api/delegates")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: { name: string; count: number }[]) => { if (active) setDelegateContacts(data); })
       .catch(() => {});
     return () => { active = false; };
   }, [isEditing]);
@@ -248,7 +288,9 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, skipConfl
         if (tag === "D") (payload as CreateTaskInput).isDelegable = true;
         if (pillar) (payload as CreateTaskInput).pillar = pillar;
         if (attendees.length) (payload as CreateTaskInput).attendees = attendees;
-        if (delegate?.email) (payload as CreateTaskInput).delegateTo = delegate;
+        if (delegate?.name?.trim() || delegate?.email?.trim()) {
+          (payload as CreateTaskInput).delegateTo = delegate;
+        }
         const effectiveReminder = customReminder
           ? (Number(customReminderValue) || 0)
           : reminderMinutes;
@@ -663,34 +705,32 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, skipConfl
                     </span>
                   </div>
                 )}
-                {attendees.filter((e) => e !== delegate?.email).length > 0 && (
+                {delegateSuggestions.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
-                    {attendees
-                      .filter((e) => e !== delegate?.email)
-                      .map((email) => (
-                        <button
-                          key={email}
-                          type="button"
-                          onClick={() => setDelegate({ email })}
-                          className="px-2 py-1 rounded-full bg-[#2a2b2e] border border-[#3c4043] text-[11px] text-[#9aa0a6] hover:text-[#e8eaed] hover:border-[#4dd0e1]/60 transition-colors"
-                          title={email}
-                        >
-                          {email}
-                        </button>
-                      ))}
+                    {delegateSuggestions.map((s) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => { setDelegate({ name: s.label, email: s.email }); setDelegateInput(""); }}
+                        className="px-2 py-1 rounded-full bg-[#2a2b2e] border border-[#3c4043] text-[11px] text-[#9aa0a6] hover:text-[#e8eaed] hover:border-[#4dd0e1]/60 transition-colors"
+                        title={s.email ?? s.label}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
                   </div>
                 )}
                 <div className="flex gap-2">
                   <input
-                    type="email"
-                    placeholder="email@exemplo.com"
+                    type="text"
+                    placeholder="Nome de quem vai entregar"
                     value={delegateInput}
                     onChange={(e) => setDelegateInput(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        const email = delegateInput.trim().toLowerCase();
-                        if (email) setDelegate({ email });
+                        const name = delegateInput.trim();
+                        if (name) setDelegate({ name });
                         setDelegateInput("");
                       }
                     }}
@@ -699,8 +739,8 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, skipConfl
                   <button
                     type="button"
                     onClick={() => {
-                      const email = delegateInput.trim().toLowerCase();
-                      if (email) setDelegate({ email });
+                      const name = delegateInput.trim();
+                      if (name) setDelegate({ name });
                       setDelegateInput("");
                     }}
                     className="px-3 py-2.5 rounded-xl bg-[#2a2b2e] border border-[#3c4043] text-[#8ab4f8] hover:bg-[#313236] transition-colors text-sm"
@@ -708,25 +748,6 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, skipConfl
                     Definir
                   </button>
                 </div>
-                {frequentAttendees.filter((a) => a.email !== delegate?.email).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {frequentAttendees
-                      .filter((a) => a.email !== delegate?.email)
-                      .filter((a) => !delegateInput.trim() || a.email.includes(delegateInput.trim().toLowerCase()) || a.name?.toLowerCase().includes(delegateInput.trim().toLowerCase()))
-                      .slice(0, 8)
-                      .map((a) => (
-                        <button
-                          key={a.email}
-                          type="button"
-                          onClick={() => { setDelegate({ email: a.email, name: a.name }); setDelegateInput(""); }}
-                          className="px-2 py-1 rounded-full bg-[#2a2b2e] border border-[#3c4043] text-[11px] text-[#9aa0a6] hover:text-[#e8eaed] hover:border-[#4dd0e1]/60 transition-colors"
-                          title={a.email}
-                        >
-                          {a.name || a.email}
-                        </button>
-                      ))}
-                  </div>
-                )}
               </div>
             )}
 
