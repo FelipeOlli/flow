@@ -77,6 +77,14 @@ export function TaskItem({ task, onComplete, onEdit, onDelete, isPending, onImpo
           ${task.isComplete ? "line-through text-gray-500" : "text-white"}
         `}>
           {task.title}
+          {task.delegateTo?.email && (
+            <span
+              className="ml-1 text-[#4dd0e1] align-middle"
+              title={`Responsável: ${task.delegateTo.name || task.delegateTo.email}`}
+            >
+              👤
+            </span>
+          )}
         </p>
         {!task.isAllDay && task.startTime && (
           <p className={`text-xs mt-0.5 ${task.isComplete ? "text-gray-600" : "text-gray-500"}`}>

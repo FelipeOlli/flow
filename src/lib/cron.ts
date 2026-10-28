@@ -4,6 +4,7 @@ import { runMigration } from "./migration";
 import { getValidAccessToken } from "./token-store";
 import { setMigrationError, setMigrationRunning, setMigrationSuccess } from "./migration-status";
 import { sendDueNotifications } from "./notifier";
+import { sendDelegationDigest } from "./delegation-digest";
 import {
   getDateKeyInTimeZone,
   getReferenceDateForDateKey,
@@ -125,10 +126,24 @@ export function initCron() {
       { timezone: "America/Sao_Paulo" }
     );
 
+    cron.schedule(
+      "0 8 * * *",
+      async () => {
+        try {
+          const token = await getValidAccessToken();
+          if (token) await sendDelegationDigest(token, timeZone);
+        } catch (err) {
+          console.error("[FLOW CRON] Erro no resumo de cobranças:", err);
+        }
+      },
+      { timezone: "America/Sao_Paulo" }
+    );
+
     cronScheduled = true;
     cronInitError = null;
     console.log("[FLOW CRON] Migração noturna agendada para 00:01 (America/Sao_Paulo)");
     console.log("[FLOW CRON] Notificações push agendadas a cada minuto.");
+    console.log("[FLOW CRON] Resumo de cobranças agendado para 08:00 (America/Sao_Paulo).");
     console.log("[FLOW CRON] Recomendado em produção: cron externo chamando POST /api/cron/migrate às 00:01.");
   } catch (err) {
     cronScheduled = false;

@@ -1,5 +1,11 @@
 export type Pillar = "trabalho" | "saude" | "familia" | "espiritualidade";
 
+/** Responsável pela execução do evento (quem você delegou). */
+export interface TaskDelegate {
+  email?: string;
+  name?: string;
+}
+
 export interface FlowTask {
   id: string;
   title: string;
@@ -8,6 +14,8 @@ export interface FlowTask {
   isComplete: boolean;
   isImportant?: boolean;
   isDelegable?: boolean;
+  /** Quem foi responsável por entregar este evento. */
+  delegateTo?: TaskDelegate;
   category?: "operational" | "strategic";
   pillar?: Pillar;
   colorId?: string;
@@ -61,6 +69,8 @@ export interface CreateTaskInput {
   recurrence?: string[];
   isImportant?: boolean;
   isDelegable?: boolean;
+  /** Responsável pela entrega. */
+  delegateTo?: TaskDelegate;
   category?: "operational" | "strategic";
   pillar?: Pillar;
   /** Lista de e-mails dos convidados */
@@ -77,6 +87,8 @@ export interface UpdateTaskInput {
   isComplete?: boolean;
   isImportant?: boolean;
   isDelegable?: boolean;
+  /** Responsável pela entrega. null = remover a delegação. */
+  delegateTo?: TaskDelegate | null;
   category?: "operational" | "strategic" | null;
   pillar?: Pillar | null;
   calendarId?: string;

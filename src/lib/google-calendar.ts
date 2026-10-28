@@ -1,5 +1,5 @@
 import { google, calendar_v3 } from "googleapis";
-import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, AttendanceStatus, Pillar } from "@/types/task";
+import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, AttendanceStatus, Pillar, TaskDelegate } from "@/types/task";
 import { getDateKeyInTimeZone, getUtcRangeForDateKey, shiftDateKey } from "./timezone";
 import { formatGoogleRecurrence, rruleShortCode } from "./recurrence-format";
 import { CALENDAR_PILLAR_OVERRIDES } from "./pillar-config";
@@ -27,6 +27,29 @@ function getClient(accessToken: string) {
   const auth = new google.auth.OAuth2();
   auth.setCredentials({ access_token: accessToken });
   return google.calendar({ version: "v3", auth });
+}
+
+const DELEGATE_EMAIL_KEY = "flowDelegateEmail";
+const DELEGATE_NAME_KEY = "flowDelegateName";
+
+/** Lê a delegação do extendedProperties.private do evento. */
+function readDelegate(
+  privateMap: Record<string, string> | undefined | null
+): TaskDelegate | undefined {
+  const email = privateMap?.[DELEGATE_EMAIL_KEY]?.trim();
+  const name = privateMap?.[DELEGATE_NAME_KEY]?.trim();
+  if (!email && !name) return undefined;
+  return { email: email || undefined, name: name || undefined };
+}
+
+/** Serializa a delegação para o extendedProperties.private. */
+function writeDelegate(delegate: TaskDelegate | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  const email = delegate?.email?.trim().toLowerCase();
+  const name = delegate?.name?.trim();
+  if (email) out[DELEGATE_EMAIL_KEY] = email;
+  if (name) out[DELEGATE_NAME_KEY] = name;
+  return out;
 }
 
 function mapEvent(
@@ -67,6 +90,7 @@ function mapEvent(
     })(),
     isImportant: event.extendedProperties?.private?.["flowImportant"] === "true",
     isDelegable: event.extendedProperties?.private?.["flowDelegable"] === "true",
+    delegateTo: readDelegate(event.extendedProperties?.private),
     category: (event.extendedProperties?.private?.["flowCategory"] as "operational" | "strategic" | undefined) || undefined,
     pillar: ((event.extendedProperties?.private?.["flowPillar"] || CALENDAR_PILLAR_OVERRIDES[calendarName]) as Pillar | undefined) || undefined,
     colorId: event.colorId ?? undefined,
@@ -341,6 +365,9 @@ export async function createEvent(
 
   const extraPrivate: Record<string, string> = {};
   if (input.isDelegable) extraPrivate.flowDelegable = "true";
+  if (input.delegateTo?.email || input.delegateTo?.name) {
+    Object.assign(extraPrivate, writeDelegate(input.delegateTo));
+  }
   if (input.category) extraPrivate.flowCategory = input.category;
   if (input.pillar) extraPrivate.flowPillar = input.pillar;
   if (input.reminderMinutes !== undefined) {
@@ -445,12 +472,24 @@ export async function updateEvent(
     if (endISO !== undefined) body.end = { dateTime: endISO, timeZone };
     if (updates.attendees !== undefined) body.attendees = updates.attendees.map((email) => ({ email }));
     if (updates.recurrence !== undefined) body.recurrence = updates.recurrence;
-    if (updates.reminderMinutes !== undefined) {
-      body.extendedProperties = {
-        private: { flowReminderMinutes: serializeReminder(updates.reminderMinutes)! },
-      };
-    }
     return body;
+  }
+
+  /**
+   * Aplica o patch principal e, se houver, grava o lembrete num patch separado.
+   * Separado porque o patch do Google substitui o extendedProperties.private inteiro —
+   * o lembrete precisa ser gravado com merge, sem apagar as outras marcações.
+   */
+  async function patchAndMap(
+    targetId: string,
+    requestBody: calendar_v3.Schema$Event
+  ): Promise<FlowTask> {
+    const { data } = await calendar.events.patch({ calendarId, eventId: targetId, requestBody });
+    if (updates.reminderMinutes === undefined) return mapEvent(data, calendarId);
+    const patched = await patchPrivateProps(calendar, calendarId, targetId, {
+      flowReminderMinutes: serializeReminder(updates.reminderMinutes)!,
+    });
+    return mapEvent(patched, calendarId);
   }
 
   if (updates.removeRecurrence) {
@@ -486,14 +525,12 @@ export async function updateEvent(
     }
 
     const requestBody = buildRequestBody(updates.startTime, updates.endTime);
-    const { data } = await calendar.events.patch({ calendarId, eventId, requestBody });
-    return mapEvent(data, calendarId);
+    return patchAndMap(eventId, requestBody);
   }
 
   if (scope === "this") {
     const requestBody = buildRequestBody(updates.startTime, updates.endTime);
-    const { data } = await calendar.events.patch({ calendarId, eventId, requestBody });
-    return mapEvent(data, calendarId);
+    return patchAndMap(eventId, requestBody);
   }
 
   const { data: instance } = await calendar.events.get({ calendarId, eventId });
@@ -501,8 +538,7 @@ export async function updateEvent(
 
   if (scope === "all") {
     const requestBody = buildRequestBody(updates.startTime, updates.endTime);
-    const { data } = await calendar.events.patch({ calendarId, eventId: masterId, requestBody });
-    return mapEvent(data, calendarId);
+    return patchAndMap(masterId, requestBody);
   }
 
   // thisAndFollowing
@@ -515,16 +551,14 @@ export async function updateEvent(
 
   if (!originalStart) {
     const requestBody = buildRequestBody(updates.startTime, updates.endTime);
-    const { data } = await calendar.events.patch({ calendarId, eventId, requestBody });
-    return mapEvent(data, calendarId);
+    return patchAndMap(eventId, requestBody);
   }
 
   const masterStart = master.start?.dateTime ?? master.start?.date ?? "";
   if (masterStart && new Date(originalStart) <= new Date(masterStart)) {
     // editing from the first occurrence — just patch master
     const requestBody = buildRequestBody(updates.startTime, updates.endTime);
-    const { data } = await calendar.events.patch({ calendarId, eventId: masterId, requestBody });
-    return mapEvent(data, calendarId);
+    return patchAndMap(masterId, requestBody);
   }
 
   // Truncate master RRULE at originalStart - 1s
@@ -757,6 +791,34 @@ async function resolveEventId(
   return instance.recurringEventId ?? eventId;
 }
 
+/**
+ * Aplica mudanças no extendedProperties.private preservando as demais chaves.
+ * O patch do Google faz merge do mapa e apaga a chave quando o valor é null —
+ * reenviamos o mapa inteiro pra não depender do comportamento de merge.
+ */
+async function patchPrivateProps(
+  calendar: ReturnType<typeof getClient>,
+  calendarId: string,
+  eventId: string,
+  changes: Record<string, string | null> | ((current: calendar_v3.Schema$Event) => Record<string, string | null>),
+  buildExtraBody?: (current: calendar_v3.Schema$Event) => calendar_v3.Schema$Event | undefined
+): Promise<calendar_v3.Schema$Event> {
+  const { data: current } = await calendar.events.get({ calendarId, eventId });
+  const resolved = typeof changes === "function" ? changes(current) : changes;
+  const privateBody: Record<string, string> = { ...(current.extendedProperties?.private ?? {}) };
+  for (const [key, value] of Object.entries(resolved)) {
+    // null = o Google remove a chave. O cast é só pra caber no tipo do schema.
+    privateBody[key] = value as unknown as string;
+  }
+  const extra = buildExtraBody?.(current) ?? {};
+  const { data } = await calendar.events.patch({
+    calendarId,
+    eventId,
+    requestBody: { ...extra, extendedProperties: { private: privateBody } },
+  });
+  return data;
+}
+
 export async function markEventImportant(
   accessToken: string,
   eventId: string,
@@ -765,22 +827,17 @@ export async function markEventImportant(
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
   const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
-  const { data: current } = await calendar.events.get({ calendarId, eventId: targetId });
-  const originalColorId =
-    current.colorId && current.colorId !== IMPORTANT_COLOR_ID ? current.colorId : "";
-  const { data } = await calendar.events.patch({
+  const data = await patchPrivateProps(
+    calendar,
     calendarId,
-    eventId: targetId,
-    requestBody: {
-      colorId: IMPORTANT_COLOR_ID,
-      extendedProperties: {
-        private: {
-          flowImportant: "true",
-          flowOriginalImportantColorId: originalColorId,
-        },
-      },
-    },
-  });
+    targetId,
+    (current) => ({
+      flowImportant: "true",
+      flowOriginalImportantColorId:
+        current.colorId && current.colorId !== IMPORTANT_COLOR_ID ? current.colorId : "",
+    }),
+    () => ({ colorId: IMPORTANT_COLOR_ID })
+  );
   return mapEvent(data, calendarId);
 }
 
@@ -792,22 +849,15 @@ export async function markEventUnimportant(
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
   const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
-  const { data: current } = await calendar.events.get({ calendarId, eventId: targetId });
-  const restoredColorId =
-    current.extendedProperties?.private?.["flowOriginalImportantColorId"] || null;
-  const { data } = await calendar.events.patch({
+  const data = await patchPrivateProps(
+    calendar,
     calendarId,
-    eventId: targetId,
-    requestBody: {
-      colorId: restoredColorId,
-      extendedProperties: {
-        private: {
-          flowImportant: "false",
-          flowOriginalImportantColorId: "",
-        },
-      },
-    },
-  });
+    targetId,
+    { flowImportant: "false", flowOriginalImportantColorId: "" },
+    (current) => ({
+      colorId: current.extendedProperties?.private?.["flowOriginalImportantColorId"] || null,
+    })
+  );
   return mapEvent(data, calendarId);
 }
 
@@ -819,13 +869,7 @@ export async function markEventDelegable(
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
   const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
-  const { data } = await calendar.events.patch({
-    calendarId,
-    eventId: targetId,
-    requestBody: {
-      extendedProperties: { private: { flowDelegable: "true" } },
-    },
-  });
+  const data = await patchPrivateProps(calendar, calendarId, targetId, { flowDelegable: "true" });
   return mapEvent(data, calendarId);
 }
 
@@ -837,12 +881,27 @@ export async function markEventUndelegable(
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
   const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
-  const { data } = await calendar.events.patch({
-    calendarId,
-    eventId: targetId,
-    requestBody: {
-      extendedProperties: { private: { flowDelegable: "false" } },
-    },
+  const data = await patchPrivateProps(calendar, calendarId, targetId, { flowDelegable: "false" });
+  return mapEvent(data, calendarId);
+}
+
+/**
+ * Define (ou remove) o responsável pela entrega do evento.
+ * Faz GET antes do PATCH e mescla o private map existente: o patch do Google
+ * substitui o mapa inteiro e apagaria as outras marcações do Flow.
+ */
+export async function setEventDelegate(
+  accessToken: string,
+  eventId: string,
+  calendarId = "primary",
+  delegate: TaskDelegate | null,
+  scope: "this" | "all" = "this"
+): Promise<FlowTask> {
+  const calendar = getClient(accessToken);
+  const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
+  const data = await patchPrivateProps(calendar, calendarId, targetId, {
+    [DELEGATE_EMAIL_KEY]: delegate?.email?.trim().toLowerCase() || null,
+    [DELEGATE_NAME_KEY]: delegate?.name?.trim() || null,
   });
   return mapEvent(data, calendarId);
 }
@@ -856,12 +915,8 @@ export async function setEventCategory(
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
   const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
-  const { data } = await calendar.events.patch({
-    calendarId,
-    eventId: targetId,
-    requestBody: {
-      extendedProperties: { private: { flowCategory: category ?? "" } },
-    },
+  const data = await patchPrivateProps(calendar, calendarId, targetId, {
+    flowCategory: category ?? "",
   });
   return mapEvent(data, calendarId);
 }
@@ -875,12 +930,8 @@ export async function setEventPillar(
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
   const targetId = await resolveEventId(calendar, eventId, calendarId, scope);
-  const { data } = await calendar.events.patch({
-    calendarId,
-    eventId: targetId,
-    requestBody: {
-      extendedProperties: { private: { flowPillar: pillar ?? "" } },
-    },
+  const data = await patchPrivateProps(calendar, calendarId, targetId, {
+    flowPillar: pillar ?? "",
   });
   return mapEvent(data, calendarId);
 }

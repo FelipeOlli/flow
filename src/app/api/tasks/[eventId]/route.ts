@@ -7,6 +7,7 @@ import {
   markEventUnimportant,
   markEventDelegable,
   markEventUndelegable,
+  setEventDelegate,
   setEventCategory,
   setEventPillar,
   deleteEvent,
@@ -56,6 +57,8 @@ export async function PATCH(req: NextRequest, context: { params: Params }) {
       task = await markEventDelegable(accessToken, eventId, calendarId, markerScope);
     } else if (body.isDelegable === false) {
       task = await markEventUndelegable(accessToken, eventId, calendarId, markerScope);
+    } else if (body.delegateTo !== undefined) {
+      task = await setEventDelegate(accessToken, eventId, calendarId, body.delegateTo, markerScope);
     } else if (body.category !== undefined) {
       task = await setEventCategory(accessToken, eventId, calendarId, body.category, markerScope);
     } else if (body.pillar !== undefined) {

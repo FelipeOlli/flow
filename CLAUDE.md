@@ -160,6 +160,14 @@ flow/
 - **Cron de notificações**: a cada minuto em `cron.ts`, chama `sendDueNotifications()`. Exclui `isComplete`, `isCancelled`, `declined`. Erro 410/404 do push provider remove a subscription automaticamente.
 - **Chave pública em runtime**: `push-client.ts` faz `GET /api/push/vapid` para obter a chave — não depende de build-time env vars.
 
+### Delegação e cobrança
+- **`delegateTo` é o responsável pela entrega**: `{ email, name }`, gravado em `extendedProperties.private` (`flowDelegateEmail` / `flowDelegateName`). Independe de `isDelegable` (que significa "pode ser delegado").
+- **Marcação**: no `EventPopover` (edição) e no `TaskForm` (criação). A lista de responsáveis vem dos convidados do próprio evento; sem convidado, digita o e-mail (sugestões de `/api/attendees/frequent`).
+- **Prazo = dia do início do evento**: evento de dia inteiro usa o prefixo literal da data, com hora usa o timezone (`getTaskGridDateKey`). Atrasado = `dueDateKey < hoje`; vence hoje = igual.
+- **Painel de Cobrança**: `src/components/dashboard/CobrancaView.tsx`, alimentado por `GET /api/tasks/delegated` (180 dias atrás → 60 à frente). Agrupamento por pessoa em `src/lib/delegation.ts`.
+- **`extendedProperties.private` no `patch` do Google faz MERGE** (omitir mantém a chave; `null` remove). O helper `patchPrivateProps()` em `google-calendar.ts` faz GET e reenvia o mapa inteiro — não depender do merge.
+- **Resumo diário no Telegram**: 08:00 em `cron.ts` → `sendDelegationDigest()`; dedup por dia em `/app/data/.delegation-digest-state.json`.
+
 ### UI
 - **Dark theme fixo**: Toda a UI usa paleta Google Material Dark (`#202124`, `#2a2b2e`, `#3c4043`, `#e8eaed`, `#9aa0a6`).
 - **Português brasileiro**: Todos os textos de UI, mensagens de erro, labels.
@@ -255,6 +263,43 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 ---
 
 ## 6. Última Sessão
+
+### 2026-10-28
+
+**O que foi feito:**
+
+1. **Responsável pela entrega (`delegateTo`)** — Novo campo na tarefa: quem você delegou. Persistido em `extendedProperties.private` (`flowDelegateEmail` + `flowDelegateName`), sem banco de dados. Marcável na edição do evento (bloco "Delegar para" no `EventPopover`) e na criação (`TaskForm`). A lista de responsáveis vem dos **convidados do próprio evento** (clicar num convidado define o responsável) ou digitando o e-mail, com as sugestões de `/api/attendees/frequent`. Aparece no modo leitura do popover e como ícone 👤 ciano nos cards do calendário.
+2. **Painel de Cobrança** — Nova visão no header (ícone de alerta, badge vermelho com o nº de atrasadas). Agrupa as delegações por pessoa, com atrasadas no topo (`venceu 12/10`, `venceu há 3 dias`), vence hoje em âmbar e as em dia em branco. Botão ✓ pra concluir direto do painel. Abas "Atrasadas" / "Todas".
+3. **Endpoint `/api/tasks/delegated`** — Devolve os eventos com responsável numa janela de 180 dias atrás a 60 dias à frente (já concluídos/cancelados fora). O `CalendarView` carrega em background pra alimentar o badge do header.
+4. **Resumo diário no Telegram (opcional, ativo)** — Job às 08:00 no `cron.ts` manda as delegações atrasadas agrupadas por pessoa. Estado de dedup em `/app/data/.delegation-digest-state.json` (um envio por dia).
+
+**Arquivos modificados:**
+- `src/types/task.ts` — `TaskDelegate` + `delegateTo` em `FlowTask`/`CreateTaskInput`/`UpdateTaskInput`
+- `src/lib/google-calendar.ts` — `mapEvent` lê a delegação; `createEvent` grava; nova `setEventDelegate`; helper `patchPrivateProps` (GET + reenvia o `private` map inteiro) aplicado nos marcadores de importante/delegável/categoria/pilar e na gravação do lembrete
+- `src/lib/delegation.ts` — novo: prazo do evento, status (atrasado/hoje/futuro) e agrupamento por responsável
+- `src/lib/delegation-digest.ts` — novo: resumo diário pro Telegram
+- `src/app/api/tasks/delegated/route.ts` — novo
+- `src/app/api/tasks/[eventId]/route.ts` — branch `delegateTo` no PATCH
+- `src/components/dashboard/CobrancaView.tsx` — novo
+- `src/components/calendar/EventPopover.tsx` — leitura + edição da delegação
+- `src/components/tasks/TaskForm.tsx` — delegação na criação
+- `src/components/calendar/CalendarView.tsx` — modo de visualização unificado (`mode`), badge + painel de cobrança, PATCH separado da delegação
+- `src/components/tasks/TaskBlock.tsx`, `TaskItem.tsx` — ícone 👤
+- `src/lib/cron.ts` — job diário das 08:00
+
+**Decisões tomadas:**
+- `isDelegable` ("isto é delegável") e `delegateTo` ("isto foi delegado para X") são independentes — um não implica o outro
+- A delegação é uma operação de PATCH dedicada (igual `isImportant`/`pillar`), não entra no payload geral do `updateEvent` — o `PATCH` da API tem branches exclusivos e o campo novo seria ignorado no caminho genérico
+- Prazo = dia do início do evento; evento de dia inteiro usa o prefixo literal da data, com hora usa o timezone do app (regra de `getTaskGridDateKey`)
+- `extendedProperties.private` no `patch` do Google faz **merge** (omitir = manter, `null` = remover) — confirmado na doc oficial. O helper `patchPrivateProps` reenvia o mapa inteiro pra não depender do comportamento de merge
+- Recorrentes: a delegação vale só para a ocorrência editada (scope `this`), como as outras marcações
+- Badge no header em vez de só o painel: o painel exige abrir o app, o badge te puxa pra cobrar
+
+**Verificação:** `npx tsc --noEmit` limpo e `npm run build` OK. Testado ao vivo contra o Google Calendar real (dev local com token válido): criação com `delegateTo` grava e devolve, `/api/tasks/delegated` lista, PATCH troca o responsável, marcar como importante não apaga a delegação, `delegateTo: null` remove (preservando o "importante"), evento de teste apagado no final.
+
+**Próximos passos:** conferir visualmente o painel de cobrança e o bloco "Delegar para" no `npm run dev`; redeploy no EasyPanel.
+
+---
 
 ### 2026-10-26
 

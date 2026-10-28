@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { format } from "date-fns";
-import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, Pillar } from "@/types/task";
+import { FlowTask, CreateTaskInput, UpdateTaskInput, CalendarOption, Pillar, TaskDelegate } from "@/types/task";
 import { findConflicts, suggestFreeSlots } from "@/components/calendar/calendarLayout";
 import { DEFAULT_REMINDER_MINUTES, REMINDER_OPTIONS } from "@/lib/reminder";
 
@@ -104,6 +104,8 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, skipConfl
   const [attendeeInput, setAttendeeInput] = useState("");
   const [attendees, setAttendees] = useState<string[]>(defaults?.attendees ?? []);
   const [frequentAttendees, setFrequentAttendees] = useState<{ email: string; name?: string }[]>([]);
+  const [delegate, setDelegate] = useState<TaskDelegate | null>(null);
+  const [delegateInput, setDelegateInput] = useState("");
 
   // Detecção de conflito de horário (apenas na criação)
   const conflictData = useMemo(() => {
@@ -246,6 +248,7 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, skipConfl
         if (tag === "D") (payload as CreateTaskInput).isDelegable = true;
         if (pillar) (payload as CreateTaskInput).pillar = pillar;
         if (attendees.length) (payload as CreateTaskInput).attendees = attendees;
+        if (delegate?.email) (payload as CreateTaskInput).delegateTo = delegate;
         const effectiveReminder = customReminder
           ? (Number(customReminderValue) || 0)
           : reminderMinutes;
@@ -634,6 +637,94 @@ export function TaskForm({ task, currentDate, defaults, existingTasks, skipConfl
                         </button>
                       </span>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Delegar para — só na criação */}
+            {!isEditing && (
+              <div>
+                <label className="text-xs text-[#9aa0a6] mb-1.5 block">Delegar para</label>
+                {delegate && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    <span className="flex items-center gap-1 bg-[#4dd0e1]/20 border border-[#4dd0e1]/50 text-[#4dd0e1] text-xs px-2.5 py-1 rounded-full">
+                      {delegate.name?.trim() || delegate.email}
+                      <button
+                        type="button"
+                        onClick={() => setDelegate(null)}
+                        className="text-[#4dd0e1]/70 hover:text-[#f28b82] ml-0.5"
+                        aria-label="Remover delegação"
+                      >
+                        <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </span>
+                  </div>
+                )}
+                {attendees.filter((e) => e !== delegate?.email).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {attendees
+                      .filter((e) => e !== delegate?.email)
+                      .map((email) => (
+                        <button
+                          key={email}
+                          type="button"
+                          onClick={() => setDelegate({ email })}
+                          className="px-2 py-1 rounded-full bg-[#2a2b2e] border border-[#3c4043] text-[11px] text-[#9aa0a6] hover:text-[#e8eaed] hover:border-[#4dd0e1]/60 transition-colors"
+                          title={email}
+                        >
+                          {email}
+                        </button>
+                      ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    placeholder="email@exemplo.com"
+                    value={delegateInput}
+                    onChange={(e) => setDelegateInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const email = delegateInput.trim().toLowerCase();
+                        if (email) setDelegate({ email });
+                        setDelegateInput("");
+                      }
+                    }}
+                    className="flex-1 bg-[#2a2b2e] text-[#e8eaed] placeholder-[#9aa0a6] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#8ab4f8] border border-[#3c4043]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const email = delegateInput.trim().toLowerCase();
+                      if (email) setDelegate({ email });
+                      setDelegateInput("");
+                    }}
+                    className="px-3 py-2.5 rounded-xl bg-[#2a2b2e] border border-[#3c4043] text-[#8ab4f8] hover:bg-[#313236] transition-colors text-sm"
+                  >
+                    Definir
+                  </button>
+                </div>
+                {frequentAttendees.filter((a) => a.email !== delegate?.email).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {frequentAttendees
+                      .filter((a) => a.email !== delegate?.email)
+                      .filter((a) => !delegateInput.trim() || a.email.includes(delegateInput.trim().toLowerCase()) || a.name?.toLowerCase().includes(delegateInput.trim().toLowerCase()))
+                      .slice(0, 8)
+                      .map((a) => (
+                        <button
+                          key={a.email}
+                          type="button"
+                          onClick={() => { setDelegate({ email: a.email, name: a.name }); setDelegateInput(""); }}
+                          className="px-2 py-1 rounded-full bg-[#2a2b2e] border border-[#3c4043] text-[11px] text-[#9aa0a6] hover:text-[#e8eaed] hover:border-[#4dd0e1]/60 transition-colors"
+                          title={a.email}
+                        >
+                          {a.name || a.email}
+                        </button>
+                      ))}
                   </div>
                 )}
               </div>

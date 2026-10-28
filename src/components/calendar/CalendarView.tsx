@@ -18,6 +18,8 @@ import { EventPopover, EventAnchorPoint } from "./EventPopover";
 import { TaskForm } from "@/components/tasks/TaskForm";
 import { DashboardView } from "@/components/dashboard/DashboardView";
 import { WeeklyReviewView } from "@/components/dashboard/WeeklyReviewView";
+import { CobrancaView } from "@/components/dashboard/CobrancaView";
+import { countOverdue } from "@/lib/delegation";
 import { getPushStatus, registerPush, unregisterPush, getActiveSubscription, type PushStatus } from "@/lib/push-client";
 import { VoiceCaptureModal } from "./VoiceCaptureModal";
 import { FileCaptureModal } from "./FileCaptureModal";
@@ -106,8 +108,37 @@ interface CalendarViewProps {
 export function CalendarView({ initialDate }: CalendarViewProps) {
   const router = useRouter();
   const [view, setView] = useState<View>("day");
-  const [showDashboard, setShowDashboard] = useState(false);
-  const [showWeeklyReview, setShowWeeklyReview] = useState(false);
+  const [mode, setMode] = useState<"calendar" | "dashboard" | "weeklyReview" | "cobranca">("calendar");
+  const showDashboard = mode === "dashboard";
+  const showWeeklyReview = mode === "weeklyReview";
+  const showCobranca = mode === "cobranca";
+  /** true quando o calendário não está visível (dashboard/revisão/cobrança no lugar). */
+  const inAlternateView = mode !== "calendar";
+
+  // Delegações — base do painel de cobrança. Carregadas em background pro badge do header.
+  const [delegatedTasks, setDelegatedTasks] = useState<FlowTask[]>([]);
+  const [delegatedLoading, setDelegatedLoading] = useState(true);
+  const fetchDelegated = useCallback(async () => {
+    setDelegatedLoading(true);
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const res = await fetch(`/api/tasks/delegated?tz=${encodeURIComponent(tz)}`);
+      if (!res.ok) throw new Error();
+      const data: FlowTask[] = await res.json();
+      setDelegatedTasks(Array.isArray(data) ? data : []);
+    } catch {
+      // Silencioso: o painel de cobrança é acessório, não pode derrubar o app.
+    } finally {
+      setDelegatedLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    void fetchDelegated();
+  }, [fetchDelegated]);
+  const overdueDelegations = useMemo(
+    () => countOverdue(delegatedTasks, Intl.DateTimeFormat().resolvedOptions().timeZone),
+    [delegatedTasks]
+  );
   const [dayDisplayMode, setDayDisplayMode] = useState<"grid" | "list" | "calendar" | "hyperfocus">("hyperfocus");
   const [multiDayDisplayMode, setMultiDayDisplayMode] = useState<"grid" | "list">("grid");
   const [currentDate, setCurrentDate] = useState(() =>
@@ -372,6 +403,26 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     }
   }
 
+  async function handleCompleteDelegated(task: FlowTask) {
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          isComplete: true,
+          calendarId: task.calendarId ?? "primary",
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to complete");
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, isComplete: true } : t)));
+      setDelegatedTasks((prev) => prev.filter((t) => t.id !== task.id));
+      void fetchDelegated();
+    } catch {
+      setMigrateResult("Não foi possível salvar. Verifique o acesso ao calendário.");
+      scheduleMigrateResultClear(4_000);
+    }
+  }
+
   async function handleImportant(task: FlowTask, scope: "this" | "all" = "this") {
     const newImportant = !task.isImportant;
     setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, isImportant: newImportant } : t));
@@ -528,7 +579,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
   async function handleInlineEdit(task: FlowTask, updates: UpdateTaskInput) {
     const calendarId = updates.targetCalendarId ?? updates.calendarId ?? task.calendarId ?? "primary";
-    const { isImportant, isDelegable, category, pillar, ...baseUpdates } = updates;
+    const { isImportant, isDelegable, category, pillar, delegateTo, ...baseUpdates } = updates;
 
     const patch = async (body: Record<string, unknown>) => {
       const res = await fetch(`/api/tasks/${task.id}`, {
@@ -559,6 +610,10 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
     }
     if (pillar !== undefined && pillar !== (task.pillar ?? null)) {
       await patch({ pillar });
+    }
+    // Delegação é um PATCH dedicado (grava em extendedProperties) — não entra no payload geral.
+    if (delegateTo !== undefined) {
+      await patch({ delegateTo, ...(updates.scope ? { scope: updates.scope } : {}) });
     }
 
     await fetchTasks();
@@ -983,9 +1038,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           <div className="flex items-center justify-between sm:justify-end gap-1.5 w-full sm:w-auto">
             {/* Calendário */}
             <button
-              onClick={() => { setShowDashboard(false); setShowWeeklyReview(false); }}
+              onClick={() => { setMode("calendar") }}
               className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full transition-colors ${
-                !showDashboard && !showWeeklyReview
+                !inAlternateView
                   ? "bg-[#3c4043] text-[#e8eaed]"
                   : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
               }`}
@@ -1002,9 +1057,9 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
 
             {/* Dashboard */}
             <button
-              onClick={() => { setShowDashboard(true); setShowWeeklyReview(false); }}
+              onClick={() => { setMode("dashboard") }}
               className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full transition-colors ${
-                showDashboard && !showWeeklyReview
+                showDashboard
                   ? "bg-[#3c4043] text-[#e8eaed]"
                   : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
               }`}
@@ -1016,12 +1071,33 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
               </svg>
             </button>
 
+            {/* Cobrança */}
+            <button
+              onClick={() => setMode("cobranca")}
+              className={`relative w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full transition-colors ${
+                showCobranca
+                  ? "bg-[#3c4043] text-[#e8eaed]"
+                  : "text-[#9aa0a6] hover:text-[#e8eaed] hover:bg-[#2a2b2e]"
+              }`}
+              aria-label="Cobrança de delegações"
+              title="Cobrança de delegações"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              {overdueDelegations > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-[#f28b82] text-[#202124] text-[9px] font-bold flex items-center justify-center">
+                  {overdueDelegations}
+                </span>
+              )}
+            </button>
+
             {/* Revisão Semanal */}
             {(() => {
               const isFriday = new Date().getDay() === 5;
               return (
                 <button
-                  onClick={() => { setShowWeeklyReview(true); setShowDashboard(false); }}
+                  onClick={() => { setMode("weeklyReview") }}
                   className={`relative w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full transition-colors ${
                     showWeeklyReview
                       ? "bg-[#3c4043] text-[#e8eaed]"
@@ -1492,7 +1568,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           </div>
         </div>
 
-        {!showDashboard && !showWeeklyReview && (
+        {!inAlternateView && (
           <>
             {/* View switcher */}
             <div className="flex gap-1 px-3 pb-2.5">
@@ -1545,20 +1621,31 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       </div>
 
       {/* Dashboard */}
-      {showDashboard && !showWeeklyReview && <DashboardView onBack={() => setShowDashboard(false)} />}
+      {showDashboard && <DashboardView onBack={() => setMode("calendar")} />}
 
       {/* Revisão Semanal */}
       {showWeeklyReview && <WeeklyReviewView />}
 
+      {/* Cobrança */}
+      {showCobranca && (
+        <CobrancaView
+          tasks={delegatedTasks}
+          loading={delegatedLoading}
+          onRefresh={fetchDelegated}
+          onOpenTask={(task) => setSelectedTask(task)}
+          onComplete={handleCompleteDelegated}
+        />
+      )}
+
       {/* Loading */}
-      {!showDashboard && !showWeeklyReview && loading && (
+      {!inAlternateView && loading && (
         <div className="flex justify-center items-center py-8">
           <div className="w-5 h-5 border-2 border-[#8ab4f8]/30 border-t-[#8ab4f8] rounded-full animate-spin" />
         </div>
       )}
 
       {/* Views */}
-      {!showDashboard && !showWeeklyReview && !loading && view === "day" && (
+      {!inAlternateView && !loading && view === "day" && (
         <DayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onMove={handleMove}
@@ -1569,7 +1656,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           completedTodayIdSet={completedTodayIdSet}
           onConflictClick={() => setConflictPanelOpen(true)} />
       )}
-      {!showDashboard && !showWeeklyReview && !loading && view === "3days" && (
+      {!inAlternateView && !loading && view === "3days" && (
         <ThreeDayView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
@@ -1578,7 +1665,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           completedTodayTasks={isViewingToday ? completedTodayTasks : []}
           completedTodayIdSet={completedTodayIdSet} />
       )}
-      {!showDashboard && !showWeeklyReview && !loading && view === "week" && (
+      {!inAlternateView && !loading && view === "week" && (
         <WeekView tasks={tasks} currentDate={currentDate} pendingIds={pendingIds}
           onComplete={handleComplete} onEdit={openEventCard}
           onDelete={handleDelete} onTimeClick={openCreateForm} onDayClick={goToDate}
@@ -1587,7 +1674,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
           completedTodayTasks={isViewingToday ? completedTodayTasks : []}
           completedTodayIdSet={completedTodayIdSet} />
       )}
-      {!showDashboard && !showWeeklyReview && !loading && view === "month" && (
+      {!inAlternateView && !loading && view === "month" && (
         <MonthView tasks={tasks} currentDate={currentDate} onDayClick={goToDate}
           onEventClick={openEventCard} onComplete={handleComplete} onImportant={handleImportant}
           completedTodayTasks={isViewingToday ? completedTodayTasks : []}
@@ -1595,7 +1682,7 @@ export function CalendarView({ initialDate }: CalendarViewProps) {
       )}
 
       {/* FAB — hidden in dashboard/projects/review mode */}
-      {!showDashboard && !showWeeklyReview && (
+      {!inAlternateView && (
         <>
           {/* FAB arquivo/imagem/texto IA */}
           <button
