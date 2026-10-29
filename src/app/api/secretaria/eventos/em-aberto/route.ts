@@ -24,7 +24,13 @@ export async function GET(req: NextRequest) {
     const { endUtc } = getUtcRangeForDateKey(toKey, timeZone);
 
     const tasks = await getEventsInRange(accessToken, startUtc, endUtc, timeZone);
-    const abertos = findOpenTasks(tasks, Date.now(), diasParado, timeZone);
+    const abertos = findOpenTasks(
+      tasks,
+      Date.now(),
+      diasParado,
+      timeZone,
+      params.get("incluir_feriados") === "true"
+    );
 
     const { dados, paginacao } = paginate(
       abertos.map((t) => toSecretariaEvent(t, timeZone)),

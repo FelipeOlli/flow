@@ -19,6 +19,18 @@ export const DEFAULT_LIMIT = 100;
 /** Janela máxima de uma consulta de listagem (dias). */
 export const MAX_RANGE_DAYS = 366;
 
+/**
+ * Calendários que não são tarefas — feriados e datas comemorativas.
+ * Entram na lista só com `?incluir_feriados=true`.
+ * Mesmo critério já usado em /api/tasks/kanban.
+ */
+export const EXCLUDED_CALENDAR_NAMES = ["feriado"];
+
+export function isExcludedCalendar(task: FlowTask): boolean {
+  const name = (task.calendarName ?? "").toLowerCase();
+  return EXCLUDED_CALENDAR_NAMES.some((ex) => name.includes(ex));
+}
+
 export interface SecretariaEvent {
   id: string;
   titulo: string;
@@ -55,6 +67,8 @@ export interface EventFilters {
   /** DateKey YYYY-MM-DD final. */
   ate?: string;
   status?: EventStatus[];
+  /** Inclui feriados e datas comemorativas (padrão: não). */
+  incluirFeriados?: boolean;
   timeZone: string;
 }
 
@@ -111,6 +125,7 @@ export function matchesStatus(task: FlowTask, status: EventStatus[]): boolean {
 /** Filtra por agenda, período e status. */
 export function filterEvents(tasks: FlowTask[], filters: EventFilters): FlowTask[] {
   return tasks.filter((task) => {
+    if (!filters.incluirFeriados && isExcludedCalendar(task)) return false;
     if (filters.agenda && !matchesAgenda(task, filters.agenda)) return false;
     if (!matchesStatus(task, filters.status ?? [])) return false;
     if (filters.de || filters.ate) {
@@ -131,11 +146,13 @@ export function findUpcoming(
   tasks: FlowTask[],
   nowMs: number,
   minutos: number,
-  timeZone: string
+  timeZone: string,
+  incluirFeriados = false
 ): FlowTask[] {
   const limitMs = nowMs + minutos * 60_000;
   return tasks
     .filter((task) => {
+      if (!incluirFeriados && isExcludedCalendar(task)) return false;
       if (task.isCancelled || task.isComplete) return false;
       if (task.selfResponseStatus === "declined") return false;
       if (!task.startTime) return false;
@@ -154,10 +171,12 @@ export function findOpenTasks(
   tasks: FlowTask[],
   nowMs: number,
   diasParado: number,
-  timeZone: string
+  timeZone: string,
+  incluirFeriados = false
 ): FlowTask[] {
   return tasks
     .filter((task) => {
+      if (!incluirFeriados && isExcludedCalendar(task)) return false;
       if (task.isCancelled || task.isComplete) return false;
       if (task.selfResponseStatus === "declined") return false;
       const diasEmAberto = computeDaysOpen(task, timeZone);
@@ -173,10 +192,15 @@ export function findOpenTasks(
 }
 
 /** Eventos delegados a uma pessoa — comparação por nome (sem acento/caixa) ou e-mail. */
-export function findByResponsavel(tasks: FlowTask[], pessoa: string): FlowTask[] {
+export function findByResponsavel(
+  tasks: FlowTask[],
+  pessoa: string,
+  incluirFeriados = false
+): FlowTask[] {
   const query = normalizeText(pessoa);
   if (!query) return [];
   return tasks.filter((task) => {
+    if (!incluirFeriados && isExcludedCalendar(task)) return false;
     const delegate = task.delegateTo;
     if (!delegate) return false;
     const name = normalizeText(delegate.name ?? "");

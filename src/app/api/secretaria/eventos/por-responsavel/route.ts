@@ -18,7 +18,11 @@ export async function GET(req: NextRequest) {
     const { endUtc } = getUtcRangeForDateKey(shiftDateKey(todayKey, 60), timeZone);
 
     const tasks = await getEventsInRange(accessToken, startUtc, endUtc, timeZone);
-    const encontrados = findByResponsavel(tasks, pessoa);
+    const encontrados = findByResponsavel(
+      tasks,
+      pessoa,
+      params.get("incluir_feriados") === "true"
+    );
 
     const { dados, paginacao } = paginate(
       encontrados.map((t) => toSecretariaEvent(t, timeZone)),

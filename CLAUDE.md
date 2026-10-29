@@ -169,6 +169,7 @@ flow/
 - **Endpoints**: `GET /agendas` · `GET /eventos?de=&ate=&agenda=&status=&limite=&offset=` · `GET /eventos/proximos?minutos=` · `GET /eventos/em-aberto?dias_parado=` · `GET /eventos/por-responsavel?pessoa=` · `GET /eventos/{id}`
 - **Formato do evento**: `id`, `titulo`, `agenda`, `agenda_id`, `inicio`, `fim`, `dia`, `dia_inteiro`, `status` (aberto|concluido|cancelado|recusado — derivado, não existe no Google), `responsavel`, `responsavel_email`, `atualizado_em`, `dias_em_aberto`, `descricao`, `local`, `importante`, `delegavel`, `recorrente`, `categoria`, `pilar`, `convidados`. Resposta: `{ dados: [...], paginacao: { total, limite, offset } }`.
 - **Limites**: máximo 500 itens por página, janela máxima de 366 dias por consulta (acima disso, 400). Sem `de`/`ate`, o padrão é de 7 dias atrás a 60 dias à frente.
+- **Feriados e datas comemorativas ficam de fora** por padrão (calendário "Feriados no Brasil" e afins) — mesmo critério do `/api/tasks/kanban`. Opt-in com `?incluir_feriados=true`. Sem isso, "Dia do Trabalho" e companhia entravam na lista de pendências e na cobrança.
 - **Lógica pura** em `src/lib/secretaria.ts` (status derivado, filtros, paginação) — testável isolado.
 - **Testes**: `npm run test:secretaria` — sobe o dev server com token de teste e exercita cada endpoint (token ausente/inválido, filtros, paginação, 400/404). 19 testes, sem dependência nova (runner nativo do Node).
 

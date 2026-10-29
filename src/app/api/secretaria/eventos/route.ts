@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
       de: fromKey,
       ate: toKey,
       status,
+      incluirFeriados: params.get("incluir_feriados") === "true",
       timeZone,
     });
 

@@ -21,7 +21,13 @@ export async function GET(req: NextRequest) {
     const searchEnd = new Date(now.getTime() + minutos * 60_000);
 
     const tasks = await getEventsInRange(accessToken, searchStart, searchEnd, timeZone);
-    const upcoming = findUpcoming(tasks, now.getTime(), minutos, timeZone);
+    const upcoming = findUpcoming(
+      tasks,
+      now.getTime(),
+      minutos,
+      timeZone,
+      params.get("incluir_feriados") === "true"
+    );
 
     const { dados, paginacao } = paginate(
       upcoming.map((t) => toSecretariaEvent(t, timeZone)),

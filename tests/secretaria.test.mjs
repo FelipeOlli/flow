@@ -229,6 +229,35 @@ test("GET /eventos/por-responsavel filtra por nome", async () => {
   assert.ok(Array.isArray(body.dados));
 });
 
+test("feriados ficam de fora por padrão", async () => {
+  const { body } = await api(
+    "/api/secretaria/eventos?de=2026-01-01&ate=2026-12-31&limite=250",
+    { token: TOKEN }
+  );
+  for (const evento of body.dados) {
+    assert.ok(
+      !/feriado/i.test(evento.agenda),
+      `feriado na lista: ${evento.titulo} (${evento.agenda})`
+    );
+  }
+});
+
+test("feriados voltam com incluir_feriados=true", async () => {
+  const janela = "de=2026-01-01&ate=2026-12-31&limite=500";
+  const { body: sem } = await api(`/api/secretaria/eventos?${janela}`, { token: TOKEN });
+  const { body: com } = await api(`/api/secretaria/eventos?${janela}&incluir_feriados=true`, {
+    token: TOKEN,
+  });
+  assert.ok(
+    com.paginacao.total > sem.paginacao.total,
+    `com incluir_feriados=true deveria trazer mais evento (${com.paginacao.total} vs ${sem.paginacao.total})`
+  );
+  assert.ok(
+    com.dados.some((e) => /feriado/i.test(e.agenda)),
+    "a lista com feriados deveria conter um evento de feriado"
+  );
+});
+
 test("GET /eventos/{id} devolve 404 pra id inexistente", async () => {
   const { status } = await api("/api/secretaria/eventos/nao-existe-esse-id", { token: TOKEN });
   assert.equal(status, 404);
