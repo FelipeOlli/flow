@@ -177,6 +177,8 @@ flow/
 - **Servidor MCP** com as mesmas ferramentas em dois transportes: **stdio** (`mcp/server.ts`, pro Claude Code/Desktop) e **HTTP** (`/mcp` no app, pro Claude no celular via conector do claude.ai). As ferramentas são compartilhadas em `src/lib/secretaria-mcp.ts` — um só lugar, sem duplicar.
 - **6 ferramentas**: `listar_eventos`, `eventos_proximos`, `eventos_em_aberto`, `eventos_por_responsavel`, `listar_agendas`, `detalhe_evento`. Config: `FLOW_API_URL` + `FLOW_API_TOKEN`.
 - **Rota `/mcp`**: `WebStandardStreamableHTTPServerTransport` (SDK 1.32) em modo **stateless** (servidor+transporte novos por requisição) → o app pode reiniciar sem quebrar o conector. `server.connect(transport)` **antes** de `handleRequest` — sem isso a resposta sai vazia. Auth por `Authorization: Bearer <FLOW_API_TOKEN>` (mesmo token da API) e CORS liberado.
+- **O `Accept` é normalizado antes do transporte**: o SDK exige `application/json` **e** `text/event-stream` no POST e responde 406 se faltar um dos dois — o conector do claude.ai reporta isso como "fetch failed". A rota ainda responde no formato que o cliente pediu (JSON ou SSE) e delega GET/DELETE ao transporte.
+- **Backend direto no app**: as ferramentas do `/mcp` consultam a agenda no mesmo processo (`src/lib/secretaria-service.ts`), sem hop HTTP — dentro do container `localhost:3000` não é confiável. O servidor stdio usa o backend HTTP (roda fora do app). Regra única de negócio, dois caminhos.
 - **`/mcp` está fora do middleware NextAuth** (igual a `/api/secretaria`) — a rota faz a própria checagem do bearer.
 - **No celular**: em claude.ai, *Settings → Connectors → Add custom connector* → URL `https://flow.sitecnologia.tec.br/mcp` + header `Authorization: Bearer <FLOW_API_TOKEN>`. Exige **plano pago**. O app do celular usa os mesmos conectores da conta.
 - **Node roda o TS direto** (type stripping, Node 22.18+). Sem build — mas o `node --experimental-strip-types` **não aceita parameter properties** (`constructor(public x: number)`) nem enums. Imports entre arquivos do MCP precisam da extensão `.ts` (o `tsconfig.json` do app exclui `mcp/` por causa disso).
@@ -297,6 +299,27 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 ---
 
 ## 6. Última Sessão
+
+### 2026-10-29 (b) — Conector do claude.ai: "fetch failed" no /mcp
+
+**O que foi feito:**
+
+1. **Compatibilidade do protocolo MCP na rota `/mcp`** — o SDK oficial exige que o POST traga `Accept` com `application/json` **E** `text/event-stream`; cliente que manda só um dos dois levava 406, e o conector da Anthropic reportava isso como o genérico "fetch failed". A rota agora normaliza o `Accept`, responde no formato que o cliente pediu (JSON ou SSE), delega GET/DELETE ao transporte (o protocolo permite stream SSE via GET) e derruba o keep-alive do stream de 15s pra 1s (os headers saem na hora).
+2. **Fim do hop interno de rede** — a lógica de consulta da secretária saiu das rotas e foi pra `src/lib/secretaria-service.ts`. O MCP do app agora usa um backend **direto** (mesmo processo, sem HTTP): dentro do container, `localhost:3000` não era alcançável (o erro real era 504/fetch failed do MCP pra API). O servidor stdio continua pelo backend HTTP, porque ele roda fora do app.
+3. **Contrato do backend** em `src/lib/secretaria-backend.ts` (só tipos, sem import — o MCP roda TypeScript direto pelo Node e não resolve o alias `@/`).
+4. **Timeout de 30s** nas chamadas do MCP pra API, com mensagem clara; **log `[MCP]`** em toda requisição (method, status, duração, accept, protocolo, sessão, IP, UA).
+
+**Arquivos novos:** `src/lib/secretaria-service.ts` · `src/lib/secretaria-backend.ts`
+**Arquivos modificados:** `src/app/mcp/route.ts` · `src/lib/secretaria-mcp.ts` · as 6 rotas de `src/app/api/secretaria/**` · `mcp/README.md`
+**Decisões:**
+- **Backend direto no app, HTTP no stdio** — o token do Google já está no processo do app; o hop só trazia risco de porta/DNS/proxy
+- **Uma implementação da regra de negócio** (serviço) consumida pelas rotas HTTP e pelo MCP — resposta idêntica nos dois caminhos, sem cópia
+
+**Verificação:** `npx tsc --noEmit` limpo (app e mcp), `npm run build` OK, `npm run test:secretaria` → 21/21, `mcp/smoke-test.mjs` (stdio, backend HTTP) OK, e as 6 ferramentas do `/mcp` (backend direto) devolvendo a agenda real.
+
+**Próximos passos:** redeploy no EasyPanel e reteste no conector do claude.ai (celular).
+
+---
 
 ### 2026-10-29 — Secretária de IA: MCP (fase 2) + monitoramento (fase 3)
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { criarServidorSecretaria } from "@/lib/secretaria-mcp";
+import { criarBackendDireto } from "@/lib/secretaria-service";
 
 /**
  * Servidor MCP da secretária do Flow, servido por HTTP (Streamable HTTP).
@@ -96,7 +97,12 @@ async function tratar(req: NextRequest): Promise<Response> {
   }
 
   // Servidor e transporte novos a cada requisição (stateless).
-  const server = criarServidorSecretaria();
+  //
+  // O backend é **direto**: as ferramentas consultam a agenda dentro deste
+  // processo, sem passar por HTTP. Dentro do container, `localhost:3000` nem
+  // sempre é alcançável (IPv6, porta trocada pelo proxy) — e o token do Google
+  // já está aqui, então o hop interno só trazia risco.
+  const server = criarServidorSecretaria(criarBackendDireto());
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     // Responde no formato que o cliente aceitou.

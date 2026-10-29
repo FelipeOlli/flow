@@ -1,5 +1,15 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import type {
+  AgendaSecretaria,
+  EventoSecretaria,
+  ParamsListarEmAberto,
+  ParamsListarEventos,
+  ParamsListarPorResponsavel,
+  ParamsListarProximos,
+  Pagina,
+  SecretariaBackend,
+} from "./secretaria-backend";
 
 /**
  * Ferramentas MCP da secretária do Flow.
@@ -9,8 +19,9 @@ import { z } from "zod";
  * no Claude Code/Desktop (`mcp/server.ts`), que roda o TypeScript direto pelo
  * Node (sem webpack, sem alias).
  *
- * O MCP só chama a API REST do Flow — a credencial do Google nunca sai do
- * servidor do app.
+ * O MCP nunca fala com o Google Calendar: ele lê a agenda por um *backend*,
+ * que pode ser a API REST (servidor stdio, que roda fora do app) ou a lógica
+ * da secretária dentro do próprio processo (rota `/mcp` do app).
  */
 
 const BASE_URL = (process.env.FLOW_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -27,35 +38,6 @@ export class FlowApiError extends Error {
     super(message);
     this.status = status;
   }
-}
-
-export interface EventoSecretaria {
-  id: string;
-  titulo: string;
-  agenda: string;
-  agenda_id: string;
-  inicio: string;
-  fim: string;
-  dia: string;
-  dia_inteiro: boolean;
-  status: "aberto" | "concluido" | "cancelado" | "recusado";
-  responsavel?: string;
-  responsavel_email?: string;
-  atualizado_em?: string;
-  dias_em_aberto: number;
-  descricao?: string;
-  local?: string;
-  importante: boolean;
-  delegavel: boolean;
-  recorrente: boolean;
-  categoria?: string;
-  pilar?: string;
-  convidados: string[];
-}
-
-export interface Pagina<T> {
-  dados: T[];
-  paginacao: { total: number; limite: number; offset: number };
 }
 
 async function request<T>(
@@ -113,35 +95,72 @@ async function request<T>(
   return corpo as T;
 }
 
-function listarAgendas(): Promise<{ agendas: { id: string; nome: string; cor: string | null }[] }> {
-  return request("/api/secretaria/agendas");
+function paginas<T>(dados: T[], paginacao: { total: number; limite: number; offset: number }): Pagina<T> {
+  return { dados, paginacao };
 }
 
-function listarEventos(params: {
-  agenda?: string;
-  de?: string;
-  ate?: string;
-  status?: string;
-  limite?: number;
-  offset?: number;
-}): Promise<Pagina<EventoSecretaria>> {
-  return request("/api/secretaria/eventos", params);
-}
+/**
+ * Backend que fala com a API REST do Flow.
+ *
+ * É o padrão porque o servidor stdio roda **fora** do app — ele só conhece a
+ * API, e o token do Google nunca sai do servidor.
+ */
+export function criarBackendHttp(): SecretariaBackend {
+  return {
+    listarAgendas: async () => {
+      const { agendas } = await request<{ agendas: AgendaSecretaria[] }>("/api/secretaria/agendas");
+      return { agendas };
+    },
 
-function eventosProximos(minutos: number): Promise<Pagina<EventoSecretaria>> {
-  return request("/api/secretaria/eventos/proximos", { minutos });
-}
+    listarEventos: async (params: ParamsListarEventos) => {
+      const pagina = await request<Pagina<EventoSecretaria>>("/api/secretaria/eventos", {
+        de: params.de,
+        ate: params.ate,
+        agenda: params.agenda,
+        status: params.status,
+        limite: params.limite,
+        offset: params.offset,
+        incluir_feriados: params.incluirFeriados ? "true" : undefined,
+      });
+      return paginas(pagina.dados, pagina.paginacao);
+    },
 
-function eventosEmAberto(diasParado: number): Promise<Pagina<EventoSecretaria>> {
-  return request("/api/secretaria/eventos/em-aberto", { dias_parado: diasParado });
-}
+    listarProximos: async (params: ParamsListarProximos) => {
+      const pagina = await request<Pagina<EventoSecretaria>>("/api/secretaria/eventos/proximos", {
+        minutos: params.minutos,
+        limite: params.limite,
+        offset: params.offset,
+        incluir_feriados: params.incluirFeriados ? "true" : undefined,
+      });
+      return paginas(pagina.dados, pagina.paginacao);
+    },
 
-function eventosPorResponsavel(pessoa: string): Promise<Pagina<EventoSecretaria>> {
-  return request("/api/secretaria/eventos/por-responsavel", { pessoa });
-}
+    listarEmAberto: async (params: ParamsListarEmAberto) => {
+      const pagina = await request<Pagina<EventoSecretaria>>("/api/secretaria/eventos/em-aberto", {
+        dias_parado: params.diasParado,
+        limite: params.limite,
+        offset: params.offset,
+        incluir_feriados: params.incluirFeriados ? "true" : undefined,
+      });
+      return paginas(pagina.dados, pagina.paginacao);
+    },
 
-function eventoPorId(id: string): Promise<{ evento: EventoSecretaria }> {
-  return request(`/api/secretaria/eventos/${encodeURIComponent(id)}`);
+    listarPorResponsavel: async (params: ParamsListarPorResponsavel) => {
+      const pagina = await request<Pagina<EventoSecretaria>>(
+        "/api/secretaria/eventos/por-responsavel",
+        {
+          pessoa: params.pessoa,
+          limite: params.limite,
+          offset: params.offset,
+          incluir_feriados: params.incluirFeriados ? "true" : undefined,
+        }
+      );
+      return paginas(pagina.dados, pagina.paginacao);
+    },
+
+    listarEventoPorId: async (params: { id: string }) =>
+      request<{ evento: EventoSecretaria }>(`/api/secretaria/eventos/${encodeURIComponent(params.id)}`),
+  };
 }
 
 /** Texto curto de um evento, pro Claude ler sem parsear JSON. */
@@ -178,15 +197,26 @@ function resposta(dados: unknown, texto: string) {
 }
 
 function erro(e: unknown) {
+  // Erros com `status` (FlowApiError, HttpError) carregam o código da API.
+  const status =
+    typeof e === "object" && e !== null && "status" in e
+      ? Number((e as { status: unknown }).status)
+      : undefined;
   const mensagem =
-    e instanceof FlowApiError
-      ? `Erro da API do Flow (${e.status}): ${e.message}`
+    status !== undefined && Number.isFinite(status)
+      ? `Erro da API do Flow (${status}): ${e instanceof Error ? e.message : String(e)}`
       : `Erro ao consultar a API do Flow: ${e instanceof Error ? e.message : String(e)}`;
   return { content: [{ type: "text" as const, text: mensagem }], isError: true };
 }
 
-/** Cria o servidor MCP com todas as ferramentas da secretária. */
-export function criarServidorSecretaria(): McpServer {
+/**
+ * Cria o servidor MCP com todas as ferramentas da secretária.
+ *
+ * `backend` é onde os dados vêm. Sem ele, usa a API REST (servidor stdio).
+ */
+export function criarServidorSecretaria(backend?: SecretariaBackend): McpServer {
+  const dados = backend ?? criarBackendHttp();
+
   const server = new McpServer({
     name: "flow-secretaria",
     version: "1.0.0",
@@ -214,7 +244,7 @@ export function criarServidorSecretaria(): McpServer {
     },
     async ({ de, ate, agenda, status, limite, offset }) => {
       try {
-        const pagina = await listarEventos({ de, ate, agenda, status, limite, offset });
+        const pagina = await dados.listarEventos({ de, ate, agenda, status, limite, offset });
         return resposta(pagina, formatarLista(pagina.dados, pagina.paginacao.total));
       } catch (e) {
         return erro(e);
@@ -242,7 +272,7 @@ export function criarServidorSecretaria(): McpServer {
     },
     async ({ minutos }) => {
       try {
-        const pagina = await eventosProximos(minutos ?? 120);
+        const pagina = await dados.listarProximos({ minutos: minutos ?? 120 });
         return resposta(pagina, formatarLista(pagina.dados, pagina.paginacao.total));
       } catch (e) {
         return erro(e);
@@ -270,7 +300,7 @@ export function criarServidorSecretaria(): McpServer {
     },
     async ({ dias_parado }) => {
       try {
-        const pagina = await eventosEmAberto(dias_parado ?? 7);
+        const pagina = await dados.listarEmAberto({ diasParado: dias_parado ?? 7 });
         return resposta(pagina, formatarLista(pagina.dados, pagina.paginacao.total));
       } catch (e) {
         return erro(e);
@@ -283,7 +313,7 @@ export function criarServidorSecretaria(): McpServer {
     {
       title: "Eventos por responsável (delegação)",
       description:
-        'Retorna os eventos delegados a uma pessoa. Use para "o que o André tem", "quais tarefas são do ' +
+        'Retorna os eventos delegado a uma pessoa. Use para "o que o André tem", "quais tarefas são do ' +
         'Gabriel", "o que está com a Yasmim". Aceita nome parcial, sem acento e sem diferenciar maiúsculas de ' +
         'minúsculas, ou o e-mail. Se a pessoa não existir, devolve lista vazia — tente `listar_agendas` ou um nome ' +
         "parcial.",
@@ -293,7 +323,7 @@ export function criarServidorSecretaria(): McpServer {
     },
     async ({ pessoa }) => {
       try {
-        const pagina = await eventosPorResponsavel(pessoa);
+        const pagina = await dados.listarPorResponsavel({ pessoa });
         return resposta(pagina, formatarLista(pagina.dados, pagina.paginacao.total));
       } catch (e) {
         return erro(e);
@@ -313,7 +343,7 @@ export function criarServidorSecretaria(): McpServer {
     },
     async () => {
       try {
-        const { agendas } = await listarAgendas();
+        const { agendas } = await dados.listarAgendas();
         const texto = agendas.length
           ? agendas.map((a) => `• ${a.nome} — id: ${a.id}`).join("\n")
           : "Nenhuma agenda encontrada.";
@@ -337,7 +367,7 @@ export function criarServidorSecretaria(): McpServer {
     },
     async ({ id }) => {
       try {
-        const { evento } = await eventoPorId(id);
+        const { evento } = await dados.listarEventoPorId({ id });
         return resposta({ evento }, formatarEvento(evento));
       } catch (e) {
         return erro(e);

@@ -3,9 +3,16 @@
 Ferramentas MCP que expõem a agenda do Flow para o Claude. **Só leitura**: nenhuma
 ferramenta cria, altera ou apaga evento.
 
-O MCP não fala com o Google Calendar. Ele chama a API REST (`/api/secretaria/*`) do
-Flow, que roda no EasyPanel e guarda o token do Google no servidor. O MCP só conhece
-o token de leitura (`FLOW_API_TOKEN`).
+O MCP não fala com o Google Calendar. Ele lê a agenda por um **backend**, que
+depende de onde o servidor roda:
+
+| Backend | Onde | Por quê |
+|---|---|---|
+| **HTTP** (padrão) | `mcp/server.ts` (stdio) | O servidor roda fora do app — ele só conhece a API REST (`/api/secretaria/*`), e o token do Google nunca sai do servidor. |
+| **Direto** | `/mcp` (HTTP, no app) | As ferramentas consultam a agenda **dentro do processo do app**, sem passar por rede. Dentro do container, `localhost:3000` nem sempre é alcançável (IPv6, porta trocada pelo proxy) — e o token do Google já está ali, então o hop interno só trazia risco. |
+
+Em ambos os caminhos a lógica é a mesma (`src/lib/secretaria-service.ts`), então
+a resposta não muda.
 
 ## Onde roda
 
