@@ -25,13 +25,24 @@ const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Expose-Headers": "mcp-session-id, mcp-protocol-version",
 };
 
+/**
+ * Token válido no pedido.
+ *
+ * O conector do claude.ai só deixa usar nomes de cabeçalho aprovados pela
+ * Anthropic — por isso aceitamos os nomes comuns, não só `Authorization`.
+ */
 function autorizado(req: NextRequest): boolean {
   const configured = process.env.FLOW_API_TOKEN?.trim();
   if (!configured) return false;
-  const header = req.headers.get("authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-  if (!token) return false;
-  return token === configured;
+
+  const authorization = req.headers.get("authorization") ?? "";
+  const candidatos = [
+    authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : authorization.trim(),
+    req.headers.get("x-api-key")?.trim() ?? "",
+    req.headers.get("x-flow-token")?.trim() ?? "",
+  ];
+
+  return candidatos.some((token) => token.length > 0 && token === configured);
 }
 
 export async function POST(req: NextRequest) {
