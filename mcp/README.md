@@ -1,12 +1,21 @@
 # Secretária do Flow — servidor MCP
 
-Servidor MCP que expõe a agenda do Flow como ferramentas do Claude. **Só leitura**:
-nenhuma ferramenta cria, altera ou apaga evento — quem escreve é a API do Flow,
-e ela ainda só lê.
+Ferramentas MCP que expõem a agenda do Flow para o Claude. **Só leitura**: nenhuma
+ferramenta cria, altera ou apaga evento.
 
 O MCP não fala com o Google Calendar. Ele chama a API REST (`/api/secretaria/*`) do
 Flow, que roda no EasyPanel e guarda o token do Google no servidor. O MCP só conhece
 o token de leitura (`FLOW_API_TOKEN`).
+
+## Onde roda
+
+| Onde | Transporte | Pra quê |
+|---|---|---|
+| `https://flow.sitecnologia.tec.br/mcp` | Streamable HTTP | **Claude no celular** (e desktop) via conector do claude.ai |
+| `mcp/server.ts` | stdio | Claude Code e Claude Desktop (registro local) |
+
+As ferramentas são as mesmas nos dois casos — o módulo compartilhado é
+`src/lib/secretaria-mcp.ts`.
 
 ## Ferramentas
 
@@ -21,9 +30,8 @@ o token de leitura (`FLOW_API_TOKEN`).
 
 ## Requisitos
 
-- **Node 22.18+** (o servidor roda TypeScript direto, sem build — o Node faz o strip dos tipos)
-- API do Flow no ar (EasyPanel) com `FLOW_API_TOKEN` configurado
-- Dependências: `cd mcp && npm install`
+- **Node 22.18+** (o servidor stdio roda TypeScript direto, sem build — o Node faz o strip dos tipos)
+- Dependências instaladas **na raiz do repo**: `npm install` (SDK oficial do MCP + zod)
 
 ## Configuração
 
@@ -32,29 +40,16 @@ export FLOW_API_URL="https://flow.sitecnologia.tec.br"
 export FLOW_API_TOKEN="<token de leitura>"
 ```
 
-## Rodar
+## Claude Code e Claude Desktop (stdio)
 
 ```bash
-cd mcp
-npm install
-npm start          # sobe o servidor MCP no stdio
+claude mcp add flow-secretaria --scope user \
+  -e FLOW_API_URL=https://flow.sitecnologia.tec.br \
+  -e FLOW_API_TOKEN=<token> \
+  -- node --experimental-strip-types /caminho/absoluto/para/flow/mcp/server.ts
 ```
 
-## Registrar no Claude Code
-
-```bash
-claude mcp add flow-secretaria \
-  --env FLOW_API_URL=https://flow.sitecnologia.tec.br \
-  --env FLOW_API_TOKEN=<token> \
-  -- node /caminho/absoluto/para/flow/mcp/server.ts
-```
-
-Depois de registrar, confere com `claude mcp list` e pergunta no Claude:
-*"o que tenho hoje na agenda?"*
-
-## Registrar no Claude Desktop
-
-No `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Para o Claude Desktop, no `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
@@ -71,14 +66,30 @@ No `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Reinicie o Claude Desktop depois de editar.
+## Claude no celular (HTTP)
+
+1. **No app do Flow** (EasyPanel): o `FLOW_API_TOKEN` já é env var do serviço.
+2. **Em claude.ai** (desktop ou navegador, na mesma conta): *Settings → Connectors →
+   Add custom connector*
+   - **URL**: `https://flow.sitecnologia.tec.br/mcp`
+   - **Header**: `Authorization: Bearer <FLOW_API_TOKEN>`
+3. **No celular**: o app do Claude (iOS/Android) usa os mesmos conectores da conta —
+   abra e pergunte *"o que tenho hoje na agenda?"*
+
+> Conector customizado exige **plano pago** do Claude (Pro ou Max).
 
 ## Teste rápido
 
-Sobe o servidor e chama as ferramentas de verdade, contra a API configurada:
-
 ```bash
+# stdio
 FLOW_API_URL=... FLOW_API_TOKEN=... node mcp/smoke-test.mjs
+
+# http
+curl -s -X POST https://flow.sitecnologia.tec.br/mcp \
+  -H "Authorization: Bearer $FLOW_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
 ## Regras

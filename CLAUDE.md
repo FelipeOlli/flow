@@ -174,8 +174,13 @@ flow/
 - **Testes**: `npm run test:secretaria` — sobe o dev server com token de teste e exercita cada endpoint (token ausente/inválido, filtros, paginação, 400/404). 19 testes, sem dependência nova (runner nativo do Node).
 
 ### Secretária de IA (MCP + monitoramento)
-- **Servidor MCP** em `mcp/` — TypeScript, roda no stdio, chama a API REST (nunca o Google). 6 ferramentas: `listar_eventos`, `eventos_proximos`, `eventos_em_aberto`, `eventos_por_responsavel`, `listar_agendas`, `detalhe_evento`. Config: `FLOW_API_URL` + `FLOW_API_TOKEN`. Registro no Claude Code: `claude mcp add flow-secretaria --scope user -e FLOW_API_URL=... -e FLOW_API_TOKEN=... -- node .../mcp/server.ts`.
+- **Servidor MCP** com as mesmas ferramentas em dois transportes: **stdio** (`mcp/server.ts`, pro Claude Code/Desktop) e **HTTP** (`/mcp` no app, pro Claude no celular via conector do claude.ai). As ferramentas são compartilhadas em `src/lib/secretaria-mcp.ts` — um só lugar, sem duplicar.
+- **6 ferramentas**: `listar_eventos`, `eventos_proximos`, `eventos_em_aberto`, `eventos_por_responsavel`, `listar_agendas`, `detalhe_evento`. Config: `FLOW_API_URL` + `FLOW_API_TOKEN`.
+- **Rota `/mcp`**: `WebStandardStreamableHTTPServerTransport` (SDK 1.32) em modo **stateless** (servidor+transporte novos por requisição) → o app pode reiniciar sem quebrar o conector. `server.connect(transport)` **antes** de `handleRequest` — sem isso a resposta sai vazia. Auth por `Authorization: Bearer <FLOW_API_TOKEN>` (mesmo token da API) e CORS liberado.
+- **`/mcp` está fora do middleware NextAuth** (igual a `/api/secretaria`) — a rota faz a própria checagem do bearer.
+- **No celular**: em claude.ai, *Settings → Connectors → Add custom connector* → URL `https://flow.sitecnologia.tec.br/mcp` + header `Authorization: Bearer <FLOW_API_TOKEN>`. Exige **plano pago**. O app do celular usa os mesmos conectores da conta.
 - **Node roda o TS direto** (type stripping, Node 22.18+). Sem build — mas o `node --experimental-strip-types` **não aceita parameter properties** (`constructor(public x: number)`) nem enums. Imports entre arquivos do MCP precisam da extensão `.ts` (o `tsconfig.json` do app exclui `mcp/` por causa disso).
+- **Dependências do MCP ficam na raiz** do `package.json` (SDK + zod); `mcp/package.json` só marca `"type": "module"`.
 - **Monitoramento roda dentro do Flow** (decidido com o Felipe), não no n8n: o app já tem cron, Telegram e Web Push.
 - **Quatro avisos** (`src/lib/secretaria-monitor.ts`, roda a cada minuto pelo cron):
   1. **Proximidade** — 1 dia antes, 1 hora antes, 10 min antes (janela de ±2 min).
