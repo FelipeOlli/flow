@@ -5,6 +5,7 @@ import { formatGoogleRecurrence, rruleShortCode } from "./recurrence-format";
 import { CALENDAR_PILLAR_OVERRIDES } from "./pillar-config";
 import { parseReminderProp, serializeReminder } from "./reminder";
 import { rememberDelegateName } from "./delegate-contacts";
+import { normalizeText } from "./text";
 
 const COMPLETE_COLOR_ID = "2";
 const IMPORTANT_COLOR_ID = "5";
@@ -16,12 +17,7 @@ const CALENDAR_COLOR_OVERRIDES: Record<string, string> = {
 };
 
 export function normalizeForSearch(text: string): string {
-  return text
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
+  return normalizeText(text);
 }
 
 function getClient(accessToken: string) {
@@ -115,6 +111,8 @@ function mapEvent(
       return undefined;
     })(),
     createdAt: event.created ?? undefined,
+    /** ISO 8601 — última modificação do evento no Google Calendar */
+    updatedAt: event.updated ?? undefined,
     completedAt: event.extendedProperties?.private?.["flowCompletedAt"] || undefined,
     openSince: event.extendedProperties?.private?.["flowOpenSince"] || undefined,
     reminderMinutes: parseReminderProp(event.extendedProperties?.private?.["flowReminderMinutes"]),
@@ -449,6 +447,54 @@ export async function listWritableCalendars(accessToken: string): Promise<Calend
       name: cal.summary ?? "Sem nome",
       bgColor: CALENDAR_COLOR_OVERRIDES[cal.summary ?? ""] ?? cal.backgroundColor ?? undefined,
     }));
+}
+
+/**
+ * Todas as agendas visíveis pelo token — inclui as compartilhadas só como leitor.
+ * A API da secretária é de leitura, então precisa enxergar tudo que o token vê.
+ */
+export async function listReadableCalendars(accessToken: string): Promise<CalendarOption[]> {
+  const calendar = getClient(accessToken);
+  const entries = await listCalendarEntries(calendar, "reader");
+  return entries
+    .filter((cal) => !!cal.id)
+    .map((cal) => ({
+      id: cal.id!,
+      name: cal.summary ?? "Sem nome",
+      bgColor: CALENDAR_COLOR_OVERRIDES[cal.summary ?? ""] ?? cal.backgroundColor ?? undefined,
+    }));
+}
+
+/**
+ * Procura um evento por id em todas as agendas visíveis. O id do Google não
+ * carrega a agenda, então só dá pra descobrir testando agenda por agenda.
+ */
+export async function getEventFromAnyCalendar(
+  accessToken: string,
+  eventId: string
+): Promise<FlowTask | null> {
+  const calendar = getClient(accessToken);
+  const entries = await listCalendarEntries(calendar, "reader");
+  const candidates = entries.filter((cal) => !!cal.id);
+
+  // Paralelo: buscar agenda por agenda em série custava dezenas de segundos.
+  const results = await Promise.allSettled(
+    candidates.map(async (entry) => {
+      const { data } = await calendar.events.get({ calendarId: entry.id!, eventId });
+      if (!data) return null;
+      return mapEvent(
+        data,
+        entry.id!,
+        entry.summary ?? "",
+        CALENDAR_COLOR_OVERRIDES[entry.summary ?? ""] ?? entry.backgroundColor ?? "#4285f4"
+      );
+    })
+  );
+
+  for (const result of results) {
+    if (result.status === "fulfilled" && result.value) return result.value;
+  }
+  return null;
 }
 
 export async function updateEvent(

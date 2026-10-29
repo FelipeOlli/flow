@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:secretaria": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

@@ -160,6 +160,18 @@ flow/
 - **Cron de notificações**: a cada minuto em `cron.ts`, chama `sendDueNotifications()`. Exclui `isComplete`, `isCancelled`, `declined`. Erro 410/404 do push provider remove a subscription automaticamente.
 - **Chave pública em runtime**: `push-client.ts` faz `GET /api/push/vapid` para obter a chave — não depende de build-time env vars.
 
+### API da secretária (leitura)
+- **Base**: `/api/secretaria/*` — API REST de leitura para a "secretária de IA" (Claude/MCP). Escreita só na Fase 4, com token separado.
+- **Auth**: header `Authorization: Bearer <FLOW_API_TOKEN>` (env). 401 sem token ou com token errado; 503 se `FLOW_API_TOKEN` não estiver configurado. Comparação por `crypto.timingSafeEqual`.
+- **Rate limit**: 120 req/min por IP, em memória (`src/lib/secretaria-auth.ts`). Log de acesso em `[SECRETARIA]` (method, path, status, duração, ip).
+- **Rota fora do NextAuth**: `api/secretaria` está na allowlist do `src/middleware.ts` — a autenticação é o bearer, não a sessão.
+- **Token do Google nunca sai do servidor**: a rota usa `getValidAccessToken()` (token-store). Quem consome a API nunca vê credencial do Google.
+- **Endpoints**: `GET /agendas` · `GET /eventos?de=&ate=&agenda=&status=&limite=&offset=` · `GET /eventos/proximos?minutos=` · `GET /eventos/em-aberto?dias_parado=` · `GET /eventos/por-responsavel?pessoa=` · `GET /eventos/{id}`
+- **Formato do evento**: `id`, `titulo`, `agenda`, `agenda_id`, `inicio`, `fim`, `dia`, `dia_inteiro`, `status` (aberto|concluido|cancelado|recusado — derivado, não existe no Google), `responsavel`, `responsavel_email`, `atualizado_em`, `dias_em_aberto`, `descricao`, `local`, `importante`, `delegavel`, `recorrente`, `categoria`, `pilar`, `convidados`. Resposta: `{ dados: [...], paginacao: { total, limite, offset } }`.
+- **Limites**: máximo 500 itens por página, janela máxima de 366 dias por consulta (acima disso, 400). Sem `de`/`ate`, o padrão é de 7 dias atrás a 60 dias à frente.
+- **Lógica pura** em `src/lib/secretaria.ts` (status derivado, filtros, paginação) — testável isolado.
+- **Testes**: `npm run test:secretaria` — sobe o dev server com token de teste e exercita cada endpoint (token ausente/inválido, filtros, paginação, 400/404). 19 testes, sem dependência nova (runner nativo do Node).
+
 ### Delegação e cobrança
 - **`delegateTo` é o responsável pela entrega**: `{ name, email }`, gravado em `extendedProperties.private` (`flowDelegateName` / `flowDelegateEmail`). **O nome é a chave**; o e-mail é opcional (só existe quando o responsável é um convidado do evento) e serve como info extra.
 - **`isDelegable` é independente** — significa "pode ser delegado", não "foi delegado para X".
@@ -265,6 +277,46 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 ---
 
 ## 6. Última Sessão
+
+### 2026-10-28 (b) — API da secretária (Fase 1)
+
+**O que foi feito:**
+
+1. **API REST de leitura** em `/api/secretaria/*` — base pra secretária de IA (Claude/MCP). Seis endpoints: `agendas`, `eventos`, `eventos/proximos`, `eventos/em-aberto`, `eventos/por-responsavel`, `eventos/{id}`.
+2. **Auth por bearer token** (`FLOW_API_TOKEN` no env), com comparação timing-safe, rate limit de 120 req/min por IP e log de acesso. `api/secretaria` foi pra allowlist do middleware — a sessão NextAuth não vale pra ela.
+3. **Dois campos que o plano pedia e o app não tinha**: `status` (derivado: aberto/concluído/cancelado/recusado) e `atualizado_em` (mapeado do `updated` do Google — novo `updatedAt` no `FlowTask`).
+4. **Normalização de texto compartilhada** — `normalizeText` saiu do `google-calendar.ts` pra `src/lib/text.ts` (o `normalizeForSearch` virou wrapper, sem quebrar quem usava).
+5. **Testes** — `npm run test:secretaria`: 19 testes de integração HTTP (sobe o dev server com token de teste). Sem dependência nova: runner nativo do Node (`node --test`), arquivo em JS puro.
+
+**Decisões tomadas:**
+- **Monitoramento vai DENTRO do Flow, não no n8n** (decidido com o Felipe) — o app já tem cron a cada minuto, Telegram e Web Push; n8n seria mais uma peça sem ganho
+- **Canal de aviso: Telegram** (decidido) — já integrado, sem cadastro nem custo
+- **MCP em TypeScript no próprio repo** (decidido) — mesma stack, tipagem compartilhada com a API
+- **Lógica pura isolada em `src/lib/secretaria.ts`** — status/filtros/paginação testáveis sem HTTP
+- **Janela máxima de 366 dias por consulta** — sem isso, uma query de 100 anos no Google demorava 30s
+- **`getEventFromAnyCalendar` paraleliza** as buscas entre agendas — em série, o detalhe de um evento levava dezenas de segundos
+- **Agendas da secretária são as "reader"**, não só as graváveis — a API é de leitura e precisa enxergar as compartilhadas só-leitura
+
+**Divergência com o plano:** o plano cita as agendas CF, Pessoal, Infotec e DevPoint — as reais são **TI CF Contabilidade, Soluções Inteligentes, Felipe Oliveira, DevPoint e YFLume** (não existe Infotec).
+
+**Arquivos modificados/novos:**
+- `src/lib/secretaria.ts` (novo) — lógica pura da API
+- `src/lib/secretaria-auth.ts` (novo) — bearer token, rate limit, log
+- `src/lib/secretaria-route.ts` (novo) — envelope comum das rotas (guarda, token do Google, erro, log)
+- `src/lib/text.ts` (novo) — normalização de texto
+- `src/app/api/secretaria/**` (novo) — 6 rotas
+- `src/lib/google-calendar.ts` — `mapEvent` mapeia `updated`; `listReadableCalendars` e `getEventFromAnyCalendar` novos; `normalizeForSearch` delegando pro `text.ts`
+- `src/types/task.ts` — `updatedAt`
+- `src/middleware.ts` — `api/secretaria` na allowlist
+- `src/lib/delegation.ts` — `normalizeDelegateName` movido pra cá (o `delegate-contacts.ts` importava, mas ele usa `fs` e não pode entrar no bundle do cliente)
+- `tests/secretaria.test.mjs` (novo) + `package.json` (script `test:secretaria`)
+- `.env.example` — `FLOW_API_TOKEN`
+
+**Verificação:** `npx tsc --noEmit` limpo, `npm run build` OK (6 rotas registradas), `npm run test:secretaria` → 19/19 passando.
+
+**Próximos passos:** Fase 2 (servidor MCP em TypeScript) e Fase 3 (monitoramento no Flow com Telegram), aguardando o OK.
+
+---
 
 ### 2026-10-28
 

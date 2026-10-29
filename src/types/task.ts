@@ -40,6 +40,8 @@ export interface FlowTask {
   recurrenceCode?: string;
   /** ISO 8601 — quando o evento foi criado no Google Calendar */
   createdAt?: string;
+  /** ISO 8601 — última modificação do evento no Google Calendar */
+  updatedAt?: string;
   /** ISO 8601 — quando o evento foi marcado como concluído (via flowCompletedAt extended property) */
   completedAt?: string;
   /** DateKey YYYY-MM-DD — dia em que o evento foi migrado pela primeira vez (flowOpenSince). Usado para calcular dias em aberto sem resetar a cada migração. */
