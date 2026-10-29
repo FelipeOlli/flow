@@ -4,7 +4,9 @@ import { runMigration } from "./migration";
 import { getValidAccessToken } from "./token-store";
 import { setMigrationError, setMigrationRunning, setMigrationSuccess } from "./migration-status";
 import { sendDueNotifications } from "./notifier";
-import { sendDelegationDigest } from "./delegation-digest";
+import { sendSecretariaReminders } from "./secretaria-monitor";
+import { getEventsForDateKey } from "./google-calendar";
+import { horarioCobranca, horarioFechamento, horarioResumo } from "./secretaria-regras";
 import {
   getDateKeyInTimeZone,
   getReferenceDateForDateKey,
@@ -118,22 +120,21 @@ export function initCron() {
       async () => {
         try {
           const token = await getValidAccessToken();
-          if (token) await sendDueNotifications(token, timeZone);
+          if (!token) return;
+
+          // Uma única ida à API do Google por tick: hoje + amanhã.
+          // Notificador e secretária usam a mesma lista.
+          const hojeKey = getDateKeyInTimeZone(new Date(), timeZone);
+          const [hoje, amanha] = await Promise.all([
+            getEventsForDateKey(token, hojeKey, timeZone),
+            getEventsForDateKey(token, shiftDateKey(hojeKey, 1), timeZone),
+          ]);
+          const tasks = [...hoje, ...amanha];
+
+          await sendDueNotifications(token, timeZone, tasks);
+          await sendSecretariaReminders(token, timeZone, tasks);
         } catch (err) {
           console.error("[FLOW CRON] Erro no tick de notificações:", err);
-        }
-      },
-      { timezone: "America/Sao_Paulo" }
-    );
-
-    cron.schedule(
-      "0 8 * * *",
-      async () => {
-        try {
-          const token = await getValidAccessToken();
-          if (token) await sendDelegationDigest(token, timeZone);
-        } catch (err) {
-          console.error("[FLOW CRON] Erro no resumo de cobranças:", err);
         }
       },
       { timezone: "America/Sao_Paulo" }
@@ -143,7 +144,11 @@ export function initCron() {
     cronInitError = null;
     console.log("[FLOW CRON] Migração noturna agendada para 00:01 (America/Sao_Paulo)");
     console.log("[FLOW CRON] Notificações push agendadas a cada minuto.");
-    console.log("[FLOW CRON] Resumo de cobranças agendado para 08:00 (America/Sao_Paulo).");
+    console.log("[FLOW CRON] Secretária (lembretes de proximidade) a cada minuto.");
+    console.log(
+      `[FLOW CRON] Secretária diária: resumo ${horarioResumo()}, cobrança ${horarioCobranca()}, ` +
+        `fechamento ${horarioFechamento()} (America/Sao_Paulo).`
+    );
     console.log("[FLOW CRON] Recomendado em produção: cron externo chamando POST /api/cron/migrate às 00:01.");
   } catch (err) {
     cronScheduled = false;

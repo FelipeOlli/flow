@@ -24,13 +24,31 @@ function loadNotifiedToday(todayKey: string): Set<string> {
   return new Set<string>();
 }
 
+/**
+ * Salva mesclando com o que está no arquivo agora — a secretária também
+ * escreve nesse arquivo (pra marcar um lembrete como já enviado) e os dois
+ * podem rodar no mesmo minuto.
+ */
 function saveNotifiedToday(todayKey: string, ids: Set<string>): void {
   try {
+    const atual = loadNotifiedToday(todayKey);
+    for (const id of ids) atual.add(id);
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(NOTIFIED_FILE, JSON.stringify({ date: todayKey, ids: Array.from(ids) }), "utf-8");
+    fs.writeFileSync(NOTIFIED_FILE, JSON.stringify({ date: todayKey, ids: Array.from(atual) }), "utf-8");
   } catch (err) {
     console.error("[NOTIFIER] Falha ao salvar notified-today:", err);
   }
+}
+
+/**
+ * Marca o lembrete de um evento como já enviado, sem enviar nada.
+ * A secretária usa isso pra não duplicar o aviso (ela avisa 10 min antes e o
+ * notifier dispararia o lembrete de 5 min logo em seguida).
+ */
+export function markReminderSent(task: FlowTask, minutes: number, todayKey: string): void {
+  const notified = loadNotifiedToday(todayKey);
+  notified.add(`${task.id}@${task.startTime}#${minutes}`);
+  saveNotifiedToday(todayKey, notified);
 }
 
 async function sendPushNotification(
@@ -54,7 +72,12 @@ async function sendPushNotification(
   }
 }
 
-export async function sendDueNotifications(accessToken: string, timeZone: string): Promise<void> {
+export async function sendDueNotifications(
+  accessToken: string,
+  timeZone: string,
+  /** Eventos já buscados (hoje + amanhã). Evita uma segunda ida à API do Google. */
+  preloadedTasks?: FlowTask[]
+): Promise<void> {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
   const subject = process.env.VAPID_SUBJECT;
@@ -74,12 +97,16 @@ export async function sendDueNotifications(accessToken: string, timeZone: string
   // evento ainda listado no dia seguinte.
   let tasks: FlowTask[];
   try {
-    const tomorrowKey = shiftDateKey(todayKey, 1);
-    const [todayTasks, tomorrowTasks] = await Promise.all([
-      getEventsForDateKey(accessToken, todayKey, timeZone),
-      getEventsForDateKey(accessToken, tomorrowKey, timeZone),
-    ]);
-    tasks = [...todayTasks, ...tomorrowTasks];
+    if (preloadedTasks) {
+      tasks = preloadedTasks;
+    } else {
+      const tomorrowKey = shiftDateKey(todayKey, 1);
+      const [todayTasks, tomorrowTasks] = await Promise.all([
+        getEventsForDateKey(accessToken, todayKey, timeZone),
+        getEventsForDateKey(accessToken, tomorrowKey, timeZone),
+      ]);
+      tasks = [...todayTasks, ...tomorrowTasks];
+    }
   } catch (err) {
     console.error("[NOTIFIER] Erro ao buscar eventos:", err);
     return;

@@ -173,6 +173,20 @@ flow/
 - **Lógica pura** em `src/lib/secretaria.ts` (status derivado, filtros, paginação) — testável isolado.
 - **Testes**: `npm run test:secretaria` — sobe o dev server com token de teste e exercita cada endpoint (token ausente/inválido, filtros, paginação, 400/404). 19 testes, sem dependência nova (runner nativo do Node).
 
+### Secretária de IA (MCP + monitoramento)
+- **Servidor MCP** em `mcp/` — TypeScript, roda no stdio, chama a API REST (nunca o Google). 6 ferramentas: `listar_eventos`, `eventos_proximos`, `eventos_em_aberto`, `eventos_por_responsavel`, `listar_agendas`, `detalhe_evento`. Config: `FLOW_API_URL` + `FLOW_API_TOKEN`. Registro no Claude Code: `claude mcp add flow-secretaria --scope user -e FLOW_API_URL=... -e FLOW_API_TOKEN=... -- node .../mcp/server.ts`.
+- **Node roda o TS direto** (type stripping, Node 22.18+). Sem build — mas o `node --experimental-strip-types` **não aceita parameter properties** (`constructor(public x: number)`) nem enums. Imports entre arquivos do MCP precisam da extensão `.ts` (o `tsconfig.json` do app exclui `mcp/` por causa disso).
+- **Monitoramento roda dentro do Flow** (decidido com o Felipe), não no n8n: o app já tem cron, Telegram e Web Push.
+- **Quatro avisos** (`src/lib/secretaria-monitor.ts`, roda a cada minuto pelo cron):
+  1. **Proximidade** — 1 dia antes, 1 hora antes, 10 min antes (janela de ±2 min).
+  2. **Cobrança** (diária, 08:00) — delegações atrasadas, escalonando em 3/7/14 dias.
+  3. **Resumo da manhã** (diária, 07:30) — o dia por agenda + conflitos de horário.
+  4. **Fechamento do dia** (diário, 20:00) — pendências e o que vem amanhã.
+- **Atraso é medido por `dias_em_aberto`** (computeDaysOpen/openSince), **não pela data do evento** — a migração noturna empurra as pendências pra hoje todo dia, então a data nunca "vence".
+- **Janelas por agenda** (`src/lib/secretaria-regras.ts`): CF só em horário comercial (dias úteis), Pessoal fora do expediente, SI/DevPoint/YFLume o dia todo. Silêncio padrão 21:30→07:00. Tudo por env (ver `.env.example`).
+- **Disparo manual** pra teste: `POST /api/cron/secretaria` com `{"qual":"resumo|cobranca|fechamento|proximidade"}` e `{"dryRun":true}` devolve o texto sem enviar.
+- **Uma única ida ao Google por minuto**: o cron busca hoje+amanhã uma vez e entrega a mesma lista pro notifier e pra secretária (dobrar as buscas estourou o rate limit da API do Google).
+
 ### Delegação e cobrança
 - **`delegateTo` é o responsável pela entrega**: `{ name, email }`, gravado em `extendedProperties.private` (`flowDelegateName` / `flowDelegateEmail`). **O nome é a chave**; o e-mail é opcional (só existe quando o responsável é um convidado do evento) e serve como info extra.
 - **`isDelegable` é independente** — significa "pode ser delegado", não "foi delegado para X".
@@ -278,6 +292,38 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 ---
 
 ## 6. Última Sessão
+
+### 2026-10-29 — Secretária de IA: MCP (fase 2) + monitoramento (fase 3)
+
+**O que foi feito:**
+
+1. **Servidor MCP** em `mcp/` — TypeScript no stdio, 6 ferramentas de leitura, chamando a API REST do Flow. `mcp/README.md` traz o registro no Claude Code e no Claude Desktop. Dependências isoladas no `mcp/package.json` (SDK oficial + zod 4).
+2. **Monitoramento dentro do Flow** (sem n8n, como decidido): lembretes de proximidade (1 dia/1h/10min), cobrança escalonada das delegações atrasadas (3/7/14 dias), resumo da manhã e fechamento do dia — tudo no Telegram.
+3. **Disparo manual** `POST /api/cron/secretaria` — com `dryRun` devolve o texto sem enviar, pra testar na hora.
+4. **O digest antigo (`delegation-digest.ts`) foi removido** — a cobrança nova faz o mesmo trabalho, com escalonamento.
+
+**Bugs achados e corrigidos no caminho:**
+- **A busca da agenda duplicava** entre notifier e secretária → o Google estourou o rate limit. Agora o cron busca uma vez e entrega a mesma lista pros dois.
+- **"Atrasada" era medida pela data do evento** — sem sentido aqui, porque a migração noturna empurra tudo pra hoje. Agora usa `dias_em_aberto` (openSince).
+- **Conflitos de horário inúteis** (listavam todos os pares) → agrupados por union-find, e eventos com mais de 4h (tempo aberto/marcador) não bloqueiam horário.
+- **Janela de ±1,2 min no degrau de 10 min** era apertada demais pro cron → ±2 min.
+- **`secretariaAtiva()` exigia `TELEGRAM_CHAT_ID`** → em ambiente sem Telegram, o monitor inteiro nem rodava (e o disparo manual não funcionava).
+
+**Verificação:** `npx tsc --noEmit` limpo (app e mcp), `npm run build` OK, `npm run test:secretaria` → 21/21. Testado ao vivo contra a agenda real: os quatro tipos de mensagem foram montados e conferidos (resumo, cobrança, fechamento e proximidade — o de proximidade disparou de verdade num evento de teste, e o dedup segurou o segundo disparo). Os 6 eventos de teste foram apagados.
+
+**Decisões:**
+- **Fase 3 dentro do Flow, não n8n** (decidido com o Felipe) — o app já tem cron, Telegram e Web Push; n8n seria mais uma peça.
+- **Canal: só Telegram** (decidido).
+- **MCP em TypeScript no repo** (decidido) — uma pasta à parte, com `package.json` e `tsconfig.json` próprios; o `tsconfig.json` do app exclui `mcp/` (imports com extensão `.ts`).
+- **Janela por agenda** implementada conforme o plano (CF só em horário comercial, Pessoal fora do expediente, SI/DevPoint/YFLume o dia todo).
+
+**Arquivos novos:** `mcp/` (server.ts, flow-api.ts, smoke-test.mjs, README.md, package.json, tsconfig.json) · `src/lib/secretaria-monitor.ts` · `src/lib/secretaria-regras.ts` · `src/app/api/cron/secretaria/route.ts`
+**Arquivos alterados:** `src/lib/cron.ts` · `src/lib/notifier.ts` · `tsconfig.json` · `.env.example` · `.gitignore` · `CLAUDE.md`
+**Removidos:** `src/lib/delegation-digest.ts`
+
+**Próximos passos:** Fase 4 (ações de escrita com confirmação) — só depois de alguns dias de uso do monitoramento.
+
+---
 
 ### 2026-10-28 (b) — API da secretária (Fase 1)
 

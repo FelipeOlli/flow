@@ -42,8 +42,8 @@ next-env.d.ts
 # contatos de delegação (nomes de quem já recebeu tarefas)
 .delegate-contacts.json
 
-# estado do resumo diário de cobranças
-.delegation-digest-state.json
+# estado da secretária (dedup de lembretes e mensagens diárias)
+.secretaria-notified.json
 
 # dados persistentes (tokens, uploads)
 data/
