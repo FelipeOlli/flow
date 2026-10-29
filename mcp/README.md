@@ -98,3 +98,10 @@ curl -s -X POST https://flow.sitecnologia.tec.br/mcp \
 - **Feriados e datas comemorativas ficam de fora** por padrão
   (`?incluir_feriados=true` traz de volta).
 - O token do Google **nunca** chega no MCP — só o token de leitura da API.
+- **Logs**: toda requisição em `/mcp` gera uma linha `[MCP]` no log do serviço
+  (method, status, duração, `accept`, versão do protocolo, sessão, IP, UA).
+  É a primeira coisa a olhar quando o conector do claude.ai falha.
+- O `Accept` do cliente é normalizado antes de chegar no SDK — o transporte
+  oficial exige `application/json` **e** `text/event-stream` no POST, e
+  responde 406 se faltar um dos dois (o cliente do claude.ai reporta isso
+  como "fetch failed").

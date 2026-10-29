@@ -16,6 +16,9 @@ import { z } from "zod";
 const BASE_URL = (process.env.FLOW_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const API_TOKEN = process.env.FLOW_API_TOKEN ?? "";
 
+/** Tempo máximo de espera por uma chamada à API do Flow. */
+const TIMEOUT_API_MS = 30_000;
+
 export class FlowApiError extends Error {
   // Sem parameter property: o Node roda TS em modo strip-only, que não aceita essa sintaxe.
   status: number;
@@ -71,7 +74,26 @@ async function request<T>(
     if (valor !== undefined && valor !== "") url.searchParams.set(chave, String(valor));
   }
 
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${API_TOKEN}` } });
+  // Sem timeout, uma consulta lenta ao Google segura a conexão até o cliente
+  // desistir — e o erro chega como "fetch failed", sem dizer o que houve.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_API_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { Authorization: `Bearer ${API_TOKEN}` },
+      signal: controller.signal,
+    });
+  } catch (e) {
+    const mensagem =
+      e instanceof Error && e.name === "AbortError"
+        ? `A API do Flow demorou mais de ${TIMEOUT_API_MS / 1000}s para responder. Tente uma janela menor.`
+        : `Não foi possível alcançar a API do Flow (${BASE_URL}): ${e instanceof Error ? e.message : String(e)}`;
+    throw new FlowApiError(504, mensagem);
+  } finally {
+    clearTimeout(timer);
+  }
 
   const texto = await res.text();
   let corpo: unknown = null;
