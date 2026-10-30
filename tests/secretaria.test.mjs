@@ -334,3 +334,62 @@ test("PATCH /eventos/{id} com token de leitura responde 401", async () => {
   assert.equal(status, 401);
   assert.match(body.erro, /escrita/i);
 });
+
+// ─────────────────── Marcas: delegável (D) e importante ───────────────────
+// D, O e E são um slot só — como no controle segmentado do popover. Pedir
+// `categoria` e `delegavel: true` juntos é erro, não sobrescrita silenciosa.
+
+test("POST /eventos recusa categoria e delegavel juntos", async () => {
+  const { status, body } = await api("/api/secretaria/eventos", {
+    token: WRITE_TOKEN,
+    method: "POST",
+    body: {
+      titulo: "não deve criar",
+      data: "2026-12-01",
+      categoria: "operacional",
+      delegavel: true,
+    },
+  });
+  assert.equal(status, 400);
+  assert.match(body.erro, /exclusivos/i);
+});
+
+test("POST /eventos recusa delegavel que não é booleano", async () => {
+  const { status, body } = await api("/api/secretaria/eventos", {
+    token: WRITE_TOKEN,
+    method: "POST",
+    body: { titulo: "não deve criar", data: "2026-12-01", delegavel: "sim" },
+  });
+  assert.equal(status, 400);
+  assert.match(body.erro, /booleano/i);
+});
+
+test("PATCH /eventos/{id} recusa categoria e delegavel juntos", async () => {
+  const { status, body } = await api("/api/secretaria/eventos/qualquer-id", {
+    token: WRITE_TOKEN,
+    method: "PATCH",
+    body: { categoria: "operacional", delegavel: true },
+  });
+  assert.equal(status, 400);
+  assert.match(body.erro, /exclusivos/i);
+});
+
+test("PATCH /eventos/{id} recusa importante que não é booleano", async () => {
+  const { status, body } = await api("/api/secretaria/eventos/qualquer-id", {
+    token: WRITE_TOKEN,
+    method: "PATCH",
+    body: { importante: "sim" },
+  });
+  assert.equal(status, 400);
+  assert.match(body.erro, /booleano/i);
+});
+
+test("POST /eventos recusa categoria desconhecida", async () => {
+  const { status, body } = await api("/api/secretaria/eventos", {
+    token: WRITE_TOKEN,
+    method: "POST",
+    body: { titulo: "não deve criar", data: "2026-12-01", categoria: "urgente" },
+  });
+  assert.equal(status, 400);
+  assert.match(body.erro, /categoria/i);
+});

@@ -119,6 +119,10 @@ export interface ParamsCriarEvento {
   lembreteMinutos?: number;
   pilar?: PilarEvento;
   categoria?: CategoriaEvento;
+  /** Tag D: tarefa delegável. Exclusivo com `categoria`. */
+  delegavel?: boolean;
+  /** Destaque com estrela. Independe das tags. */
+  importante?: boolean;
   /** Nome de quem ficou responsável pela entrega. */
   responsavel?: string;
   /** E-mails dos convidados. */
@@ -136,7 +140,12 @@ export interface ParamsAtualizarEvento {
   descricao?: string;
   lembreteMinutos?: number;
   pilar?: PilarEvento;
-  categoria?: CategoriaEvento;
+  /** `null` remove a categoria. */
+  categoria?: CategoriaEvento | null;
+  /** Tag D: tarefa delegável. Exclusivo com `categoria`. */
+  delegavel?: boolean;
+  /** Destaque com estrela. Independe das tags. */
+  importante?: boolean;
   responsavel?: string;
   /** "concluir" marca o evento como concluído. */
   acao?: "concluir";

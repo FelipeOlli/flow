@@ -436,7 +436,11 @@ export function criarServidorSecretaria(
         "Cria um evento na agenda do Flow. IMPORTANTE: chame em duas etapas — primeiro " +
         "SEM `confirmar`, para mostrar ao usuário o que será criado, e só depois que o " +
         "usuário autorizar, chame de novo com `confirmar: true`. Nunca grave sem ter " +
-        "pedido confirmação.",
+        "pedido confirmação. " +
+        "Sobre as marcações: `responsavel` é quem fica com a entrega desta tarefa; " +
+        "`delegavel` é a tag D (tarefa que pode virar delegação permanente, aparece na " +
+        "Revisão Semanal) — são coisas diferentes. `categoria` (O/E) e `delegavel` (D) são " +
+        "mutuamente exclusivos: use um ou outro, nunca os dois.",
       inputSchema: {
         titulo: z.string().min(1).describe("Título do evento."),
         data: z.string().describe("Data do evento (YYYY-MM-DD)."),
@@ -450,7 +454,12 @@ export function criarServidorSecretaria(
           .enum(["trabalho", "saude", "familia", "espiritualidade"])
           .optional()
           .describe("Pilar do evento."),
-        categoria: z.enum(["operacional", "estrategico"]).optional().describe("Categoria O/E."),
+        categoria: z.enum(["operacional", "estrategico"]).optional().describe("Categoria O/E. Exclusivo com `delegavel`."),
+        delegavel: z
+          .boolean()
+          .optional()
+          .describe("Tag D: marca a tarefa como delegável (candidata a delegação permanente, aparece na Revisão Semanal). Exclusivo com `categoria` — envie um ou outro."),
+        importante: z.boolean().optional().describe("Destaca o evento com estrela. Independe das tags."),
         responsavel: z.string().optional().describe("Nome de quem fica responsável pela entrega."),
         convidados: z.array(z.string()).optional().describe("E-mails dos convidados."),
         confirmar: z.boolean().optional().describe("Gravar de verdade. Só true depois do usuário autorizar."),
@@ -471,6 +480,9 @@ export function criarServidorSecretaria(
           args.agenda ? `• Agenda: ${args.agenda}` : "",
           args.descricao ? `• Descrição: ${args.descricao}` : "",
           args.responsavel ? `• Responsável: ${args.responsavel}` : "",
+          args.categoria ? `• Categoria: ${args.categoria}` : "",
+          args.delegavel ? "• Delegável (tag D)" : "",
+          args.importante ? "• Importante (estrela)" : "",
           "",
           "Confirme para eu gravar.",
         ].filter(Boolean);
@@ -489,6 +501,8 @@ export function criarServidorSecretaria(
           lembreteMinutos: args.lembrete_minutos,
           pilar: args.pilar as PilarEvento | undefined,
           categoria: args.categoria as CategoriaEvento | undefined,
+          delegavel: args.delegavel,
+          importante: args.importante,
           responsavel: args.responsavel,
           convidados: args.convidados,
         });
@@ -505,9 +519,14 @@ export function criarServidorSecretaria(
       title: "Atualizar evento no Flow",
       description:
         "Altera um evento existente (título, data, hora, descrição, lembrete, pilar, " +
-        "categoria, responsável) ou marca como concluído. IMPORTANTE: chame em duas " +
-        "etapas — primeiro SEM `confirmar` para mostrar ao usuário o que vai mudar, e " +
-        "só depois que o usuário autorizar, chame de novo com `confirmar: true`.",
+        "categoria, tag delegável, destaque, responsável) ou marca como concluído. " +
+        "IMPORTANTE: chame em duas etapas — primeiro SEM `confirmar` para mostrar ao " +
+        "usuário o que vai mudar, e só depois que o usuário autorizar, chame de novo " +
+        "com `confirmar: true`. " +
+        "Sobre as marcações: `responsavel` é quem fica com a entrega desta tarefa; " +
+        "`delegavel` é a tag D (tarefa que pode virar delegação permanente, aparece na " +
+        "Revisão Semanal) — são coisas diferentes. `categoria` (O/E) e `delegavel` (D) são " +
+        "mutuamente exclusivos: use um ou outro, nunca os dois.",
       inputSchema: {
         id: z.string().min(1).describe("Id do evento (campo `id` da listagem)."),
         titulo: z.string().optional().describe("Novo título."),
@@ -520,7 +539,12 @@ export function criarServidorSecretaria(
           .enum(["trabalho", "saude", "familia", "espiritualidade"])
           .optional()
           .describe("Novo pilar."),
-        categoria: z.enum(["operacional", "estrategico"]).optional().describe("Nova categoria."),
+        categoria: z.enum(["operacional", "estrategico"]).optional().describe("Nova categoria O/E. Exclusivo com `delegavel`."),
+        delegavel: z
+          .boolean()
+          .optional()
+          .describe("Tag D: marca (true) ou desmarca (false) a tarefa como delegável — candidata a delegação permanente, aparece na Revisão Semanal. Exclusivo com `categoria`."),
+        importante: z.boolean().optional().describe("Marca (true) ou desmarca (false) o destaque com estrela. Independe das tags."),
         responsavel: z.string().optional().describe("Novo responsável. String vazia remove a delegação."),
         acao: z.enum(["concluir"]).optional().describe("\"concluir\" marca o evento como concluído."),
         escopo: z
@@ -543,6 +567,8 @@ export function criarServidorSecretaria(
           lembrete_minutos: args.lembrete_minutos,
           pilar: args.pilar,
           categoria: args.categoria,
+          delegavel: args.delegavel,
+          importante: args.importante,
           responsavel: args.responsavel,
           acao: args.acao,
         })
@@ -569,6 +595,8 @@ export function criarServidorSecretaria(
           lembreteMinutos: args.lembrete_minutos,
           pilar: args.pilar as PilarEvento | undefined,
           categoria: args.categoria as CategoriaEvento | undefined,
+          delegavel: args.delegavel,
+          importante: args.importante,
           responsavel: args.responsavel,
           acao: args.acao,
           escopo: args.escopo as Escopo | undefined,

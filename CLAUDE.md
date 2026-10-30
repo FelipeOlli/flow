@@ -171,19 +171,23 @@ flow/
 - **Limites**: máximo 500 itens por página, janela máxima de 366 dias por consulta (acima disso, 400). Sem `de`/`ate`, o padrão é de 7 dias atrás a 60 dias à frente.
 - **Feriados e datas comemorativas ficam de fora** por padrão (calendário "Feriados no Brasil" e afins) — mesmo critério do `/api/tasks/kanban`. Opt-in com `?incluir_feriados=true`. Sem isso, "Dia do Trabalho" e companhia entravam na lista de pendências e na cobrança.
 - **Lógica pura** em `src/lib/secretaria.ts` (status derivado, filtros, paginação) — testável isolado.
-- **Testes**: `npm run test:secretaria` — sobe o dev server com token de teste e exercita cada endpoint (token ausente/inválido, filtros, paginação, 400/404). 19 testes, sem dependência nova (runner nativo do Node).
+- **Testes**: `npm run test:secretaria` — sobe o dev server com token de teste e exercita cada endpoint (token ausente/inválido, filtros, paginação, 400/404, portão de escrita, validação das tags). 31 testes, sem dependência nova (runner nativo do Node).
+- **Escrita (Fase 4)**: `POST /api/secretaria/eventos` e `PATCH /api/secretaria/eventos/{id}` — `titulo`, `data`, `horaInicio`, `horaFim`, `duracaoMinutos`, `agenda`, `descricao`, `lembreteMinutos`, `pilar`, `categoria`, `delegavel`, `importante`, `responsavel`, `convidados`, `recorrencia`, `acao`. Exigem `FLOW_API_WRITE_TOKEN`.
+- **D/O/E são um slot só** (como o controle segmentado do popover): `categoria` (operacional/estrategico) e `delegavel` (tag D) são **mutuamente exclusivos**. `categoria` + `delegavel: true` na mesma chamada → 400, não sobrescrita silenciosa. Escolher a categoria desliga o D; marcar o D limpa a categoria. `importante` (estrela) é independente das três.
+- **Validação**: valor não-booleano em `delegavel`/`importante` → 400 (não é ignorado em silêncio). Categoria fora do enum → 400 (antes, uma categoria inválida era apagada sem aviso).
 
 ### Secretária de IA (MCP + monitoramento)
 - **Servidor MCP** com as mesmas ferramentas em dois transportes: **stdio** (`mcp/server.ts`, pro Claude Code/Desktop) e **HTTP** (`/mcp` no app, pro Claude no celular via conector do claude.ai). As ferramentas são compartilhadas em `src/lib/secretaria-mcp.ts` — um só lugar, sem duplicar.
-- **6 ferramentas**: `listar_eventos`, `eventos_proximos`, `eventos_em_aberto`, `eventos_por_responsavel`, `listar_agendas`, `detalhe_evento`. Config: `FLOW_API_URL` + `FLOW_API_TOKEN`.
+- **8 ferramentas**: 6 de leitura (`listar_eventos`, `eventos_proximos`, `eventos_em_aberto`, `eventos_por_responsavel`, `listar_agendas`, `detalhe_evento`) + 2 de escrita (`criar_evento`, `atualizar_evento`). Config: `FLOW_API_URL` + `FLOW_API_TOKEN` (+ `FLOW_API_WRITE_TOKEN` para escrita).
 - **Rota `/mcp`**: `WebStandardStreamableHTTPServerTransport` (SDK 1.32) em modo **stateless** (servidor+transporte novos por requisição) → o app pode reiniciar sem quebrar o conector. `server.connect(transport)` **antes** de `handleRequest` — sem isso a resposta sai vazia. Auth por `Authorization: Bearer <FLOW_API_TOKEN>` (mesmo token da API) e CORS liberado.
 - **O `Accept` é normalizado antes do transporte**: o SDK exige `application/json` **e** `text/event-stream` no POST e responde 406 se faltar um dos dois — o conector do claude.ai reporta isso como "fetch failed". A rota ainda responde no formato que o cliente pediu (JSON ou SSE) e delega GET/DELETE ao transporte.
 - **Backend direto no app**: as ferramentas do `/mcp` consultam a agenda no mesmo processo (`src/lib/secretaria-service.ts`), sem hop HTTP — dentro do container `localhost:3000` não é confiável. O servidor stdio usa o backend HTTP (roda fora do app). Regra única de negócio, dois caminhos.
 - **Escrita (Fase 4)**: `criar_evento` e `atualizar_evento`, liberadas só com `FLOW_API_WRITE_TOKEN`. Toda escrita exige `confirmar: true` — sem ele, a ferramenta devolve só a prévia e não grava. **Sem ferramenta de apagar** (excluir por IA não volta).
+- **Marcações nas ferramentas de escrita**: `delegavel` (tag D), `importante` (estrela) e `categoria` (O/E). O `inputSchema` descreve o que cada uma é e que `responsavel` (quem entrega) ≠ `delegavel` (tag de candidata a delegação permanente, que alimenta a Revisão Semanal). `categoria` e `delegavel` são mutuamente exclusivos — pedir os dois dá 400.
 - **Guarda da API**: `checkToken` aceita o token de leitura **ou** o de escrita; `guardSecretaria(req, startedAt, { exigirEscrita: true })` exige o de escrita. A API REST exige o prefixo `Bearer` — a rota `/mcp` é a única que aceita outras formas de header (limitação do conector do claude.ai).
 - **Eventos de dia inteiro**: `createEvent` detecta início só-data (`YYYY-MM-DD`) e manda `start.date`/`end.date` (fim exclusivo = dia seguinte), como o Google espera.
 - **`/mcp` está fora do middleware NextAuth** (igual a `/api/secretaria`) — a rota faz a própria checagem do bearer.
-- **No celular**: em claude.ai, *Settings → Connectors → Add custom connector* → URL `https://flow.sitecnologia.tec.br/mcp` + header `Authorization: Bearer <FLOW_API_TOKEN>`. Exige **plano pago**. O app do celular usa os mesmos conectores da conta.
+- **No celular**: em claude.ai, *Settings → Connectors → Add custom connector* → URL `https://flow.sitecnologia.tec.br/mcp`, autenticação **Sem login**, cabeçalho `authorization` = `Bearer <FLOW_API_WRITE_TOKEN>`. Exige **plano pago**. O app do celular usa os mesmos conectores da conta. Detalhes na seção 5.
 - **Node roda o TS direto** (type stripping, Node 22.18+). Sem build — mas o `node --experimental-strip-types` **não aceita parameter properties** (`constructor(public x: number)`) nem enums. Imports entre arquivos do MCP precisam da extensão `.ts` (o `tsconfig.json` do app exclui `mcp/` por causa disso).
 - **Dependências do MCP ficam na raiz** do `package.json` (SDK + zod); `mcp/package.json` só marca `"type": "module"`.
 - **Monitoramento roda dentro do Flow** (decidido com o Felipe), não no n8n: o app já tem cron, Telegram e Web Push.
@@ -302,6 +306,30 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 ---
 
 ## 6. Última Sessão
+
+### 2026-10-30 — Marcações delegável/importante na escrita da secretária
+
+**O que foi feito:**
+
+1. **Diagnóstico**: o Claude no celular criou uma tarefa com responsável, categoria e pilar — e o evento voltou com `delegavel: false` e `importante: false`. A causa não era o Flow calculando nada: **`delegavel` e `importante` não existiam no caminho de escrita**. O `inputSchema` da `criar_evento` não tinha os campos, e o `criarEvento` só repassava `pilar`, `categoria` e `responsavel` — o `createEvent` do Google aceita `isDelegable`, mas nada na rota da secretária o preenchia. Sem parâmetro, "false" é a única saída possível, e o modelo respondeu como se fosse valor computado.
+2. **`delegavel` e `importante` abertos para escrita** — MCP (`criar_evento`/`atualizar_evento`) e API REST (que usa o mesmo contrato). No `criarEvento` viram `isDelegable`/`isImportant` do `createEvent`; no `atualizarEvento` são operações próprias (`markEventDelegable`/`markEventUndelegable`/`markEventImportant`/`markEventUnimportant`), no mesmo padrão de `pilar`/`categoria`/`responsavel`.
+3. **D/O/E são um slot só**, espelhando o controle segmentado do popover (decidido com o Felipe): `categoria` (O/E) e `delegavel` (D) são **mutuamente exclusivos**. Escolher a categoria desliga o D; marcar o D limpa a categoria. Pedir os dois na mesma chamada é **400 com mensagem explicativa**, não sobrescrita silenciosa.
+4. **O `inputSchema` das ferramentas explica a diferença**: `responsavel` é quem fica com a entrega; `delegavel` é a tag de "candidata a delegação permanente", que alimenta a aba "Tarefas para delegar" da Revisão Semanal. As duas marcações novas também entram na prévia (o bloco sem `confirmar`).
+5. **Validação que não engole erro**: valor não-booleano em `delegavel`/`importante` → 400. Categoria fora do enum → 400 (antes era apagada em silêncio — e, com a regra de exclusividade, teria derrubado o D junto).
+
+**Arquivos modificados:** `src/lib/secretaria-backend.ts` (contrato) · `src/lib/secretaria-service.ts` (validação + gravação dos marcadores) · `src/lib/secretaria-mcp.ts` (schema, descrição e prévia) · `tests/secretaria.test.mjs` (5 casos novos) · `CLAUDE.md`
+
+**Bug do servidor stdio (achado depois):** `mcp/server.ts` chamava `criarServidorSecretaria()` sem opções, e `podeEscrever` tem default `false` — ou seja, **o Claude Code/Desktop nunca conseguiu escrever**, com ou sem `FLOW_API_WRITE_TOKEN`. Toda escrita respondia "Este conector está com o token de LEITURA". Agora `mcp/server.ts` deriva `podeEscrever` da presença de `FLOW_API_WRITE_TOKEN`, como o README já prometia.
+
+**Verificação:** `npx tsc --noEmit` limpo (app e mcp), `npm run build` OK, `npm run test:secretaria` → 31/31. A verificação viva contra a agenda real (criar evento de teste com as tags, conferir no popover e apagar) ficou pendente — o classificador de comandos bloqueou a escrita via curl na agenda compartilhada.
+
+**Decisões:**
+- **Espelhar a UI na API** (decidido com o Felipe): D/O/E exclusivos, em vez de deixar a IA marcar "operacional + delegável" ao mesmo tempo — que o popover não representa e que o próximo salvamento pela interface apagaria.
+- **Erro explícito em vez de precedência silenciosa**: quando a IA erra a combinação, ela recebe o 400 e escolhe de novo, em vez de o app adivinhar o que ela quis dizer.
+
+**Próximos passos:** redeploy no EasyPanel e, depois, marcar o evento do Chrome (`5mq9q3n9cvf09u4r9bragv0jao`) com `delegavel: true` — **atenção**: pela exclusividade, isso limpa a categoria "operacional" dele; se preferir manter "operacional", o evento fica como está (a tag D é inacessível por design). O conector do Claude Code ainda precisa de `FLOW_API_WRITE_TOKEN` no ambiente (`claude mcp add`/registro) — o `~/.claude.json` atual só tem o token de leitura.
+
+---
 
 ### 2026-10-29 (c) — Fase 4: escrita no Flow pelo Claude (MCP)
 

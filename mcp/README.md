@@ -50,6 +50,24 @@ da ferramenta pede ao Claude para mostrar a prévia primeiro e só repetir a
 chamada com `confirmar: true` depois que o usuário autorizar — é o que segura
 a escrita no celular, onde o conector roda em modo "sempre permitir".
 
+### Marcações
+
+As ferramentas de escrita aceitam as mesmas marcações que a interface do Flow:
+
+| Campo | O que é |
+|---|---|
+| `responsavel` | Quem fica com a **entrega** deste evento (vira o 👤 no card e entra na cobrança) |
+| `delegavel` | Tag **D**: tarefa que pode virar delegação permanente — aparece na aba "Tarefas para delegar" da Revisão Semanal |
+| `importante` | Destaque com **estrela** (independe das tags) |
+| `categoria` | **O** (operacional) ou **E** (estratégico) |
+
+`responsavel` e `delegavel` não são a mesma coisa: o primeiro é quem entrega,
+o segundo é a marcação de "isso pode ser delegado".
+
+`categoria` e `delegavel` são **mutuamente exclusivos**, como no controle
+segmentado da interface — pedir os dois na mesma chamada devolve erro 400
+explicando que é para escolher uma das duas tags.
+
 ```bash
 export FLOW_API_URL="https://flow.sitecnologia.tec.br"
 export FLOW_API_TOKEN="<token de leitura>"

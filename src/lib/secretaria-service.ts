@@ -1,4 +1,4 @@
-import { getEventFromAnyCalendar, getEventsInRange, listReadableCalendars, listWritableCalendars, createEvent, updateEvent, markEventComplete, setEventDelegate, setEventCategory, setEventPillar } from "@/lib/google-calendar";
+import { getEventFromAnyCalendar, getEventsInRange, listReadableCalendars, listWritableCalendars, createEvent, updateEvent, markEventComplete, markEventImportant, markEventUnimportant, markEventDelegable, markEventUndelegable, setEventDelegate, setEventCategory, setEventPillar } from "@/lib/google-calendar";
 import {
   DEFAULT_LIMIT,
   MAX_RANGE_DAYS,
@@ -288,6 +288,43 @@ function normalizarEntrada<T extends object>(body: unknown): T {
 }
 
 /**
+ * Lê um campo booleano do payload.
+ *
+ * Um valor não-booleano é erro, não falsy: `delegavel: "sim"` sendo ignorado
+ * em silêncio deixaria o evento gravado sem a marca pedida — o pior tipo de
+ * bug numa escrita.
+ *
+ * `null` é tratado como "não mexer" (patch sem mudança), igual ao `null` de
+ * `categoria` — que ali significa "limpar", porque limpar é uma operação.
+ */
+function mapaBooleano(valor: unknown, campo: string): boolean | undefined {
+  if (valor === undefined || valor === null) return undefined;
+  if (typeof valor !== "boolean") {
+    throw new HttpError(400, `\`${campo}\` deve ser booleano (true ou false).`);
+  }
+  return valor;
+}
+
+/**
+ * D, O e E são um slot só — igual ao controle segmentado do popover.
+ * Pedir os dois na mesma chamada é erro, não sobrescrita silenciosa.
+ *
+ * `categoria: null` (limpar a categoria) não conta como conflito: junto com
+ * `delegavel: true` é justamente a troca de O/E para D.
+ */
+function validaExclusividadeTags(
+  categoria: CategoriaEvento | null | undefined,
+  delegavel: boolean | undefined
+): void {
+  if (categoria !== undefined && categoria !== null && delegavel === true) {
+    throw new HttpError(
+      400,
+      "`categoria` e `delegavel: true` são mutuamente exclusivos — use `categoria` (operacional/estrategico) OU `delegavel` (tag D)."
+    );
+  }
+}
+
+/**
  * Monta o par início/fim do evento.
  *
  * Sem `horaInicio`, é um evento de dia inteiro: o Google espera o fim
@@ -345,10 +382,24 @@ function mapaPilar(pilar?: PilarEvento) {
   return pilar;
 }
 
-function mapaCategoria(categoria?: CategoriaEvento): "operational" | "strategic" | undefined {
+function mapaCategoria(categoria?: CategoriaEvento | null): "operational" | "strategic" | undefined {
   if (categoria === "operacional") return "operational";
   if (categoria === "estrategico") return "strategic";
   return undefined;
+}
+
+/**
+ * Valida a categoria antes de gravar.
+ *
+ * Sem isso, uma categoria inválida virava `undefined` → `null` → apagava a
+ * categoria do evento em silêncio. E, com a regra de exclusividade das tags,
+ * apagaria também a tag D — um erro de digitação derrubando duas marcações.
+ */
+function validaCategoria(categoria: unknown): CategoriaEvento | null | undefined {
+  if (categoria === undefined) return undefined;
+  if (categoria === null) return null;
+  if (categoria === "operacional" || categoria === "estrategico") return categoria;
+  throw new HttpError(400, "`categoria` deve ser \"operacional\" ou \"estrategico\".");
 }
 
 /** "esta" | "seguintes" | "todas" → escopo do app. */
@@ -367,6 +418,11 @@ export async function criarEvento(
   const titulo = input.titulo?.trim();
   if (!titulo) throw new HttpError(400, "`titulo` é obrigatório");
   if (!isDateKeyParam(input.data)) throw new HttpError(400, "`data` deve ser YYYY-MM-DD");
+
+  const delegavel = mapaBooleano(input.delegavel, "delegavel");
+  const importante = mapaBooleano(input.importante, "importante");
+  const categoria = validaCategoria(input.categoria);
+  validaExclusividadeTags(categoria, delegavel);
 
   const calendarId = await resolverAgendaGravavel(ctx.accessToken, input.agenda);
   const { startTime, endTime } = montarHorarios(
@@ -388,7 +444,9 @@ export async function criarEvento(
       // 0 = sem lembrete; undefined = default do Flow (5 min).
       reminderMinutes: input.lembreteMinutos === 0 ? null : input.lembreteMinutos,
       pillar: mapaPilar(input.pilar),
-      category: mapaCategoria(input.categoria),
+      category: mapaCategoria(categoria),
+      isDelegable: delegavel === true,
+      isImportant: importante === true,
       delegateTo: input.responsavel?.trim() ? { name: input.responsavel.trim() } : undefined,
       attendees: input.convidados,
       recurrence: input.recorrencia,
@@ -408,10 +466,21 @@ export async function atualizarEvento(
   const id = input.id?.trim();
   if (!id) throw new HttpError(400, "`id` é obrigatório");
 
+  // Valida antes de qualquer chamada ao Google — payload inválido não deve
+  // custar uma ida à API nem chegar a gravar qualquer coisa.
+  const delegavel = mapaBooleano(input.delegavel, "delegavel");
+  const importante = mapaBooleano(input.importante, "importante");
+  const categoria = validaCategoria(input.categoria);
+  validaExclusividadeTags(categoria, delegavel);
+
   const existente = await getEventFromAnyCalendar(ctx.accessToken, id);
   if (!existente) throw new HttpError(404, "Evento não encontrado");
   const calendarId = existente.calendarId ?? "primary";
   const escopo = mapaEscopo(input.escopo);
+
+  // Os marcadores de destaque não são aceitos pelo updateEvent — cada um é
+  // uma operação própria, no mesmo padrão de pilar/categoria/responsável.
+  const escopoMarcador = escopo === "all" ? "all" : "this";
 
   const updates: Parameters<typeof updateEvent>[2] = {};
   if (input.titulo !== undefined) updates.title = input.titulo;
@@ -453,14 +522,33 @@ export async function atualizarEvento(
   if (input.pilar !== undefined) {
     task = await setEventPillar(ctx.accessToken, task.id, calendarId, input.pilar, escopo === "all" ? "all" : "this");
   }
-  if (input.categoria !== undefined) {
+  if (categoria !== undefined) {
     task = await setEventCategory(
       ctx.accessToken,
       task.id,
       calendarId,
-      mapaCategoria(input.categoria) ?? null,
-      escopo === "all" ? "all" : "this"
+      mapaCategoria(categoria) ?? null,
+      escopoMarcador
     );
+    // D e O/E são um slot só (como no controle segmentado do popover):
+    // escolher a categoria desliga a tag D.
+    if (delegavel === undefined) {
+      task = await markEventUndelegable(ctx.accessToken, task.id, calendarId, escopoMarcador);
+    }
+  }
+  if (delegavel !== undefined) {
+    task = delegavel
+      ? await markEventDelegable(ctx.accessToken, task.id, calendarId, escopoMarcador)
+      : await markEventUndelegable(ctx.accessToken, task.id, calendarId, escopoMarcador);
+    if (delegavel) {
+      // Marcar D limpa a categoria — pela mesma regra de exclusividade.
+      task = await setEventCategory(ctx.accessToken, task.id, calendarId, null, escopoMarcador);
+    }
+  }
+  if (importante !== undefined) {
+    task = importante
+      ? await markEventImportant(ctx.accessToken, task.id, calendarId, escopoMarcador)
+      : await markEventUnimportant(ctx.accessToken, task.id, calendarId, escopoMarcador);
   }
   if (input.responsavel !== undefined) {
     const nome = input.responsavel.trim();

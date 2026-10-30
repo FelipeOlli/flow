@@ -24,6 +24,25 @@ await client.connect(transporte);
 const { tools } = await client.listTools();
 console.log(`\n✅ ferramentas: ${tools.map((t) => t.name).join(", ")}\n`);
 
+/**
+ * O schema é o que o modelo enxerga: campo ausente aqui é campo que o Claude
+ * nunca vai poder pedir. Verificar pela lista de tools evita depender de uma
+ * escrita real na agenda.
+ */
+let schemaOk = true;
+for (const nome of ["criar_evento", "atualizar_evento"]) {
+  const tool = tools.find((t) => t.name === nome);
+  const props = tool?.inputSchema?.properties ?? {};
+  const faltando = ["delegavel", "importante"].filter((c) => !(c in props));
+  if (faltando.length > 0) {
+    console.log(`✗ ${nome}: faltam ${faltando.join(", ")}`);
+    schemaOk = false;
+  } else {
+    console.log(`✅ ${nome}: delegavel + importante expostos`);
+  }
+}
+console.log();
+
 async function chamar(nome, args = {}) {
   const res = await client.callTool({ name: nome, arguments: args });
   const texto = (res.content ?? []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
@@ -40,4 +59,5 @@ await chamar("eventos_em_aberto", { dias_parado: 7 });
 await chamar("eventos_por_responsavel", { pessoa: "palmeiro" });
 
 await client.close();
-console.log("✅ smoke test do MCP ok");
+console.log(schemaOk ? "✅ smoke test do MCP ok" : "✗ smoke test do MCP com problema no schema");
+process.exit(schemaOk ? 0 : 1);
