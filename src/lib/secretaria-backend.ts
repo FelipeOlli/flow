@@ -91,4 +91,54 @@ export interface SecretariaBackend {
   listarEmAberto(params: ParamsListarEmAberto): Promise<Pagina<EventoSecretaria>>;
   listarPorResponsavel(params: ParamsListarPorResponsavel): Promise<Pagina<EventoSecretaria>>;
   listarEventoPorId(params: { id: string }): Promise<{ evento: EventoSecretaria }>;
+
+  // Escrita (Fase 4) — só liberado com o token de escrita.
+  criarEvento(params: ParamsCriarEvento): Promise<{ evento: EventoSecretaria }>;
+  atualizarEvento(params: ParamsAtualizarEvento): Promise<{ evento: EventoSecretaria }>;
+}
+
+/** Alcance da alteração em evento recorrente. */
+export type Escopo = "esta" | "seguintes" | "todas";
+
+export type PilarEvento = "trabalho" | "saude" | "familia" | "espiritualidade";
+export type CategoriaEvento = "operacional" | "estrategico";
+
+export interface ParamsCriarEvento {
+  titulo: string;
+  /** Data do evento (YYYY-MM-DD). */
+  data: string;
+  /** Hora de início (HH:MM). Sem ela, o evento é de dia inteiro. */
+  horaInicio?: string;
+  /** Hora de término (HH:MM). Sem ela: 1 hora depois do início. */
+  horaFim?: string;
+  duracaoMinutos?: number;
+  /** Nome ou id da agenda (padrão: principal). */
+  agenda?: string;
+  descricao?: string;
+  /** Minutos de aviso. 0 = sem lembrete. */
+  lembreteMinutos?: number;
+  pilar?: PilarEvento;
+  categoria?: CategoriaEvento;
+  /** Nome de quem ficou responsável pela entrega. */
+  responsavel?: string;
+  /** E-mails dos convidados. */
+  convidados?: string[];
+  /** Regras de recorrência, ex.: ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. */
+  recorrencia?: string[];
+}
+
+export interface ParamsAtualizarEvento {
+  id: string;
+  titulo?: string;
+  data?: string;
+  horaInicio?: string;
+  horaFim?: string;
+  descricao?: string;
+  lembreteMinutos?: number;
+  pilar?: PilarEvento;
+  categoria?: CategoriaEvento;
+  responsavel?: string;
+  /** "concluir" marca o evento como concluído. */
+  acao?: "concluir";
+  escopo?: Escopo;
 }

@@ -24,11 +24,12 @@ export interface SecretariaContext {
  */
 export async function secretariaRoute(
   req: NextRequest,
-  handler: (ctx: SecretariaContext) => Promise<unknown>
+  handler: (ctx: SecretariaContext) => Promise<unknown>,
+  opts?: { exigirEscrita?: boolean }
 ): Promise<NextResponse> {
   const startedAt = Date.now();
 
-  const guard = guardSecretaria(req, startedAt);
+  const guard = guardSecretaria(req, startedAt, opts);
   if (!guard.ok) return guard.response;
 
   const accessToken = await getValidAccessToken();

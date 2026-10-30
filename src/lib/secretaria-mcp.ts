@@ -2,12 +2,17 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type {
   AgendaSecretaria,
+  CategoriaEvento,
+  Escopo,
   EventoSecretaria,
+  ParamsAtualizarEvento,
+  ParamsCriarEvento,
   ParamsListarEmAberto,
   ParamsListarEventos,
   ParamsListarPorResponsavel,
   ParamsListarProximos,
   Pagina,
+  PilarEvento,
   SecretariaBackend,
 } from "./secretaria-backend";
 
@@ -26,6 +31,8 @@ import type {
 
 const BASE_URL = (process.env.FLOW_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const API_TOKEN = process.env.FLOW_API_TOKEN ?? "";
+/** Token de escrita (Fase 4). Vazio = escrita desabilitada no servidor. */
+const WRITE_TOKEN = process.env.FLOW_API_WRITE_TOKEN ?? "";
 
 /** Tempo máximo de espera por uma chamada à API do Flow. */
 const TIMEOUT_API_MS = 30_000;
@@ -42,7 +49,8 @@ export class FlowApiError extends Error {
 
 async function request<T>(
   caminho: string,
-  params: Record<string, string | number | undefined> = {}
+  params: Record<string, string | number | undefined> = {},
+  init?: { method?: "POST" | "PATCH"; body?: unknown; token?: string }
 ): Promise<T> {
   if (!API_TOKEN) {
     throw new FlowApiError(
@@ -64,7 +72,12 @@ async function request<T>(
   let res: Response;
   try {
     res = await fetch(url, {
-      headers: { Authorization: `Bearer ${API_TOKEN}` },
+      method: init?.method ?? "GET",
+      headers: {
+        Authorization: `Bearer ${init?.token || API_TOKEN}`,
+        ...(init?.body !== undefined ? { "Content-Type": "application/json" } : {}),
+      },
+      body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
       signal: controller.signal,
     });
   } catch (e) {
@@ -160,6 +173,22 @@ export function criarBackendHttp(): SecretariaBackend {
 
     listarEventoPorId: async (params: { id: string }) =>
       request<{ evento: EventoSecretaria }>(`/api/secretaria/eventos/${encodeURIComponent(params.id)}`),
+
+    criarEvento: async (params: ParamsCriarEvento) =>
+      request<{ evento: EventoSecretaria }>(
+        "/api/secretaria/eventos",
+        {},
+        { method: "POST", body: params, token: WRITE_TOKEN }
+      ),
+
+    atualizarEvento: async (params: ParamsAtualizarEvento) => {
+      const { id, ...corpo } = params;
+      return request<{ evento: EventoSecretaria }>(
+        `/api/secretaria/eventos/${encodeURIComponent(id)}`,
+        {},
+        { method: "PATCH", body: corpo, token: WRITE_TOKEN }
+      );
+    },
   };
 }
 
@@ -213,9 +242,28 @@ function erro(e: unknown) {
  * Cria o servidor MCP com todas as ferramentas da secretária.
  *
  * `backend` é onde os dados vêm. Sem ele, usa a API REST (servidor stdio).
+ * `podeEscrever` liga as ferramentas de escrita — só é true quando o cliente
+ * apresentou o token de escrita.
  */
-export function criarServidorSecretaria(backend?: SecretariaBackend): McpServer {
+export function criarServidorSecretaria(
+  backend?: SecretariaBackend,
+  opcoes?: { podeEscrever?: boolean }
+): McpServer {
   const dados = backend ?? criarBackendHttp();
+  const podeEscrever = opcoes?.podeEscrever ?? false;
+
+  const semPermissao = {
+    content: [
+      {
+        type: "text" as const,
+        text:
+          "Este conector está com o token de LEITURA: só consulta a agenda. " +
+          "Para criar, editar ou concluir eventos no Flow, o conector precisa do " +
+          "token de escrita (FLOW_API_WRITE_TOKEN).",
+      },
+    ],
+    isError: true,
+  };
 
   const server = new McpServer({
     name: "flow-secretaria",
@@ -369,6 +417,163 @@ export function criarServidorSecretaria(backend?: SecretariaBackend): McpServer 
       try {
         const { evento } = await dados.listarEventoPorId({ id });
         return resposta({ evento }, formatarEvento(evento));
+      } catch (e) {
+        return erro(e);
+      }
+    }
+  );
+
+  // ───────────────────────── Escrita (Fase 4) ─────────────────────────
+  // Toda ferramenta de escrita exige `confirmar: true`. Sem isso, ela devolve
+  // só a prévia do que vai acontecer — o Claude mostra ao usuário, o usuário
+  // responde "pode criar", e aí a chamada é repetida com confirmar: true.
+
+  server.registerTool(
+    "criar_evento",
+    {
+      title: "Criar evento no Flow",
+      description:
+        "Cria um evento na agenda do Flow. IMPORTANTE: chame em duas etapas — primeiro " +
+        "SEM `confirmar`, para mostrar ao usuário o que será criado, e só depois que o " +
+        "usuário autorizar, chame de novo com `confirmar: true`. Nunca grave sem ter " +
+        "pedido confirmação.",
+      inputSchema: {
+        titulo: z.string().min(1).describe("Título do evento."),
+        data: z.string().describe("Data do evento (YYYY-MM-DD)."),
+        hora_inicio: z.string().optional().describe("Hora de início (HH:MM). Sem ela: dia inteiro."),
+        hora_fim: z.string().optional().describe("Hora de término (HH:MM). Padrão: 1h depois do início."),
+        duracao_minutos: z.number().int().optional().describe("Duração em minutos (se não houver hora_fim)."),
+        agenda: z.string().optional().describe("Nome ou id da agenda (ex.: \"DevPoint\"). Padrão: principal."),
+        descricao: z.string().optional().describe("Descrição do evento."),
+        lembrete_minutos: z.number().int().optional().describe("Aviso antes do início. 0 = sem lembrete."),
+        pilar: z
+          .enum(["trabalho", "saude", "familia", "espiritualidade"])
+          .optional()
+          .describe("Pilar do evento."),
+        categoria: z.enum(["operacional", "estrategico"]).optional().describe("Categoria O/E."),
+        responsavel: z.string().optional().describe("Nome de quem fica responsável pela entrega."),
+        convidados: z.array(z.string()).optional().describe("E-mails dos convidados."),
+        confirmar: z.boolean().optional().describe("Gravar de verdade. Só true depois do usuário autorizar."),
+      },
+    },
+    async (args) => {
+      if (!podeEscrever) return semPermissao;
+
+      const quando = args.hora_inicio
+        ? `${args.data} ${args.hora_inicio}${args.hora_fim ? `–${args.hora_fim}` : ""}`
+        : `${args.data} (dia inteiro)`;
+
+      if (!args.confirmar) {
+        const linhas = [
+          "Vou criar no Flow:",
+          `• ${args.titulo}`,
+          `• Quando: ${quando}`,
+          args.agenda ? `• Agenda: ${args.agenda}` : "",
+          args.descricao ? `• Descrição: ${args.descricao}` : "",
+          args.responsavel ? `• Responsável: ${args.responsavel}` : "",
+          "",
+          "Confirme para eu gravar.",
+        ].filter(Boolean);
+        return { content: [{ type: "text" as const, text: linhas.join("\n") }] };
+      }
+
+      try {
+        const { evento } = await dados.criarEvento({
+          titulo: args.titulo,
+          data: args.data,
+          horaInicio: args.hora_inicio,
+          horaFim: args.hora_fim,
+          duracaoMinutos: args.duracao_minutos,
+          agenda: args.agenda,
+          descricao: args.descricao,
+          lembreteMinutos: args.lembrete_minutos,
+          pilar: args.pilar as PilarEvento | undefined,
+          categoria: args.categoria as CategoriaEvento | undefined,
+          responsavel: args.responsavel,
+          convidados: args.convidados,
+        });
+        return resposta({ evento }, `Criado ✓ ${formatarEvento(evento)}`);
+      } catch (e) {
+        return erro(e);
+      }
+    }
+  );
+
+  server.registerTool(
+    "atualizar_evento",
+    {
+      title: "Atualizar evento no Flow",
+      description:
+        "Altera um evento existente (título, data, hora, descrição, lembrete, pilar, " +
+        "categoria, responsável) ou marca como concluído. IMPORTANTE: chame em duas " +
+        "etapas — primeiro SEM `confirmar` para mostrar ao usuário o que vai mudar, e " +
+        "só depois que o usuário autorizar, chame de novo com `confirmar: true`.",
+      inputSchema: {
+        id: z.string().min(1).describe("Id do evento (campo `id` da listagem)."),
+        titulo: z.string().optional().describe("Novo título."),
+        data: z.string().optional().describe("Nova data (YYYY-MM-DD)."),
+        hora_inicio: z.string().optional().describe("Nova hora de início (HH:MM)."),
+        hora_fim: z.string().optional().describe("Nova hora de término (HH:MM)."),
+        descricao: z.string().optional().describe("Nova descrição."),
+        lembrete_minutos: z.number().int().optional().describe("Novo aviso. 0 = sem lembrete."),
+        pilar: z
+          .enum(["trabalho", "saude", "familia", "espiritualidade"])
+          .optional()
+          .describe("Novo pilar."),
+        categoria: z.enum(["operacional", "estrategico"]).optional().describe("Nova categoria."),
+        responsavel: z.string().optional().describe("Novo responsável. String vazia remove a delegação."),
+        acao: z.enum(["concluir"]).optional().describe("\"concluir\" marca o evento como concluído."),
+        escopo: z
+          .enum(["esta", "seguintes", "todas"])
+          .optional()
+          .describe("Alcance em recorrentes. Padrão: só esta ocorrência."),
+        confirmar: z.boolean().optional().describe("Gravar de verdade. Só true depois do usuário autorizar."),
+      },
+    },
+    async (args) => {
+      if (!podeEscrever) return semPermissao;
+
+      if (!args.confirmar) {
+        const mudancas = Object.entries({
+          titulo: args.titulo,
+          data: args.data,
+          hora_inicio: args.hora_inicio,
+          hora_fim: args.hora_fim,
+          descricao: args.descricao,
+          lembrete_minutos: args.lembrete_minutos,
+          pilar: args.pilar,
+          categoria: args.categoria,
+          responsavel: args.responsavel,
+          acao: args.acao,
+        })
+          .filter(([, valor]) => valor !== undefined)
+          .map(([chave, valor]) => `• ${chave}: ${valor}`);
+
+        const linhas = [
+          `Vou atualizar o evento ${args.id}:`,
+          ...mudancas,
+          "",
+          "Confirme para eu gravar.",
+        ];
+        return { content: [{ type: "text" as const, text: linhas.join("\n") }] };
+      }
+
+      try {
+        const { evento } = await dados.atualizarEvento({
+          id: args.id,
+          titulo: args.titulo,
+          data: args.data,
+          horaInicio: args.hora_inicio,
+          horaFim: args.hora_fim,
+          descricao: args.descricao,
+          lembreteMinutos: args.lembrete_minutos,
+          pilar: args.pilar as PilarEvento | undefined,
+          categoria: args.categoria as CategoriaEvento | undefined,
+          responsavel: args.responsavel,
+          acao: args.acao,
+          escopo: args.escopo as Escopo | undefined,
+        });
+        return resposta({ evento }, `Atualizado ✓ ${formatarEvento(evento)}`);
       } catch (e) {
         return erro(e);
       }

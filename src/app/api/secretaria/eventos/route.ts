@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { secretariaRoute } from "@/lib/secretaria-route";
-import { listarEventos } from "@/lib/secretaria-service";
+import { criarEvento, listarEventos } from "@/lib/secretaria-service";
 import { DEFAULT_LIMIT } from "@/lib/secretaria";
+import type { ParamsCriarEvento } from "@/lib/secretaria-backend";
 
 /**
  * Lista eventos por período, agenda e status.
@@ -22,5 +23,22 @@ export async function GET(req: NextRequest) {
       offset: Number(req.nextUrl.searchParams.get("offset") ?? 0),
       incluirFeriados: req.nextUrl.searchParams.get("incluir_feriados") === "true",
     })
+  );
+}
+
+/**
+ * Cria um evento (Fase 4).
+ *
+ * Exige o token de escrita (`FLOW_API_WRITE_TOKEN`) — o token de leitura não
+ * passa. Body no mesmo formato do service: titulo, data, horaInicio, ...
+ */
+export async function POST(req: NextRequest) {
+  return secretariaRoute(
+    req,
+    async (ctx) => {
+      const body = (await req.json()) as ParamsCriarEvento;
+      return criarEvento(ctx, body);
+    },
+    { exigirEscrita: true }
   );
 }

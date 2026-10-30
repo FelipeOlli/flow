@@ -179,6 +179,9 @@ flow/
 - **Rota `/mcp`**: `WebStandardStreamableHTTPServerTransport` (SDK 1.32) em modo **stateless** (servidor+transporte novos por requisição) → o app pode reiniciar sem quebrar o conector. `server.connect(transport)` **antes** de `handleRequest` — sem isso a resposta sai vazia. Auth por `Authorization: Bearer <FLOW_API_TOKEN>` (mesmo token da API) e CORS liberado.
 - **O `Accept` é normalizado antes do transporte**: o SDK exige `application/json` **e** `text/event-stream` no POST e responde 406 se faltar um dos dois — o conector do claude.ai reporta isso como "fetch failed". A rota ainda responde no formato que o cliente pediu (JSON ou SSE) e delega GET/DELETE ao transporte.
 - **Backend direto no app**: as ferramentas do `/mcp` consultam a agenda no mesmo processo (`src/lib/secretaria-service.ts`), sem hop HTTP — dentro do container `localhost:3000` não é confiável. O servidor stdio usa o backend HTTP (roda fora do app). Regra única de negócio, dois caminhos.
+- **Escrita (Fase 4)**: `criar_evento` e `atualizar_evento`, liberadas só com `FLOW_API_WRITE_TOKEN`. Toda escrita exige `confirmar: true` — sem ele, a ferramenta devolve só a prévia e não grava. **Sem ferramenta de apagar** (excluir por IA não volta).
+- **Guarda da API**: `checkToken` aceita o token de leitura **ou** o de escrita; `guardSecretaria(req, startedAt, { exigirEscrita: true })` exige o de escrita. A API REST exige o prefixo `Bearer` — a rota `/mcp` é a única que aceita outras formas de header (limitação do conector do claude.ai).
+- **Eventos de dia inteiro**: `createEvent` detecta início só-data (`YYYY-MM-DD`) e manda `start.date`/`end.date` (fim exclusivo = dia seguinte), como o Google espera.
 - **`/mcp` está fora do middleware NextAuth** (igual a `/api/secretaria`) — a rota faz a própria checagem do bearer.
 - **No celular**: em claude.ai, *Settings → Connectors → Add custom connector* → URL `https://flow.sitecnologia.tec.br/mcp` + header `Authorization: Bearer <FLOW_API_TOKEN>`. Exige **plano pago**. O app do celular usa os mesmos conectores da conta.
 - **Node roda o TS direto** (type stripping, Node 22.18+). Sem build — mas o `node --experimental-strip-types` **não aceita parameter properties** (`constructor(public x: number)`) nem enums. Imports entre arquivos do MCP precisam da extensão `.ts` (o `tsconfig.json` do app exclui `mcp/` por causa disso).
@@ -299,6 +302,35 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 ---
 
 ## 6. Última Sessão
+
+### 2026-10-29 (c) — Fase 4: escrita no Flow pelo Claude (MCP)
+
+**O que foi feito:**
+
+1. **Duas ferramentas de escrita** no MCP: `criar_evento` e `atualizar_evento` (com `acao: "concluir"`). O Claude no celular agora cria e edita eventos direto no Flow, em vez de usar o Google Calendar dele — o que perderia migração, pilares, lembrete e cobrança.
+2. **Token de escrita separado** (`FLOW_API_WRITE_TOKEN`). O token de leitura continua só leitura: com ele, as ferramentas de escrita respondem "este conector não tem permissão de escrita". O token de escrita também lê (é superconjunto). No conector do claude.ai, é o token de escrita que dá poder de criar.
+3. **Confirmação obrigatória**: toda escrita exige `confirmar: true`. Sem o campo, a ferramenta devolve **só a prévia** do que vai acontecer — a descrição da ferramenta manda o Claude mostrar a prévia e só repetir a chamada depois que o usuário autorizar. É o que segura a escrita no celular, onde o conector roda em "sempre permitir".
+4. **Endpoints HTTP de escrita**: `POST /api/secretaria/eventos` e `PATCH /api/secretaria/eventos/{id}`, com `exigirEscrita` na guarda. O `checkToken` passou a aceitar token de leitura **ou** de escrita; a exigência de escrita é opt-in por rota.
+5. **Payload tolerante**: as funções de escrita aceitam camelCase **e** snake_case (as ferramentas MCP falam snake_case, a API HTTP camelCase). Sem normalizar, um campo em snake_case era ignorado em silêncio — o pior tipo de bug numa escrita.
+6. **`createEvent` passou a criar evento de dia inteiro** quando o início é só data (`YYYY-MM-DD`), com fim exclusivo (dia seguinte), como o Google espera.
+
+**Bugs achados no caminho:**
+- `acao: "concluir"` encerrava o fluxo e descartava os outros campos da mesma chamada (o título não era alterado). Concluir passou a ser a última etapa.
+- A API REST passou a aceitar token sem o prefixo `Bearer` (quebrava o contrato documentado) — a tolerância ficou só na rota `/mcp`, que é onde o conector do claude.ai limita os cabeçalhos.
+
+**Arquivos novos:** (nenhum — a Fase 4 cabia nos arquivos da Fase 1/2)
+**Arquivos modificados:** `src/lib/secretaria-service.ts` (escrita) · `src/lib/secretaria-backend.ts` (contrato) · `src/lib/secretaria-mcp.ts` (ferramentas) · `src/lib/secretaria-auth.ts` (token de escrita) · `src/lib/secretaria-route.ts` · `src/lib/google-calendar.ts` (dia inteiro) · `src/app/mcp/route.ts` · `src/app/api/secretaria/eventos/route.ts` · `src/app/api/secretaria/eventos/[id]/route.ts` · `tests/secretaria.test.mjs` · `.env.example` · `mcp/README.md`
+
+**Verificação:** `npx tsc --noEmit` limpo, `npm run build` OK, `npm run test:secretaria` → 26/26 (5 novos: portão de escrita e validação — sem gravar nada na agenda real). À mão, contra a agenda real: criação com hora, criação de dia inteiro, mover (data + hora), alterar título + concluir em uma chamada; token de leitura barrado na escrita; prévia **sem** `confirmar` não gravou nada. Eventos de teste apagados no fim.
+
+**Decisões:**
+- **Fase 4 liberada com o Felipe** ("Implementar Fase 4 agora") — antes estava adiada por decisão do plano
+- **Confirmação no schema (`confirmar: true`)**, e não um diálogo do app: é o que funciona num conector remoto que não tem UI de aprovação
+- **Sem ferramenta de apagar**: excluir evento por IA é o tipo de operação que não volta — fica fora
+
+**Próximos passos:** no EasyPanel, gerar `FLOW_API_WRITE_TOKEN` e trocar o header do conector do claude.ai para esse token; aí o Claude cria eventos no Flow.
+
+---
 
 ### 2026-10-29 (b) — Conector do claude.ai: "fetch failed" no /mcp
 

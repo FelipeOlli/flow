@@ -27,23 +27,33 @@ const CORS_HEADERS: Record<string, string> = {
 };
 
 /**
- * Token válido no pedido.
+ * Tokens candidatos no pedido.
  *
  * O conector do claude.ai só deixa usar nomes de cabeçalho aprovados pela
  * Anthropic — por isso aceitamos os nomes comuns, não só `Authorization`.
  */
-function autorizado(req: NextRequest): boolean {
-  const configured = process.env.FLOW_API_TOKEN?.trim();
-  if (!configured) return false;
-
+function tokensApresentados(req: NextRequest): string[] {
   const authorization = req.headers.get("authorization") ?? "";
-  const candidatos = [
+  return [
     authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : authorization.trim(),
     req.headers.get("x-api-key")?.trim() ?? "",
     req.headers.get("x-flow-token")?.trim() ?? "",
-  ];
+  ].filter((token) => token.length > 0);
+}
 
-  return candidatos.some((token) => token.length > 0 && token === configured);
+/**
+ * O token apresentado define o que o MCP pode fazer:
+ * - token de leitura  → só consulta;
+ * - token de escrita → consulta e grava.
+ */
+function classificarToken(req: NextRequest): "leitura" | "escrita" | null {
+  const readToken = process.env.FLOW_API_TOKEN?.trim();
+  const writeToken = process.env.FLOW_API_WRITE_TOKEN?.trim();
+  const tokens = tokensApresentados(req);
+  if (tokens.length === 0) return null;
+  if (writeToken && tokens.includes(writeToken)) return "escrita";
+  if (readToken && tokens.includes(readToken)) return "leitura";
+  return null;
 }
 
 function log(req: NextRequest, status: number, duracaoMs: number, extra?: string) {
@@ -77,7 +87,8 @@ function log(req: NextRequest, status: number, duracaoMs: number, extra?: string
 async function tratar(req: NextRequest): Promise<Response> {
   const inicio = Date.now();
 
-  if (!autorizado(req)) {
+  const tipoToken = classificarToken(req);
+  if (!tipoToken) {
     log(req, 401, Date.now() - inicio);
     return NextResponse.json(
       { erro: "Token inválido ou ausente. Use: Authorization: Bearer <FLOW_API_TOKEN>" },
@@ -102,7 +113,11 @@ async function tratar(req: NextRequest): Promise<Response> {
   // processo, sem passar por HTTP. Dentro do container, `localhost:3000` nem
   // sempre é alcançável (IPv6, porta trocada pelo proxy) — e o token do Google
   // já está aqui, então o hop interno só trazia risco.
-  const server = criarServidorSecretaria(criarBackendDireto());
+  //
+  // As ferramentas de escrita só ficam ativas com o token de escrita.
+  const server = criarServidorSecretaria(criarBackendDireto(), {
+    podeEscrever: tipoToken === "escrita",
+  });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     // Responde no formato que o cliente aceitou.

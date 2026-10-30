@@ -347,11 +347,13 @@ export async function createEvent(
 ): Promise<FlowTask> {
   const calendar = getClient(accessToken);
   const calendarId = input.calendarId ?? "primary";
+  // Evento de dia inteiro: o Google espera `date` (sem hora), com fim exclusivo.
+  const diaInteiro = /^\d{4}-\d{2}-\d{2}$/.test(input.startTime);
   const requestBody: calendar_v3.Schema$Event = {
     summary: input.title,
     description: input.description,
-    start: { dateTime: input.startTime, timeZone },
-    end: { dateTime: input.endTime, timeZone },
+    start: diaInteiro ? { date: input.startTime } : { dateTime: input.startTime, timeZone },
+    end: diaInteiro ? { date: input.endTime } : { dateTime: input.endTime, timeZone },
     recurrence: input.recurrence?.length ? input.recurrence : undefined,
   };
 

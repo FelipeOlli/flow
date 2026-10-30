@@ -13,6 +13,7 @@ import { spawn } from "node:child_process";
 const PORT = Number(process.env.FLOW_TEST_PORT ?? 3111);
 const BASE = `http://localhost:${PORT}`;
 const TOKEN = "token-de-teste-da-secretaria";
+const WRITE_TOKEN = "token-de-teste-da-escrita";
 
 let server;
 
@@ -21,6 +22,7 @@ function startServer() {
     env: {
       ...process.env,
       FLOW_API_TOKEN: TOKEN,
+      FLOW_API_WRITE_TOKEN: WRITE_TOKEN,
       FLOW_TEST_SERVER: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -44,17 +46,22 @@ async function waitForServer(timeoutMs = 120_000) {
   throw new Error("Servidor não subiu a tempo");
 }
 
-async function api(path, { token, method = "GET" } = {}) {
+async function api(path, { token, method = "GET", body } = {}) {
   const headers = {};
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${BASE}${path}`, { method, headers });
-  let body = null;
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  let parsed = null;
   try {
-    body = await res.json();
+    parsed = await res.json();
   } catch {
-    body = null;
+    parsed = null;
   }
-  return { status: res.status, body };
+  return { status: res.status, body: parsed };
 }
 
 before(async () => {
@@ -274,4 +281,56 @@ test("GET /eventos/{id} devolve o evento quando existe", async () => {
   const { status, body } = await api(`/api/secretaria/eventos/${evento.id}`, { token: TOKEN });
   assert.equal(status, 200);
   assert.equal(body.evento.id, evento.id);
+});
+
+// ───────────────────────────── Escrita (Fase 4) ─────────────────────────────
+// Aqui só cobrimos o portão de permissão e a validação — os testes não
+// gravam nada na agenda real. A gravação em si foi verificada à mão.
+
+test("POST /eventos com token de leitura responde 401", async () => {
+  const { status, body } = await api("/api/secretaria/eventos", {
+    token: TOKEN,
+    method: "POST",
+    body: { titulo: "não deve criar", data: "2026-12-01" },
+  });
+  assert.equal(status, 401);
+  assert.match(body.erro, /escrita/i);
+});
+
+test("POST /eventos sem token responde 401", async () => {
+  const { status } = await api("/api/secretaria/eventos", {
+    method: "POST",
+    body: { titulo: "não deve criar", data: "2026-12-01" },
+  });
+  assert.equal(status, 401);
+});
+
+test("POST /eventos com token de escrita valida o payload", async () => {
+  const { status, body } = await api("/api/secretaria/eventos", {
+    token: WRITE_TOKEN,
+    method: "POST",
+    body: { data: "2026-12-01" },
+  });
+  assert.equal(status, 400);
+  assert.match(body.erro, /titulo/i);
+});
+
+test("POST /eventos com token de escrita recusa data inválida", async () => {
+  const { status, body } = await api("/api/secretaria/eventos", {
+    token: WRITE_TOKEN,
+    method: "POST",
+    body: { titulo: "não deve criar", data: "01/12/2026" },
+  });
+  assert.equal(status, 400);
+  assert.match(body.erro, /YYYY-MM-DD/);
+});
+
+test("PATCH /eventos/{id} com token de leitura responde 401", async () => {
+  const { status, body } = await api("/api/secretaria/eventos/qualquer-id", {
+    token: TOKEN,
+    method: "PATCH",
+    body: { titulo: "não deve mudar" },
+  });
+  assert.equal(status, 401);
+  assert.match(body.erro, /escrita/i);
 });

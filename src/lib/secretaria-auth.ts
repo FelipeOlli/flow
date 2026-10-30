@@ -3,8 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 
 /**
  * Autenticação e proteção da API da secretária.
- * Token único de leitura, em variável de ambiente (FLOW_API_TOKEN).
- * O token do Google nunca sai do servidor — a API usa o token store interno.
+ *
+ * Dois tokens, em variáveis de ambiente:
+ * - `FLOW_API_TOKEN` — leitura.
+ * - `FLOW_API_WRITE_TOKEN` — escrita (criar/editar/concluir eventos).
+ *
+ * O token de escrita também lê (é um superconjunto), então dá pra usar ele
+ * em qualquer cliente. O token do Google nunca sai do servidor — a API usa o
+ * token store interno.
  */
 
 const RATE_LIMIT_MAX = 120; // requisições
@@ -36,20 +42,66 @@ export interface TokenCheck {
   erro?: string;
 }
 
-export function checkToken(req: NextRequest): TokenCheck {
-  const configured = process.env.FLOW_API_TOKEN?.trim();
+/**
+ * Token apresentado na requisição.
+ *
+ * A API REST exige o prefixo `Bearer ` — a rota `/mcp` é que aceita outras
+ * formas, porque o conector do claude.ai só deixa usar nomes de cabeçalho
+ * aprovados por ele.
+ */
+export function extrairToken(req: NextRequest): string {
+  const header = req.headers.get("authorization") ?? "";
+  return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+}
+
+/**
+ * Confere o token da requisição.
+ *
+ * Sem `exigirEscrita`, aceita o token de leitura **ou** o de escrita.
+ * Com `exigirEscrita`, só o token de escrita passa.
+ */
+export function checkToken(
+  req: NextRequest,
+  opts?: { exigirEscrita?: boolean }
+): TokenCheck {
+  const readToken = process.env.FLOW_API_TOKEN?.trim();
+  const writeToken = process.env.FLOW_API_WRITE_TOKEN?.trim();
+  const token = extrairToken(req);
+
+  if (!token) {
+    return {
+      ok: false,
+      status: 401,
+      erro: "Token ausente. Use: Authorization: Bearer <FLOW_API_TOKEN>",
+    };
+  }
+
+  if (opts?.exigirEscrita) {
+    if (!writeToken) {
+      return {
+        ok: false,
+        status: 503,
+        erro: "FLOW_API_WRITE_TOKEN não configurado no servidor — escrita desabilitada",
+      };
+    }
+    if (!timingSafeEqual(token, writeToken)) {
+      return { ok: false, status: 401, erro: "Token sem permissão de escrita" };
+    }
+    return { ok: true, status: 200 };
+  }
+
+  const configured = readToken || writeToken;
   if (!configured) {
     return { ok: false, status: 503, erro: "FLOW_API_TOKEN não configurado no servidor" };
   }
-  const header = req.headers.get("authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-  if (!token) {
-    return { ok: false, status: 401, erro: "Token ausente. Use: Authorization: Bearer <FLOW_API_TOKEN>" };
+  if (timingSafeEqual(token, configured)) {
+    return { ok: true, status: 200 };
   }
-  if (!timingSafeEqual(token, configured)) {
-    return { ok: false, status: 401, erro: "Token inválido" };
+  // Token de escrita também lê.
+  if (writeToken && timingSafeEqual(token, writeToken)) {
+    return { ok: true, status: 200 };
   }
-  return { ok: true, status: 200 };
+  return { ok: false, status: 401, erro: "Token inválido" };
 }
 
 export interface RateLimitResult {
@@ -97,8 +149,12 @@ export type GuardResult =
  * Guarda comum das rotas: token + rate limit. Devolve a resposta de erro
  * pronta (401/429/503) quando o acesso não é permitido.
  */
-export function guardSecretaria(req: NextRequest, startedAt: number): GuardResult {
-  const token = checkToken(req);
+export function guardSecretaria(
+  req: NextRequest,
+  startedAt: number,
+  opts?: { exigirEscrita?: boolean }
+): GuardResult {
+  const token = checkToken(req, opts);
   if (!token.ok) {
     const res = NextResponse.json({ erro: token.erro }, { status: token.status });
     logAccess(req, token.status, startedAt, { motivo: "token" });

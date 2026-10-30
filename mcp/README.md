@@ -34,6 +34,27 @@ As ferramentas são as mesmas nos dois casos — o módulo compartilhado é
 | `eventos_por_responsavel` | Eventos delegados a uma pessoa — *"o que está com o André"* |
 | `listar_agendas` | Nome e id de cada agenda |
 | `detalhe_evento` | Um evento pelo id, com descrição e convidados |
+| `criar_evento` | Cria um evento *(escrita)* |
+| `atualizar_evento` | Altera um evento ou marca como concluído *(escrita)* |
+
+## Escrita (token separado)
+
+As ferramentas de escrita só ficam ativas quando o cliente apresenta o
+**token de escrita** (`FLOW_API_WRITE_TOKEN`). Com o token de leitura, elas
+respondem que o conector não tem permissão de escrita — a leitura continua
+funcionando normalmente.
+
+Toda ferramenta de escrita exige `confirmar: true`. Sem esse campo, ela
+devolve **só a prévia** do que vai acontecer (sem gravar nada). A descrição
+da ferramenta pede ao Claude para mostrar a prévia primeiro e só repetir a
+chamada com `confirmar: true` depois que o usuário autorizar — é o que segura
+a escrita no celular, onde o conector roda em modo "sempre permitir".
+
+```bash
+export FLOW_API_URL="https://flow.sitecnologia.tec.br"
+export FLOW_API_TOKEN="<token de leitura>"
+export FLOW_API_WRITE_TOKEN="<token de escrita>"
+```
 
 ## Requisitos
 
