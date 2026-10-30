@@ -323,11 +323,22 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 **Verificação:** `npx tsc --noEmit` limpo (app e mcp), `npm run build` OK, `npm run test:secretaria` → 31/31. A verificação viva contra a agenda real (criar evento de teste com as tags, conferir no popover e apagar) ficou pendente — o classificador de comandos bloqueou a escrita via curl na agenda compartilhada.
 
+**Verificação do caminho de escrita (local, sem tocar na agenda):** contra o app local com `FLOW_API_WRITE_TOKEN`, `PATCH /api/secretaria/eventos/{id}` com id inexistente devolve — `categoria` + `delegavel: true` → **400** "mutuamente exclusivos"; `delegavel: "sim"` → **400** "deve ser booleano"; token de leitura → **401** "Token sem permissão de escrita"; `delegavel: true` válido → **404 "Evento não encontrado"**, ou seja, passou pela validação e chegou ao Google. Pelo MCP (stdio, apontado para o app local) o `listTools` expõe `delegavel` e `importante` em `criar_evento` e `atualizar_evento`, e a prévia da `atualizar_evento` mostra "• delegavel: true".
+
+**Deploy:** o push para `main` **não** dispara build — o serviço `sintel/full_flow` está com `source.autoDeploy: false`. O deploy precisa ser acionado no EasyPanel.
+
+**API do EasyPanel mudou** (isso quebrou todas as ferramentas do MCP `easypanel-mcp-multi`, que devolviam 404): a base deixou de ser `/api/trpc` e passou a ser `/api/rpc`; o procedimento vai no caminho com **"/"** (`projects/listProjects`), e não com ponto — o `rpc.method` com ponto é só etiqueta de telemetria; o corpo é `{ json: <input> }` e a resposta vem como `{ json: <dado> }`. Os procedimentos também mudaram de nome: `projects.list` → `projects.listProjects`, `projects.get` → `projects.inspectProject`, `services.get` → `services.app.inspectService` (o serviço é qualificado pelo tipo: app, compose, box, mysql…), `deployments.create` → `services.app.deployService`, `monitor.getServiceLogs` → `logs.queryServiceLogs`.
+
 **Decisões:**
 - **Espelhar a UI na API** (decidido com o Felipe): D/O/E exclusivos, em vez de deixar a IA marcar "operacional + delegável" ao mesmo tempo — que o popover não representa e que o próximo salvamento pela interface apagaria.
 - **Erro explícito em vez de precedência silenciosa**: quando a IA erra a combinação, ela recebe o 400 e escolhe de novo, em vez de o app adivinhar o que ela quis dizer.
 
-**Próximos passos:** redeploy no EasyPanel e, depois, marcar o evento do Chrome (`5mq9q3n9cvf09u4r9bragv0jao`) com `delegavel: true` — **atenção**: pela exclusividade, isso limpa a categoria "operacional" dele; se preferir manter "operacional", o evento fica como está (a tag D é inacessível por design). O conector do Claude Code ainda precisa de `FLOW_API_WRITE_TOKEN` no ambiente (`claude mcp add`/registro) — o `~/.claude.json` atual só tem o token de leitura.
+**Próximos passos:**
+1. **Redeploy** do serviço `sintel/full_flow` no EasyPanel (o push para `main` não basta — `autoDeploy: false`).
+2. **Dar `FLOW_API_WRITE_TOKEN` ao conector do Claude Code** — o `~/.claude.json` atual só tem o token de leitura, e é por isso que `atualizar_evento` responde "este conector só lê".
+3. **Marcar o evento do Chrome** (`5mq9q3n9cvf09u4r9bragv0jao`) com `delegavel: true` — **atenção**: pela exclusividade, isso limpa a categoria "operacional" dele; se preferir manter "operacional", o evento fica como está (a tag D é inacessível por design).
+
+O script `mcp/aplica-delegavel.mjs` faz o passo 3 pelo mesmo caminho que o Claude no celular usa (servidor MCP → API de escrita): primeiro mostra a prévia, depois grava com `confirmar: true`. Ele só funciona depois do redeploy (é o servidor de produção que precisa conhecer o campo `delegavel`) e com o token de escrita no ambiente.
 
 ---
 
