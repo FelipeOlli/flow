@@ -16,6 +16,7 @@ import {
   organizadoPeloUsuario,
   podarVistos,
   registrarVisto,
+  selecionarAlvoRsvp,
   selecionarConvitesPendentes,
   selecionarNovas,
   seriesRespondidas,
@@ -443,4 +444,120 @@ test("convite pendente não é liberado", () => {
     participantes: [{ email: FELIPE, nome: "Felipe", responseStatus: "needsAction" }],
   });
   assert.deepEqual(seriesRespondidas([pendente], FELIPE), []);
+});
+
+// --- Alvo do RSVP ----------------------------------------------------------
+// Onde a resposta do convite é gravada. O par evento+agenda tem que ser da
+// MESMA cópia: misturar o id de uma agenda com o id de outra dá "evento
+// não encontrado" na hora de gravar.
+
+test("RSVP mira a cópia onde o usuário é o participante self", () => {
+  const naCompartilhada = evento({
+    id: "evt-compartilhado",
+    agendaId: CF,
+    agendaNome: "TI CF Contabilidade",
+    agendaPessoal: false,
+    participantes: [{ email: FELIPE, responseStatus: "needsAction" }],
+  });
+  const naPessoal = evento({
+    id: "evt-pessoal",
+    agendaId: FELIPE,
+    agendaNome: "Felipe Oliveira",
+    agendaPessoal: true,
+    participantes: [{ email: FELIPE, responseStatus: "needsAction", self: true }],
+  });
+
+  const alvo = selecionarAlvoRsvp([naCompartilhada, naPessoal], FELIPE);
+  assert.equal(alvo.eventId, "evt-pessoal");
+  assert.equal(alvo.calendarId, FELIPE);
+});
+
+test("RSVP cai pra agenda pessoal quando a compartilhada é a dona", () => {
+  // Na agenda compartilhada o `self` é a conta da agenda, não o Felipe —
+  // responder ali mudaria a presença de quem é dono da agenda.
+  const naCompartilhada = evento({
+    id: "evt-compartilhado",
+    agendaId: CF,
+    agendaPessoal: false,
+    participantes: [
+      { email: CF, responseStatus: "accepted", self: true },
+      { email: FELIPE, responseStatus: "needsAction" },
+    ],
+  });
+
+  const alvo = selecionarAlvoRsvp([naCompartilhada], FELIPE);
+  assert.equal(alvo.calendarId, CF);
+  assert.equal(alvo.eventId, "evt-compartilhado");
+});
+
+test("RSVP mira a ocorrência anunciada, não outra da série", () => {
+  // Cada ocorrência de uma série tem id próprio. Responder na errada
+  // seria responder a outro dia.
+  const novembro = evento({
+    id: "occ-nov",
+    iCalUid: "serie1",
+    agendaId: FELIPE,
+    agendaPessoal: true,
+    inicio: "2026-11-25T13:00:00Z",
+    participantes: [{ email: FELIPE, responseStatus: "needsAction", self: true }],
+  });
+  const dezembro = evento({
+    id: "occ-dez",
+    iCalUid: "serie1",
+    agendaId: FELIPE,
+    agendaPessoal: true,
+    inicio: "2026-12-02T13:00:00Z",
+    participantes: [{ email: FELIPE, responseStatus: "needsAction", self: true }],
+  });
+
+  const alvo = selecionarAlvoRsvp([novembro, dezembro], FELIPE, "2026-11-25T13:00:00Z");
+  assert.equal(alvo.eventId, "occ-nov");
+});
+
+test("RSVP devolve undefined quando o usuário não participa do evento", () => {
+  const e = evento({
+    participantes: [{ email: "outro@x.com", responseStatus: "needsAction" }],
+  });
+  assert.equal(selecionarAlvoRsvp([e], FELIPE), undefined);
+});
+
+test("convite pendente traz o alvo do RSVP", () => {
+  const e = evento({
+    agendaId: FELIPE,
+    agendaNome: "Felipe Oliveira",
+    agendaPessoal: true,
+    participantes: [{ email: FELIPE, responseStatus: "needsAction", self: true }],
+  });
+  const convites = selecionarConvitesPendentes([e], { emailUsuario: FELIPE });
+  assert.equal(convites.length, 1);
+  assert.ok(convites[0].rsvp);
+  assert.equal(convites[0].rsvp.eventId, e.id);
+  assert.equal(convites[0].rsvp.calendarId, FELIPE);
+});
+
+test("mensagem de convite só promete os botões quando há alvo de RSVP", () => {
+  const e = evento({
+    agendaId: FELIPE,
+    agendaNome: "Felipe Oliveira",
+    agendaPessoal: true,
+    participantes: [{ email: FELIPE, responseStatus: "needsAction", self: true }],
+  });
+  const classificacao = classificarChegada(e, { emailUsuario: FELIPE });
+
+  const semBotao = montarMensagem(
+    { ...classificacao, evento: e, agendas: [FELIPE] },
+    TZ
+  );
+  assert.doesNotMatch(semBotao.telegram, /botões/);
+
+  const comBotao = montarMensagem(
+    {
+      ...classificacao,
+      evento: e,
+      agendas: [FELIPE],
+      rsvp: { eventId: e.id, calendarId: FELIPE },
+    },
+    TZ
+  );
+  assert.match(comBotao.telegram, /botões/);
 });

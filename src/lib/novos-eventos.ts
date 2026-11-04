@@ -68,6 +68,21 @@ export interface Chegada extends Classificacao {
    * no ciclo seguinte.
    */
   agendas: string[];
+  /**
+   * Onde gravar a resposta do convite (RSVP).
+   *
+   * Só existe quando a chegada é um **convite**. Aponta pra cópia onde o
+   * Felipe é o participante `self` — a que guarda a resposta dele (o
+   * `eventId` e o `calendarId` são sempre do mesmo par: misturar os dois
+   * dá evento inexistente).
+   */
+  rsvp?: AlvoRsvp;
+}
+
+/** Par evento+agenda onde o RSVP pode ser gravado. */
+export interface AlvoRsvp {
+  eventId: string;
+  calendarId: string;
 }
 
 /** Marcador gravado em todo evento criado pelo Flow. */
@@ -337,6 +352,10 @@ export function selecionarNovas(
       ...classificacao,
       evento: chegada,
       agendas: copias.map((c) => c.agendaId),
+      rsvp:
+        classificacao.tipo === "convite" && opcoes.emailUsuario
+          ? selecionarAlvoRsvp(copias, opcoes.emailUsuario, chegada.inicio)
+          : undefined,
     });
   }
 
@@ -383,6 +402,63 @@ export function seriesRespondidas(
 }
 
 /**
+ * Escolhe **onde** gravar a resposta do convite (RSVP).
+ *
+ * Duas cópias do mesmo evento existem: a na agenda compartilhada (dona = a
+ * conta da agenda) e a cópia sombra na agenda pessoal do Felipe. São ids
+ * diferentes, e o `eventId` só existe dentro do `calendarId` dele — misturar
+ * os dois dá "evento não encontrado".
+ *
+ * A resposta do Felipe vive na cópia onde ele é o participante `self` — a
+ * pessoal. E é ela que o Google reflete com precisão (a da agenda
+ * compartilhada tem `self` na conta da agenda, não nele).
+ *
+ * A ocorrência precisa ser a mesma que a mensagem anuncia: numa série
+ * recorrente cada cópia tem um id por ocorrência, e responder a outra
+ * seria responder a outro dia.
+ */
+export function selecionarAlvoRsvp(
+  copias: EventoChegada[],
+  emailUsuario: string,
+  /** Início da ocorrência anunciada (ISO). */
+  inicioAlvo?: string
+): AlvoRsvp | undefined {
+  const alvo = normalizar(emailUsuario);
+  if (!alvo) return undefined;
+
+  const mesmaOcorrencia = (c: EventoChegada): boolean => {
+    if (!inicioAlvo) return true;
+    if (c.inicio === inicioAlvo) return true;
+    const a = Date.parse(c.inicio);
+    const b = Date.parse(inicioAlvo);
+    return !Number.isNaN(a) && !Number.isNaN(b) && a === b;
+  };
+
+  const eDoUsuario = (c: EventoChegada): boolean =>
+    c.participantes.some((p) => normalizar(p.email) === alvo);
+
+  // Primeiro: a ocorrência anunciada. Se nenhuma cópia casar (a agenda
+  // pode ter formatado a data diferente), cai pra qualquer cópia onde o
+  // Felipe participa — melhor um alvo aproximado do que nenhum botão.
+  let comUsuario = copias.filter((c) => eDoUsuario(c) && mesmaOcorrencia(c));
+  if (comUsuario.length === 0) {
+    comUsuario = copias.filter(eDoUsuario);
+  }
+  if (comUsuario.length === 0) return undefined;
+
+  const comSelf = comUsuario.filter((c) =>
+    c.participantes.some((p) => normalizar(p.email) === alvo && p.self)
+  );
+  const candidatas = comSelf.length > 0 ? comSelf : comUsuario;
+
+  const escolhida = [...candidatas].sort(
+    (a, b) => (Date.parse(a.inicio) || 0) - (Date.parse(b.inicio) || 0)
+  )[0];
+
+  return { eventId: escolhida.id, calendarId: escolhida.agendaId };
+}
+
+/**
  * Convites em aberto — eventos onde o Felipe foi convidado e ainda não
  * respondeu.
  *
@@ -407,6 +483,9 @@ export function selecionarConvitesPendentes(
       ...classificacao,
       evento: chegada,
       agendas: copias.map((c) => c.agendaId),
+      rsvp: opcoes.emailUsuario
+        ? selecionarAlvoRsvp(copias, opcoes.emailUsuario, chegada.inicio)
+        : undefined,
     });
   }
 
@@ -569,12 +648,16 @@ export function montarMensagem(
 
   if (tipo === "convite") {
     const quem = autor ? escaparHtml(autor) : "alguém";
+    // Só promete os botões quando existe alvo de RSVP — sem alvo, o
+    // convite chega sem botão e o texto não pode prometer o que não tem.
+    const dica = chegada.rsvp ? "\n👇 Responda com os botões abaixo." : "";
     return {
       telegram:
         `📩 <b>${quem} te convidou</b>\n` +
         `<b>${titulo}</b>\n` +
         `🗓 ${escaparHtml(quando)}\n` +
-        `📂 Agenda: ${agenda}`,
+        `📂 Agenda: ${agenda}` +
+        dica,
       pushTitulo: `Convite: ${evento.summary || "Sem título"}`,
       pushCorpo: `${evento.agendaNome} · ${quando}${autor ? ` · ${autor}` : ""}`,
     };

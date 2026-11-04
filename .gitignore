@@ -48,5 +48,8 @@ next-env.d.ts
 # estado do monitor de chegadas externas (eventos já vistos)
 .novos-eventos.json
 
+# estado dos convites em aberto (vincula o botão do Telegram ao evento)
+.convites-pendentes.json
+
 # dados persistentes (tokens, uploads)
 data/

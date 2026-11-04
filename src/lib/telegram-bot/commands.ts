@@ -24,6 +24,7 @@ Comandos:
 /hoje — eventos de hoje
 /amanha — eventos de amanhã
 /semana — próximos 7 dias
+/convites — convites em aberto (responda pelos botões)
 /buscar <texto> — busca por palavra-chave
 /criar <título> | <YYYY-MM-DD HH:mm> [duração min]
 /concluir <id|índice> — marcar como feito

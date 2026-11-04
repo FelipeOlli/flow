@@ -138,6 +138,7 @@ const COMMANDS: { command: string; description: string }[] = [
   { command: "hoje", description: "Eventos de hoje" },
   { command: "amanha", description: "Eventos de amanhã" },
   { command: "semana", description: "Próximos 7 dias" },
+  { command: "convites", description: "Convites em aberto (responda pelos botões)" },
   { command: "buscar", description: "Buscar por texto" },
   { command: "criar", description: "Criar evento simples" },
   { command: "concluir", description: "Marcar evento como feito" },

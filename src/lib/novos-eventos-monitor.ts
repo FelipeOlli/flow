@@ -8,6 +8,7 @@ import {
 } from "./google-calendar";
 import { sendTelegramMessage } from "./telegram";
 import { sendPushNotification } from "./push-notifier";
+import { registrarConvite, tecladoDeConvite, type TecladoInline } from "./convites-rsvp";
 import {
   montarMensagem,
   podarVistos,
@@ -224,7 +225,11 @@ async function monitorarConvitesPendentesInterno(
     for (let i = 0; i < novos.length; i++) {
       const chegada = novos[i];
       const msg = mensagens[i];
-      const entregue = await enviarAviso(msg, `flow-convite-${chegada.evento.id}`);
+      const entregue = await enviarAviso(
+        msg,
+        `flow-convite-${chegada.evento.id}`,
+        tecladoDaChegada(chegada)
+      );
       if (!entregue) {
         console.error(
           `[NOVOS EVENTOS] Falha ao enviar aviso de convite: "${chegada.evento.summary}"`
@@ -250,16 +255,36 @@ async function monitorarConvitesPendentesInterno(
  * Devolve `false` só quando **nenhum** canal entregou. Canal não
  * configurado (sem VAPID, sem subscriptions, sem token) não conta como
  * falha — é ausência de canal, não erro de envio.
+ *
+ * O teclado vai só no Telegram: push do navegador não tem botão de
+ * resposta embutido, e o Web Push tem limite de payload.
  */
 async function enviarAviso(
   msg: { telegram: string; pushTitulo: string; pushCorpo: string },
-  tag: string
+  tag: string,
+  teclado?: TecladoInline
 ): Promise<boolean> {
   const [pushOk, telegramOk] = await Promise.all([
     sendPushNotification(msg.pushTitulo, msg.pushCorpo, tag),
-    sendTelegramMessage(msg.telegram),
+    sendTelegramMessage(msg.telegram, teclado ? { replyMarkup: teclado } : {}),
   ]);
   return pushOk || telegramOk;
+}
+
+/**
+ * Botões de resposta pra um convite.
+ *
+ * O token é o vínculo entre o botão e o evento — e precisa estar
+ * registrado **antes** do envio, senão o clique chega e não acha o alvo.
+ */
+function tecladoDaChegada(chegada: Chegada): TecladoInline | undefined {
+  if (chegada.tipo !== "convite" || !chegada.rsvp) return undefined;
+  const token = registrarConvite({
+    eventId: chegada.rsvp.eventId,
+    calendarId: chegada.rsvp.calendarId,
+    titulo: chegada.evento.summary,
+  });
+  return tecladoDeConvite(token);
 }
 
 /**
@@ -351,7 +376,11 @@ async function monitorarNovosEventosInterno(
     for (let i = 0; i < semDuplicar.length; i++) {
       const chegada = semDuplicar[i];
       const msg = mensagens[i];
-      const entregue = await enviarAviso(msg, `flow-chegada-${chegada.evento.id}`);
+      const entregue = await enviarAviso(
+        msg,
+        `flow-chegada-${chegada.evento.id}`,
+        tecladoDaChegada(chegada)
+      );
       if (!entregue) {
         console.error(
           `[NOVOS EVENTOS] Falha ao enviar aviso: "${chegada.evento.summary}"`

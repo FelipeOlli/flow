@@ -26,6 +26,7 @@ import {
 } from "./commands";
 import { parseChatIntent } from "./intent";
 import { pushUndo, pushPending, getPending, deletePending, pushEventContext, peekEventContext, clearEventContext } from "./undo";
+import { handleConviteCallback, enviarListaDeConvites } from "./convites";
 import { formatDateBr, formatTimeRange, escapeHtml } from "./formatter";
 import { getValidAccessToken } from "@/lib/token-store";
 import { createEvent, getEventById, deleteEvent, markEventComplete } from "@/lib/google-calendar";
@@ -174,6 +175,24 @@ async function handleMessage(msg: TgMessage): Promise<void> {
     const cmd = cmdRaw.split("@")[0].toLowerCase();
     const args = rest.join(" ");
     await sendTelegramChatAction("typing", chatId);
+
+    // `/convites` manda uma mensagem por convite (cada uma com seus botões),
+    // então não cabe no formato `CommandResult` de texto único.
+    if (cmd === "/convites") {
+      const tokenConvites = await getValidAccessToken();
+      if (!tokenConvites) {
+        await sendTelegramMessage("Google não autorizado. Abra o Flow e reautorize.", { chatId });
+        return;
+      }
+      try {
+        await enviarListaDeConvites(chatId, tokenConvites);
+      } catch (err) {
+        console.error("[TELEGRAM-BOT] /convites falhou:", err);
+        await sendTelegramMessage("Erro ao listar convites. Tente de novo.", { chatId });
+      }
+      return;
+    }
+
     let result;
     switch (cmd) {
       case "/start": result = await cmdStart(); break;
@@ -301,6 +320,14 @@ async function handleCallbackQuery(cb: TgCallbackQuery): Promise<void> {
   const [action, hash] = data.split(":");
   const chatId = cb.message?.chat.id;
   const messageId = cb.message?.message_id;
+
+  // Convite é um botão próprio (callback_data com 3 partes) — sai antes
+  // do fluxo de criação, que usa `acao:hash`.
+  if (action === "convite") {
+    await handleConviteCallback(cb);
+    return;
+  }
+
   if (!chatId || !messageId || !hash) {
     await answerTelegramCallbackQuery(cb.id);
     return;
