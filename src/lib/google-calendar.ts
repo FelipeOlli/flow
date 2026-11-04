@@ -6,6 +6,7 @@ import { CALENDAR_PILLAR_OVERRIDES } from "./pillar-config";
 import { parseReminderProp, serializeReminder } from "./reminder";
 import { rememberDelegateName } from "./delegate-contacts";
 import { normalizeText } from "./text";
+import type { EventoChegada } from "./novos-eventos";
 
 const COMPLETE_COLOR_ID = "2";
 const IMPORTANT_COLOR_ID = "5";
@@ -364,7 +365,7 @@ export async function createEvent(
     };
   }
 
-  const extraPrivate: Record<string, string> = {};
+  const extraPrivate: Record<string, string> = { flowOrigem: "flow" };
   if (input.isDelegable) extraPrivate.flowDelegable = "true";
   if (input.delegateTo?.email || input.delegateTo?.name) {
     Object.assign(extraPrivate, writeDelegate(input.delegateTo));
@@ -465,6 +466,142 @@ export async function listReadableCalendars(accessToken: string): Promise<Calend
       name: cal.summary ?? "Sem nome",
       bgColor: CALENDAR_COLOR_OVERRIDES[cal.summary ?? ""] ?? cal.backgroundColor ?? undefined,
     }));
+}
+
+/**
+ * Eventos que mudaram desde `desde` em todas as agendas visíveis.
+ *
+ * Usa `updatedMin` + `orderBy: "updated"`: o Google devolve só o que foi
+ * criado ou modificado depois do instante — é o que separa "chegou evento
+ * novo" de "evento que já existia".
+ *
+ * Atenção: mesmo com `singleEvents: false`, o Google devolve as *ocorrências*
+ * de séries recorrentes (cada uma com id próprio). O `iCalUID` é o mesmo da
+ * série inteira, e é ele que o monitor usa como identidade.
+ */
+export async function listarEventosModificados(
+  accessToken: string,
+  desde: Date
+): Promise<EventoChegada[]> {
+  const calendar = getClient(accessToken);
+  const entries = await listCalendarEntries(calendar, "reader");
+  const desdeIso = desde.toISOString();
+  const eventos: EventoChegada[] = [];
+
+  for (const cal of entries) {
+    if (!cal.id) continue;
+    let pageToken: string | undefined;
+    do {
+      const { data } = await calendar.events.list({
+        calendarId: cal.id,
+        updatedMin: desdeIso,
+        singleEvents: false,
+        showHiddenInvitations: true,
+        maxResults: 250,
+        orderBy: "updated",
+        pageToken,
+      });
+      for (const event of data.items ?? []) {
+        eventos.push(mapearChegada(event, cal.id, cal.summary ?? "Sem nome", cal.primary === true));
+      }
+      pageToken = data.nextPageToken ?? undefined;
+    } while (pageToken);
+  }
+
+  return eventos;
+}
+
+/** Converte o evento cru do Google no formato enxuto do monitor. */
+function mapearChegada(
+  event: calendar_v3.Schema$Event,
+  agendaId: string,
+  agendaNome: string,
+  agendaPessoal: boolean
+): EventoChegada {
+  const participantes = (event.attendees ?? []).map((att) => ({
+    email: att.email ?? undefined,
+    nome: att.displayName ?? undefined,
+    responseStatus: att.responseStatus ?? undefined,
+    self: att.self === true,
+    organizador: att.organizer === true,
+  }));
+
+  // O `organizer.displayName` nem sempre vem preenchido. Quando falta, o
+  // participante marcado com `organizer: true` costuma ter o nome — é a
+  // mesma pessoa, com o nome preenchido.
+  const nomeDoOrganizador =
+    event.organizer?.displayName ??
+    participantes.find((p) => p.organizador)?.nome ??
+    participantes.find((p) => p.email === event.organizer?.email)?.nome;
+
+  return {
+    id: event.id ?? "",
+    iCalUid: event.iCalUID ?? undefined,
+    summary: event.summary ?? "Sem título",
+    inicio: event.start?.dateTime ?? event.start?.date ?? "",
+    fim: event.end?.dateTime ?? event.end?.date ?? "",
+    diaInteiro: !event.start?.dateTime,
+    status: event.status ?? undefined,
+    organizerEmail: event.organizer?.email ?? undefined,
+    organizerNome: nomeDoOrganizador,
+    organizerEhUsuario: event.organizer?.self === true,
+    flowOrigem: event.extendedProperties?.private?.["flowOrigem"] ?? undefined,
+    marcadoresFlow: Object.keys(event.extendedProperties?.private ?? {}).filter((k) =>
+      k.startsWith("flow")
+    ),
+    participantes,
+    agendaId,
+    agendaNome,
+    agendaPessoal,
+  };
+}
+
+/**
+ * Todos os eventos de todas as agendas visíveis, sem filtro de data.
+ *
+ * Usado no bootstrap do monitor de chegadas: registra o estado atual da
+ * agenda como "já visto", pra não disparar uma avalanche de avisos com o
+ * histórico inteiro. Também é o que garante que um evento antigo mexido
+ * pela migração noturna não seja reportado como novo.
+ */
+export async function listarTodosEventos(accessToken: string): Promise<EventoChegada[]> {
+  const calendar = getClient(accessToken);
+  const entries = await listCalendarEntries(calendar, "reader");
+  const eventos: EventoChegada[] = [];
+
+  for (const cal of entries) {
+    if (!cal.id) continue;
+    let pageToken: string | undefined;
+    do {
+      const { data } = await calendar.events.list({
+        calendarId: cal.id,
+        singleEvents: false,
+        showHiddenInvitations: true,
+        maxResults: 250,
+        pageToken,
+      });
+      for (const event of data.items ?? []) {
+        eventos.push(mapearChegada(event, cal.id, cal.summary ?? "Sem nome", cal.primary === true));
+      }
+      pageToken = data.nextPageToken ?? undefined;
+    } while (pageToken);
+  }
+
+  return eventos;
+}
+
+/**
+ * E-mail da conta dona do token.
+ *
+ * O `AUTH_USER_EMAIL` é a fonte oficial, mas pode não estar configurado. O
+ * id da agenda `primary` é o próprio e-mail da conta no Google — então
+ * ele serve de fallback confiável.
+ */
+export async function listarEmailDoUsuario(accessToken: string): Promise<string | undefined> {
+  const calendar = getClient(accessToken);
+  const entries = await listCalendarEntries(calendar, "reader");
+  const principal = entries.find((cal) => cal.primary && cal.id);
+  return principal?.id?.includes("@") ? principal.id : undefined;
 }
 
 /**

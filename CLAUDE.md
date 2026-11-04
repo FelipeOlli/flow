@@ -211,6 +211,22 @@ flow/
 - **`extendedProperties.private` no `patch` do Google faz MERGE** (omitir mantém a chave; `null` remove). O helper `patchPrivateProps()` em `google-calendar.ts` faz GET e reenvia o mapa inteiro — não depender do merge.
 - **Resumo diário no Telegram**: 08:00 em `cron.ts` → `sendDelegationDigest()`; dedup por dia em `/app/data/.delegation-digest-state.json`.
 
+### Chegadas externas (convites e eventos de fora)
+- **O que é**: avisa no Telegram + Web Push quando um evento aparece na agenda sem ser criado pelo Flow — alguém cria direto no Google Calendar, ou alguém adiciona o Felipe como convidado. A mensagem diz **em qual agenda** o evento caiu.
+- **Módulo de lógica pura**: `src/lib/novos-eventos.ts` — sem imports (mesmo padrão de `secretaria-backend.ts`): o Node lê TS direto nos testes e não resolve caminho relativo sem extensão.
+- **Orquestração**: `src/lib/novos-eventos-monitor.ts` — varre, decide e envia. Estado em `/app/data/.novos-eventos.json`.
+- **Cron**: a cada 5 minutos, em `cron.ts`. Disparo manual: `POST /api/cron/novos-eventos` com `{"dryRun":true}` devolve as mensagens sem enviar nem gravar.
+- **Varredura**: `listarEventosModificados()` usa `updatedMin` + `orderBy: "updated"` — só o que mudou. A janela é incremental (desde a última varredura, com 2 min de folga) e tem piso de `NOVOS_EVENTOS_JANELA_HORAS` (24h) pra cobrir o app fora do ar.
+- **Bootstrap**: na primeira execução, registra todos os eventos existentes como vistos (`listarTodosEventos()`) **sem avisar ninguém** — senão seria uma avalanche com o histórico inteiro. Também é o que impede a migração noturna (que mexe em evento antigo toda noite) de virar falso positivo.
+- **Identidade = `iCalUID`**, não o id do Google: as ocorrências de uma série recorrente têm ids diferentes a cada semana, mas o `iCalUID` é o mesmo da série. Sem isso, entrava um aviso novo toda semana.
+- **Registro**: por `iCalUID`, guarda **em quais agendas** o evento já apareceu. Isso distingue "chegou" (nunca apareceu) de "mudou de agenda" (mesmo evento, outro lugar).
+- **`organizer.self` NÃO é "o Felipe organizou"**: significa "o organizador é o dono **desta** agenda". Em agenda compartilhada, um evento de `ti@cfcontabilidade.com` vem com `self: true`. A comparação de organizador é sempre por e-mail.
+- **Convite** = participante com o e-mail do usuário e `responseStatus: "needsAction"`. Em agenda compartilhada o participante com `self` é a conta da agenda — por isso a checagem é por e-mail, nunca por `self`.
+- **E-mail do usuário**: `AUTH_USER_EMAIL`; se estiver vazio, usa o id da agenda `primary` (que é o e-mail da conta no Google) — `listarEmailDoUsuario()`.
+- **Eventos do Flow são ignorados**: marcador `flowOrigem: "flow"` em `createEvent`. Além disso, qualquer marcador de interação (`flowPillar`, `flowImportant`, `flowDelegable`, `flowDelegateName`…) também exclui o evento — cobre os criados antes do `flowOrigem` existir. O `flowOpenSince` **não** conta: a migração carimba ele em todo evento pendente, inclusive nos de fora.
+- **Push compartilhado**: `sendPushNotification()` foi extraído de `notifier.ts` para `src/lib/push-notifier.ts` e é reusado pelos dois.
+- **Env**: `NOVOS_EVENTOS_JANELA_HORAS`, `NOVOS_EVENTOS_AGENDAS_IGNORADAS` (padrão `feriado`), `NOVOS_EVENTOS_AVISAR_PROPRIOS` (`on` também avisa sobre eventos criados pelo próprio Felipe fora do Flow), `NOVOS_EVENTOS_ESTADO_FILE` (só dev).
+
 ### UI
 - **Dark theme fixo**: Toda a UI usa paleta Google Material Dark (`#202124`, `#2a2b2e`, `#3c4043`, `#e8eaed`, `#9aa0a6`).
 - **Português brasileiro**: Todos os textos de UI, mensagens de erro, labels.
@@ -307,6 +323,66 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
+### 2026-11-01 — Chegadas externas: aviso de evento externo e de convite
+
+**O que foi feito:**
+
+1. **Novo monitor de chegadas** — avisa no Telegram + Web Push quando um evento aparece na agenda sem ser criado pelo Flow: alguém cria direto no Google Calendar, ou alguém adiciona o Felipe como convidado. A mensagem diz **em qual agenda** o evento caiu (o pedido original).
+   - `src/lib/novos-eventos.ts` — lógica pura, **sem nenhum import** (mesmo padrão de `secretaria-backend.ts`: o Node lê TS direto nos testes e não resolve caminho relativo sem extensão).
+   - `src/lib/novos-eventos-monitor.ts` — varre, decide e envia; estado em `/app/data/.novos-eventos.json`.
+   - `src/lib/push-notifier.ts` — `sendPushNotification()` extraído do `notifier.ts` e reusado pelos dois.
+   - Cron a cada 5 min; disparo manual `POST /api/cron/novos-eventos` (`{"dryRun":true}` mostra as mensagens sem enviar).
+
+**Bugs achados no caminho (todos achados testando contra a conta real, não por leitura):**
+
+- **`organizer.self` não significa "o Felipe organizou"** — significa "o organizador é o dono **desta** agenda". Em agenda compartilhada, um evento de `ti@cfcontabilidade.com` vem com `self: true`. Usar isso como "evento próprio" esconderia justamente os eventos externos que o usuário quer saber.
+- **Convite por `attendee.self` dá falso positivo** — em agenda compartilhada o participante com `self` é a conta da agenda (`ti@cfcontabilidade.com`), não o Felipe. Todo evento pendente da CF viraria "convite". A checagem é por e-mail.
+- **`flowOpenSince` não prova que o evento é do Flow** — a migração noturna carimba ele em **todo** evento pendente, inclusive nos que vieram de fora, e mexe neles toda noite. Se ele contasse como marcador do Flow, a migração viraria uma fonte de falsos positivos. Só `flowOrigem` e os marcadores de interação (`flowPillar`, `flowImportant`, `flowDelegable`, `flowDelegateName`…) excluem o evento.
+- **O bootstrap precisa da listagem completa**, não da janela de 24h: um evento antigo que a migração mexe vai reaparecer na varredura seguinte, e precisa já estar no registro.
+- **`singleEvents: false` não suprime as instâncias recorrentes** quando combinado com `updatedMin` — o Google devolve cada ocorrência com id próprio. A identidade tem que ser o `iCalUID`.
+- **O `patch` do Google faz MERGE** do `extendedProperties.private` (verificado): o marcador `flowOrigem` sobrevive à migração. O comentário em `patchAndMap` dizendo "substitui o inteiro" está errado.
+- **`organizer.displayName` nem sempre vem preenchido** — o nome do autor sai do participante marcado com `organizer: true`.
+
+**Decisões:**
+
+- **Identidade = `iCalUID`**, não o id: as ocorrências de uma série têm ids diferentes a cada semana. Sem isso, entrava um aviso novo toda semana para a mesma série.
+- **Registro por `iCalUID` + lista de agendas onde apareceu** — é o que distingue "chegou" de "mudou de agenda" (mesmo evento, outro lugar).
+- **Varredura incremental** (desde a última varredura, 2 min de folga) com piso de 24h — não baixa 24h de eventos a cada 5 min.
+- **Convite novo de um evento já conhecido na agenda compartilhada avisa**; evento que só mudou de agenda, não. O primeiro é informação nova; o segundo não.
+- **E-mail do usuário vem do `AUTH_USER_EMAIL`; se estiver vazio, do id da agenda `primary`** (que é o e-mail da conta no Google). No ambiente local o `AUTH_USER_EMAIL` está vazio.
+
+**Arquivos novos:** `src/lib/novos-eventos.ts` · `src/lib/novos-eventos-monitor.ts` · `src/lib/push-notifier.ts` · `src/app/api/cron/novos-eventos/route.ts` · `tests/novos-eventos.test.mjs`
+**Arquivos modificados:** `src/lib/google-calendar.ts` (`flowOrigem` no `createEvent`, `listarEventosModificados`, `listarTodosEventos`, `listarEmailDoUsuario`) · `src/lib/notifier.ts` (push extraído) · `src/lib/cron.ts` (job de 5 min) · `.env.example` · `.gitignore` · `package.json` (`--experimental-strip-types` no `test:secretaria`) · `CLAUDE.md`
+
+**Verificação:** `npx tsc --noEmit` limpo, `npm run build` OK, `npm run test:secretaria` → 56/56 (25 novos). Contra a conta real: o bootstrap registrou 3074 eventos sem avisar ninguém; a varredura seguinte deu **0 chegadas** (nenhum falso positivo, mesmo com a migração tendo mexido em eventos); removendo o convite real do registro, a varredura o detectou ("Aniversário Miguel", da Yasmim, agenda Felipe Oliveira) e **não** repetiu no ciclo seguinte. O evento "Largo da Carioca" (marcado pelo Flow) não gera aviso.
+
+**Decisões pendentes do Felipe:** `NOVOS_EVENTOS_AVISAR_PROPRIOS=on` avisa também sobre eventos criados por ele fora do Flow (padrão: só o que veio de fora). E as agendas ignoradas por padrão são só as de feriado.
+
+**Próximos passos:** redeploy no EasyPanel e conferir o aviso real no Telegram (o ambiente local não tem `TELEGRAM_BOT_TOKEN` nem subscriptions de push).
+
+---
+
+### 2026-10-30 (b) — Tag D gravada no evento do Chrome
+
+**O que foi feito:**
+
+1. **Redeploy confirmado**: produção está com `FLOW_API_WRITE_TOKEN` configurado — um PATCH com token inválido devolve **401 "Token sem permissão de escrita"**. Se o servidor não tivesse a variável, a resposta seria 503 "escrita desabilitada".
+2. **Evento `5mq9q3n9cvf09u4r9bragv0jao` (Atualizar Google Chrome nos Macs — agenda TI CF Contabilidade) marcado com `delegavel: true`.** Confirmado por releitura (app local e produção): `delegavel: true`, `categoria` limpa (era "operational"), `responsavel` (André Palmeiro), `pilar` (trabalho), `importante` e `status` (concluido) intactos.
+   - A gravação saiu pelo **app local** (`npm run dev` com um `FLOW_API_WRITE_TOKEN` local): o valor do token de escrita não está em nenhum arquivo legível na máquina — só no EasyPanel. Mesmo Google, mesma conta, mesmo efeito.
+3. **`mcp/aplica-delegavel.mjs` segue como o caminho oficial** (MCP → API de escrita, prévia e depois `confirmar: true`); ele exige `FLOW_API_WRITE_TOKEN` no ambiente.
+
+**O que ficou pendente:**
+
+- **A produção continua no commit `b370060`** (29/10) — o `commit.sha` do serviço `sintel/full_flow` no EasyPanel aponta para ele, e o `tools/list` do `/mcp` de produção devolve `criar_evento`/`atualizar_evento` **sem** `delegavel`/`importante` (o app local, com o mesmo código, devolve com). Ou seja: o redeploy não pegou o `25e45c0`, e o Claude no celular **não consegue pedir a tag D** porque o schema publicado é o antigo. O `FLOW_API_WRITE_TOKEN` está no env do serviço (44 chars) — esse lado está certo.
+- **Os 8 tools que o conector do claude.ai mostra não provam acesso de escrita**: as ferramentas de escrita são registradas de todo jeito e só respondem "este conector só lê" quando o token apresentado é o de leitura (`podeEscrever` em `src/app/mcp/route.ts`). O que decide é o **header** do conector: tem que ser `Authorization: Bearer <FLOW_API_WRITE_TOKEN>` (a rota também aceita `x-api-key` e `x-flow-token`).
+- **`~/.claude.json` (conector `flow-secretaria` do Claude Code) ainda só tem o token de leitura** — o `env` tem `FLOW_API_URL` e `FLOW_API_TOKEN`, sem `FLOW_API_WRITE_TOKEN`. Sem ele, `criar_evento`/`atualizar_evento` respondem "este conector só lê" no Claude Code e no Claude Desktop.
+- **O servidor MCP desta sessão subiu antes do commit `25e45c0`**: o schema que ele expõe ainda não tem `delegavel`/`importante`. Reiniciar o Claude Code resolve os dois pontos de uma vez.
+- **A tag D não aparece em evento concluído**: `categoryLetters` (`src/lib/aging.ts`) devolve lista vazia quando `isComplete`, e a aba "Tarefas para delegar" da Revisão Semanal filtra `isDelegable && !isComplete && !isCancelled`. O dado fica gravado; a exibição é que não mostra.
+
+**Como conferir se o conector tem permissão de escrita (sem gravar nada):** `POST /mcp` com `tools/call` em `atualizar_evento` e o token de leitura devolve o texto "este conector só lê"; com o token de escrita, devolve a prévia. Do lado do EasyPanel, `services.app.inspectService` responde com `commit.sha` — é o commit que está no ar, e o `source.autoDeploy` (`false`) confirma que push não é deploy.
+
+---
+
 ### 2026-10-30 — Marcações delegável/importante na escrita da secretária
 
 **O que foi feito:**
@@ -333,10 +409,10 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 - **Espelhar a UI na API** (decidido com o Felipe): D/O/E exclusivos, em vez de deixar a IA marcar "operacional + delegável" ao mesmo tempo — que o popover não representa e que o próximo salvamento pela interface apagaria.
 - **Erro explícito em vez de precedência silenciosa**: quando a IA erra a combinação, ela recebe o 400 e escolhe de novo, em vez de o app adivinhar o que ela quis dizer.
 
-**Próximos passos:**
-1. **Redeploy** do serviço `sintel/full_flow` no EasyPanel (o push para `main` não basta — `autoDeploy: false`).
-2. **Dar `FLOW_API_WRITE_TOKEN` ao conector do Claude Code** — o `~/.claude.json` atual só tem o token de leitura, e é por isso que `atualizar_evento` responde "este conector só lê".
-3. **Marcar o evento do Chrome** (`5mq9q3n9cvf09u4r9bragv0jao`) com `delegavel: true` — **atenção**: pela exclusividade, isso limpa a categoria "operacional" dele; se preferir manter "operacional", o evento fica como está (a tag D é inacessível por design).
+**Próximos passos (atualizado em 2026-10-30 (b)):**
+1. **Redeploy** do serviço `sintel/full_flow` — **refeito**: o primeiro não pegou o `25e45c0` (produção ficou no `b370060`, confirmado pelo `commit.sha` e pelo schema do `/mcp`). O `FLOW_API_WRITE_TOKEN` já está no env do serviço.
+2. **Dar `FLOW_API_WRITE_TOKEN` ao conector do Claude Code** — ainda falta: o `~/.claude.json` só tem o token de leitura, e é por isso que `atualizar_evento` responde "este conector só lê". Reiniciar o Claude Code depois de mexer nisso (o servidor MCP sobe com o schema antigo).
+3. ~~**Marcar o evento do Chrome** (`5mq9q3n9cvf09u4r9bragv0jao`) com `delegavel: true`~~ — **feito**: a categoria "operacional" foi limpa pela exclusividade, como previsto.
 
 O script `mcp/aplica-delegavel.mjs` faz o passo 3 pelo mesmo caminho que o Claude no celular usa (servidor MCP → API de escrita): primeiro mostra a prévia, depois grava com `confirmar: true`. Ele só funciona depois do redeploy (é o servidor de produção que precisa conhecer o campo `delegavel`) e com o token de escrita no ambiente.
 

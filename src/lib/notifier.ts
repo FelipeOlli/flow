@@ -1,9 +1,9 @@
 import fs from "fs";
 import path from "path";
-import webpush from "web-push";
 import { getEventsForDateKey } from "./google-calendar";
 import { getDateKeyInTimeZone, shiftDateKey } from "./timezone";
-import { listSubscriptions, removeSubscription } from "./push-store";
+import { listSubscriptions } from "./push-store";
+import { sendPushNotification } from "./push-notifier";
 import { sendTelegramMessage } from "./telegram";
 import { pushEventContext } from "./telegram-bot/undo";
 import { DEFAULT_REMINDER_MINUTES, formatReminderLead } from "./reminder";
@@ -51,27 +51,6 @@ export function markReminderSent(task: FlowTask, minutes: number, todayKey: stri
   saveNotifiedToday(todayKey, notified);
 }
 
-async function sendPushNotification(
-  subs: ReturnType<typeof listSubscriptions>,
-  title: string,
-  body: string,
-  tag: string,
-): Promise<void> {
-  const payload = JSON.stringify({ title, body, tag, url: "/today" });
-
-  for (const sub of subs) {
-    try {
-      await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload);
-    } catch (err: unknown) {
-      const status = (err as { statusCode?: number }).statusCode;
-      if (status === 410 || status === 404) {
-        removeSubscription(sub.endpoint);
-        console.log(`[NOTIFIER] Subscription expirada removida: ${sub.endpoint.slice(0, 60)}…`);
-      }
-    }
-  }
-}
-
 export async function sendDueNotifications(
   accessToken: string,
   timeZone: string,
@@ -84,10 +63,6 @@ export async function sendDueNotifications(
 
   const subs = listSubscriptions();
   const pushEnabled = !!(publicKey && privateKey && subject) && subs.length > 0;
-
-  if (pushEnabled) {
-    webpush.setVapidDetails(subject!, publicKey!, privateKey!);
-  }
 
   const now = new Date();
   const todayKey = getDateKeyInTimeZone(now, timeZone);
@@ -157,7 +132,7 @@ export async function sendDueNotifications(
       `<i>#${eventTag}</i>`;
 
     if (pushEnabled) {
-      await sendPushNotification(subs, task.title, pushBody, `flow-event-${task.id}`);
+      await sendPushNotification(task.title, pushBody, `flow-event-${task.id}`);
     }
     await sendTelegramMessage(telegramText);
 

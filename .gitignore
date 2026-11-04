@@ -45,5 +45,8 @@ next-env.d.ts
 # estado da secretária (dedup de lembretes e mensagens diárias)
 .secretaria-notified.json
 
+# estado do monitor de chegadas externas (eventos já vistos)
+.novos-eventos.json
+
 # dados persistentes (tokens, uploads)
 data/
