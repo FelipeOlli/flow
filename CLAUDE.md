@@ -331,6 +331,33 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 
 ## 6. Última Sessão
 
+### 2026-11-04 (tarde) — Responder convite pelo botão no Telegram
+
+**O que era:** convite em aberto era só **aviso**. O Felipe recebia "Yasmim te convidou" no Telegram e precisava abrir o app pra responder no Google Calendar. Agora a mensagem vem com botões (Aceitar / Talvez / Recusar) e o clique grava o RSVP no Google.
+
+**O problema do botão:** o `callback_data` do Telegram tem limite de **64 bytes**, e `eventId` + `calendarId` não cabem. O botão carrega só um **token**; o par evento+agenda fica no arquivo `.convites-pendentes.json`.
+
+**Por que arquivo, e não memória:** o aviso sai pelo **monitor** (cron, bundle do `instrumentation.ts`) e o clique chega pela **rota** (bundle da rota). São cópias diferentes do módulo — a memória de um não é visível pro outro (o mesmo cuidado já aplicado ao `src/lib/cron.ts`). O token é **hash determinístico** de `agenda|evento`: reavisar o mesmo convite reusa o botão em vez de duplicar a entrada.
+
+**Escolha do alvo (o ponto que mais podia dar errado):** a resposta mora na cópia onde o Felipe é o participante **`self`** — a pessoal. A cópia da agenda compartilhada tem `self` na **conta da agenda**, então responder ali mudaria a presença de quem é dono dela. E `eventId` + `calendarId` vêm **sempre do mesmo par**: misturar o id de uma agenda com o id de outra dá "evento não encontrado".
+
+**Recorrência:** a gravação vai no **master** da série (é onde o Google guarda o RSVP do participante) e propaga para todas as ocorrências. Se o Google recusar o master, cai pra ocorrência isolada. `resolveEventId()` (já existente) faz a resolução master↔ocorrência.
+
+**`/convites`:** lista os pendentes, cada um com seus botões. Existe porque os 3 convites pendentes já foram avisados **sem** botões — e convite que ninguém vê não é respondido.
+
+**Arquivos modificados:** `src/lib/novos-eventos.ts` (`AlvoRsvp`, `selecionarAlvoRsvp()`, `Chegada.rsvp`, `montarMensagem()` só promete os botões quando há alvo) · `src/lib/convites-rsvp.ts` (novo — registro em arquivo, token, teclado) · `src/lib/convites.ts` (novo — `listarConvitesComBotao()`, `responderConvite()`) · `src/lib/telegram-bot/convites.ts` (novo — clique e `/convites`) · `src/lib/telegram-bot/index.ts` (roteia `convite:` antes do fluxo de criação; comando `/convites`) · `src/lib/telegram-bot/commands.ts` e `src/lib/telegram.ts` (`/convites` no menu) · `src/lib/novos-eventos-monitor.ts` (`tecladoDaChegada()` no envio) · `tests/novos-eventos.test.mjs` (6 casos) · `.gitignore` · `CLAUDE.md`
+
+**Verificação:** `npx tsc --noEmit` limpo · `npm run build` OK · `npm run test:secretaria` → **71/71** · contra a agenda real: os 3 convites pendentes (`Aniversário Miguel`, `Consulta obstetrícia Clínica`, `Pagar conta de luz`) apontam todos pra cópia com `self: true` + `needsAction`, e os 2 não-recorrentes **convergem com o alvo que o app web já usaria** (mesmo `eventId`/`calendarId`) · fluxo completo testado com evento descartável: token → registro → clique → RSVP gravado → propagado nas 3 instâncias → registro removido → 2º clique rejeitado · propagação master→instâncias e isolamento por ocorrência medidos na API real · o alvo do caso recorrente diverge do app web **de propósito**: o app resolve a série pra ocorrência de outubro (passada), o bot pra de novembro (a anunciada).
+
+**Deploy:** commit `08f52e0` pushado. O **deploy em produção ficou pendente** — `source.autoDeploy: false` e o classificador bloqueou o `trigger_deploy` do EasyPanel (duas tentativas). Produção continua no `e18365f`, ou seja, **sem esta funcionalidade**.
+
+**Próximos passos:**
+1. **Deploy do `08f52e0`** no EasyPanel (o push não dispara build).
+2. Depois do deploy, mandar `/convites` no Telegram — os 3 convites pendentes aparecem **com os botões**, mesmo tendo sido avisados sem eles.
+3. Conferir o clique: aceita → o RSVP muda no Google e a mensagem vira "✅ Convite aceito" (os botões somem).
+
+---
+
 ### 2026-11-04 — Convite em aberto nunca era avisado (a causa do "não chegou nada")
 
 **Sintoma:** o aviso de chegada externa não chegou ao Telegram. A detecção estava certa — a varredura classificava os convites corretamente — mas o aviso nunca saía.
