@@ -5,7 +5,7 @@ import { getValidAccessToken } from "./token-store";
 import { setMigrationError, setMigrationRunning, setMigrationSuccess } from "./migration-status";
 import { sendDueNotifications } from "./notifier";
 import { sendSecretariaReminders } from "./secretaria-monitor";
-import { monitorarNovosEventos } from "./novos-eventos-monitor";
+import { monitorarNovosEventos, monitorarConvitesPendentes } from "./novos-eventos-monitor";
 import { getEventsForDateKey } from "./google-calendar";
 import { horarioCobranca, horarioFechamento, horarioResumo } from "./secretaria-regras";
 import {
@@ -155,12 +155,30 @@ export function initCron() {
       { timezone: "America/Sao_Paulo" }
     );
 
+    // Convites em aberto — roda menos frequente que a varredura de
+    // chegadas porque é uma consulta mais cara (lista as instâncias
+    // recorrentes expandidas) e o convite não expira com pressa.
+    cron.schedule(
+      "*/30 * * * *",
+      async () => {
+        try {
+          const token = await getValidAccessToken();
+          if (!token) return;
+          await monitorarConvitesPendentes(token, timeZone);
+        } catch (err) {
+          console.error("[FLOW CRON] Erro no monitor de convites:", err);
+        }
+      },
+      { timezone: "America/Sao_Paulo" }
+    );
+
     cronScheduled = true;
     cronInitError = null;
     console.log("[FLOW CRON] Migração noturna agendada para 00:01 (America/Sao_Paulo)");
     console.log("[FLOW CRON] Notificações push agendadas a cada minuto.");
     console.log("[FLOW CRON] Secretária (lembretes de proximidade) a cada minuto.");
     console.log("[FLOW CRON] Chegadas externas (convites e eventos novos) a cada 5 minutos.");
+    console.log("[FLOW CRON] Convites em aberto a cada 30 minutos.");
     console.log(
       `[FLOW CRON] Secretária diária: resumo ${horarioResumo()}, cobrança ${horarioCobranca()}, ` +
         `fechamento ${horarioFechamento()} (America/Sao_Paulo).`

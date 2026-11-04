@@ -344,6 +344,76 @@ export function selecionarNovas(
 }
 
 /**
+ * Séries de convite que o usuário já **respondeu por completo** — e que
+ * podem ser liberadas do registro de avisos.
+ *
+ * "Por completo" é o ponto: numa série recorrente, o Felipe pode ter
+ * respondido a ocorrência de novembro e ainda estar pendente na de
+ * dezembro. Liberar a série inteira nesse caso faria o aviso voltar a cada
+ * 30 minutos, pra sempre. Só libera quando **nenhuma** ocorrência da série
+ * está mais pendente.
+ *
+ * Servir pra liberar a série no registro de avisos: se o Felipe for
+ * convidado de novo depois de ter respondido, o aviso volta a valer — do
+ * contrário a série ficaria silenciosa pra sempre.
+ */
+export function seriesRespondidas(
+  eventos: EventoChegada[],
+  emailUsuario: string
+): string[] {
+  const alvo = normalizar(emailUsuario);
+  const pendentes = new Set<string>();
+  const respondidas = new Set<string>();
+
+  for (const evento of eventos) {
+    const participacao = evento.participantes.find(
+      (p) => normalizar(p.email) === alvo
+    );
+    if (!participacao) continue;
+    const identidade = identidadeDoEvento(evento);
+    if (participacao.responseStatus === "needsAction") {
+      pendentes.add(identidade);
+    } else {
+      respondidas.add(identidade);
+    }
+  }
+
+  // Só libera a série que não tem nenhuma ocorrência pendente.
+  return [...respondidas].filter((id) => !pendentes.has(id));
+}
+
+/**
+ * Convites em aberto — eventos onde o Felipe foi convidado e ainda não
+ * respondeu.
+ *
+ * É o subset que o bootstrap **pode avisar**. O resto do histórico entra
+ * em silêncio (o histórico inteiro são milhares de eventos, e poluir o
+ * Telegram com isso não serve pra nada), mas um convite em aberto exige
+ * resposta: engoli-lo em silêncio é perder a única informação acionável
+ * que a varredura traz.
+ */
+export function selecionarConvitesPendentes(
+  eventos: EventoChegada[],
+  opcoes: OpcoesClassificar = {}
+): Chegada[] {
+  const grupos = agruparPorIcalUid(eventos);
+  const convites: Chegada[] = [];
+
+  for (const copias of grupos.values()) {
+    const chegada = mesclarCopias(copias);
+    const classificacao = classificarChegada(chegada, opcoes);
+    if (classificacao?.tipo !== "convite") continue;
+    convites.push({
+      ...classificacao,
+      evento: chegada,
+      agendas: copias.map((c) => c.agendaId),
+    });
+  }
+
+  return convites;
+}
+
+/**
  * Registro de "já vistos": por evento, em quais agendas ele já apareceu.
  *
  * A chave é o `iCalUID` (identidade do evento no Google) — o mesmo em todas
@@ -440,6 +510,30 @@ function formatarData(inicio: string, timeZone: string): string {
   }).format(amostra);
 }
 
+/**
+ * Data de um evento de dia inteiro.
+ *
+ * O Google devolve o início como data literal (`"2026-11-05"`), sem hora e
+ * sem fuso. Passar isso por `new Date()` interpreta como meia-noite **UTC** —
+ * que em São Paulo é 21h do dia anterior. O resultado é a mensagem anunciando
+ * o evento no dia errado (um dia inteiro de 05/11 viraria "04/11").
+ *
+ * A data literal é o dado: não há fuso a converter. Formatamos em UTC com
+ * meio-dia, que nunca atravessa a virada de dia.
+ */
+function formatarDataDeDiaInteiro(dataKey: string): string {
+  const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dataKey);
+  if (!partes) return dataKey;
+  const [, ano, mes, dia] = partes;
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(Number(ano), Number(mes) - 1, Number(dia), 12)));
+}
+
 function formatarHora(inicio: string, timeZone: string): string {
   if (!inicio) return "";
   return new Intl.DateTimeFormat("pt-BR", {
@@ -468,7 +562,7 @@ export function montarMensagem(
   const { evento, tipo, autorEmail, autorNome } = chegada;
   const titulo = escaparHtml(evento.summary || "Sem título");
   const quando = evento.diaInteiro
-    ? formatarData(evento.inicio, timeZone)
+    ? formatarDataDeDiaInteiro(evento.inicio)
     : `${formatarData(evento.inicio, timeZone)} · ${formatarHora(evento.inicio, timeZone)}`;
   const agenda = escaparHtml(evento.agendaNome || "Sem nome");
   const autor = descreverAutor(autorNome, autorEmail);

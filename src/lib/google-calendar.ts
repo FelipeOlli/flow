@@ -557,6 +557,66 @@ function mapearChegada(
 }
 
 /**
+ * Convites — eventos onde o usuário é participante, em qualquer estado de
+ * resposta.
+ *
+ * É uma consulta diferente da varredura de modificações: aqui o critério
+ * é o **estado do convite**, não "o que mudou". É o que pega os convites
+ * que já existiam antes do primeiro registro do monitor (o bootstrap não
+ * pode avisar o histórico inteiro, mas um convite em aberto é a única
+ * coisa da agenda que exige resposta).
+ *
+ * Traz tanto os pendentes (`needsAction`) quanto os já respondidos: os
+ * respondidos servem pra liberar a série no registro de avisos — assim, um
+ * re-convite (o Felipe responde e depois é convidado de novo) avisa de
+ * novo, em vez de ficar silencioso pra sempre.
+ *
+ * A janela é por data do evento (não por data de modificação), e as
+ * instâncias recorrentes vêm expandidas — cada ocorrência é um convite
+ * distinto, e o agrupamento por `iCalUID` no monitor cuida do resto.
+ */
+export async function listarConvites(
+  accessToken: string,
+  emailUsuario: string,
+  timeMin: Date,
+  timeMax: Date
+): Promise<EventoChegada[]> {
+  const calendar = getClient(accessToken);
+  const entries = await listCalendarEntries(calendar, "reader");
+  const alvo = emailUsuario.trim().toLowerCase();
+  const convites: EventoChegada[] = [];
+
+  for (const cal of entries) {
+    if (!cal.id) continue;
+    let pageToken: string | undefined;
+    do {
+      const { data } = await calendar.events.list({
+        calendarId: cal.id,
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        singleEvents: true,
+        showHiddenInvitations: true,
+        maxResults: 250,
+        orderBy: "startTime",
+        pageToken,
+      });
+      for (const event of data.items ?? []) {
+        const participante = (event.attendees ?? []).find(
+          (att) => (att.email ?? "").trim().toLowerCase() === alvo
+        );
+        if (!participante) continue;
+        convites.push(
+          mapearChegada(event, cal.id, cal.summary ?? "Sem nome", cal.primary === true)
+        );
+      }
+      pageToken = data.nextPageToken ?? undefined;
+    } while (pageToken);
+  }
+
+  return convites;
+}
+
+/**
  * Todos os eventos de todas as agendas visíveis, sem filtro de data.
  *
  * Usado no bootstrap do monitor de chegadas: registra o estado atual da

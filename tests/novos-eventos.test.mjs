@@ -16,7 +16,9 @@ import {
   organizadoPeloUsuario,
   podarVistos,
   registrarVisto,
+  selecionarConvitesPendentes,
   selecionarNovas,
+  seriesRespondidas,
   vistoEmAlgumaAgenda,
   vistoNaAgenda,
 } from "../src/lib/novos-eventos.ts";
@@ -325,4 +327,120 @@ test("mesclar cópias une os marcadores do Flow de todas", () => {
   assert.deepEqual(mesclado.marcadoresFlow, ["flowPillar"]);
   // E o evento inteiro é ignorado — o Flow já conhece.
   assert.equal(classificarChegada(mesclado, { emailUsuario: FELIPE }), null);
+});
+
+// --- Convites pendentes -----------------------------------------------------
+// O bootstrap da varredura de chegadas registra tudo como visto, então um
+// convite que já estava em aberto nunca passa por ela. A varredura de
+// convites pendentes é a que pega esses casos.
+
+test("convite pendente é selecionado pela varredura de convites", () => {
+  const e = evento({
+    summary: "Consulta Dr Adriano",
+    participantes: [
+      { email: FELIPE, nome: "Felipe", responseStatus: "needsAction" },
+      { email: "yasminloopesfraaga@gmail.com", nome: "Yasmin", responseStatus: "accepted", organizador: true },
+    ],
+  });
+  const convites = selecionarConvitesPendentes([e], { emailUsuario: FELIPE });
+  assert.equal(convites.length, 1);
+  assert.equal(convites[0].tipo, "convite");
+  assert.equal(convites[0].evento.summary, "Consulta Dr Adriano");
+});
+
+test("convite já respondido não é selecionado", () => {
+  const e = evento({
+    participantes: [
+      { email: FELIPE, nome: "Felipe", responseStatus: "accepted" },
+    ],
+  });
+  assert.equal(selecionarConvitesPendentes([e], { emailUsuario: FELIPE }).length, 0);
+});
+
+test("convite do Flow é ignorado na varredura de convites", () => {
+  const e = evento({
+    flowOrigem: "flow",
+    participantes: [
+      { email: FELIPE, nome: "Felipe", responseStatus: "needsAction" },
+    ],
+  });
+  assert.equal(selecionarConvitesPendentes([e], { emailUsuario: FELIPE }).length, 0);
+});
+
+test("mesma série recorrente vira um convite só", () => {
+  const a = evento({
+    id: "occ1",
+    iCalUid: "serie1",
+    summary: "Pagar conta de luz",
+    participantes: [{ email: FELIPE, nome: "Felipe", responseStatus: "needsAction" }],
+  });
+  const b = evento({
+    id: "occ2",
+    iCalUid: "serie1",
+    summary: "Pagar conta de luz",
+    inicio: "2026-12-25T13:00:00Z",
+    participantes: [{ email: FELIPE, nome: "Felipe", responseStatus: "needsAction" }],
+  });
+  const convites = selecionarConvitesPendentes([a, b], { emailUsuario: FELIPE });
+  assert.equal(convites.length, 1);
+});
+
+// --- Data de evento de dia inteiro -----------------------------------------
+// O Google devolve o início de dia inteiro como data literal ("2026-11-05").
+// Passar por new Date() entende como meia-noite UTC — em São Paulo isso é
+// 21h do dia ANTERIOR, e a mensagem anunciava o evento na data errada.
+
+test("evento de dia inteiro mostra a data certa", () => {
+  const e = evento({
+    diaInteiro: true,
+    inicio: "2026-11-05",
+    fim: "2026-11-06",
+    participants: [],
+    participantes: [
+      { email: FELIPE, nome: "Felipe", responseStatus: "needsAction" },
+      { email: "yasminloopesfraaga@gmail.com", nome: "Yasmin", responseStatus: "accepted", organizador: true },
+    ],
+  });
+  const msg = montarMensagem(
+    { ...classificarChegada(e, { emailUsuario: FELIPE }), evento: e, agendas: [CF] },
+    TZ
+  );
+  assert.match(msg.telegram, /05\/11\/2026/);
+  assert.doesNotMatch(msg.telegram, /04\/11\/2026/);
+});
+
+test("série já respondida é liberada pro re-convite", () => {
+  const respondido = evento({
+    iCalUid: "serie1",
+    participantes: [{ email: FELIPE, nome: "Felipe", responseStatus: "accepted" }],
+  });
+  const pendente = evento({
+    iCalUid: "serie2",
+    participantes: [{ email: FELIPE, nome: "Felipe", responseStatus: "needsAction" }],
+  });
+  const liberadas = seriesRespondidas([respondido, pendente], FELIPE);
+  assert.deepEqual(liberadas, ["serie1"]);
+});
+
+test("série recorrente com uma ocorrência respondida e outra pendente NÃO é liberada", () => {
+  // Se liberasse, o aviso voltaria a cada 30 minutos, pra sempre.
+  const novembro = evento({
+    id: "occ-nov",
+    iCalUid: "serie1",
+    participantes: [{ email: FELIPE, nome: "Felipe", responseStatus: "accepted" }],
+  });
+  const dezembro = evento({
+    id: "occ-dez",
+    iCalUid: "serie1",
+    participantes: [{ email: FELIPE, nome: "Felipe", responseStatus: "needsAction" }],
+  });
+  assert.deepEqual(seriesRespondidas([novembro, dezembro], FELIPE), []);
+});
+
+test("convite pendente não é liberado", () => {
+  const pendente = evento({
+    iCalUid: "serie1",
+    participantes: [{ email: FELIPE, nome: "Felipe", responseStatus: "needsAction" }],
+  });
+  assert.deepEqual(seriesRespondidas([pendente], FELIPE), []);
 });

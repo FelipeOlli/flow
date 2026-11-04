@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getValidAccessToken } from "@/lib/token-store";
-import { monitorarNovosEventos } from "@/lib/novos-eventos-monitor";
+import {
+  monitorarNovosEventos,
+  monitorarConvitesPendentes,
+} from "@/lib/novos-eventos-monitor";
 
 /**
  * Disparo manual do monitor de chegadas externas — pra testar sem esperar
@@ -26,6 +29,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const dryRun = body?.dryRun === true || body?.dryRun === "true";
+  const soConvites = body?.soConvites === true || body?.soConvites === "true";
   const timeZone = process.env.DEFAULT_TIMEZONE ?? "America/Sao_Paulo";
 
   const accessToken = await getValidAccessToken();
@@ -34,11 +38,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const resultado = await monitorarNovosEventos(accessToken, timeZone, { dryRun });
+    const resultado = soConvites
+      ? await monitorarConvitesPendentes(accessToken, timeZone, { dryRun })
+      : await monitorarNovosEventos(accessToken, timeZone, { dryRun });
+
     return NextResponse.json({
       success: true,
       dryRun,
-      bootstrap: resultado.bootstrap,
+      soConvites,
+      bootstrap: "bootstrap" in resultado ? resultado.bootstrap : false,
       chegadas: resultado.chegadas.map((c) => ({
         tipo: c.tipo,
         titulo: c.evento.summary,

@@ -39,19 +39,37 @@ export interface SendMessageOptions {
   parseMode?: "HTML" | "MarkdownV2";
 }
 
+/** O bot está configurado (token + chat)? */
+export function telegramHabilitado(): boolean {
+  return !!getConfig() && !!process.env.TELEGRAM_CHAT_ID;
+}
+
+/**
+ * Envia uma mensagem.
+ *
+ * Devolve `true` quando a mensagem foi entregue, `false` quando a API
+ * recusou. Isso importa pros avisadores que registram "já avisei" — sem o
+ * retorno, uma falha de envio passava despercebida e o evento era marcado
+ * como visto sem ninguém ter sido avisado.
+ *
+ * Sem token ou sem chat configurado, é no-op e devolve `true`: não há
+ * canal configurado, e isso não é uma falha de envio (é falta de canal).
+ */
 export async function sendTelegramMessage(
   text: string,
   options: SendMessageOptions = {},
-): Promise<void> {
+): Promise<boolean> {
   const chatId = options.chatId ?? process.env.TELEGRAM_CHAT_ID;
-  if (!chatId) return;
-  await callTelegram("sendMessage", {
+  if (!chatId) return true;
+  if (!getConfig()) return true;
+  const resultado = await callTelegram("sendMessage", {
     chat_id: chatId,
     text,
     parse_mode: options.parseMode ?? "HTML",
     disable_web_page_preview: true,
     ...(options.replyMarkup ? { reply_markup: options.replyMarkup } : {}),
   });
+  return resultado !== null;
 }
 
 export async function editTelegramMessage(
