@@ -215,17 +215,25 @@ flow/
 - **O que é**: avisa no Telegram + Web Push quando um evento aparece na agenda sem ser criado pelo Flow — alguém cria direto no Google Calendar, ou alguém adiciona o Felipe como convidado. A mensagem diz **em qual agenda** o evento caiu.
 - **Módulo de lógica pura**: `src/lib/novos-eventos.ts` — sem imports (mesmo padrão de `secretaria-backend.ts`): o Node lê TS direto nos testes e não resolve caminho relativo sem extensão.
 - **Orquestração**: `src/lib/novos-eventos-monitor.ts` — varre, decide e envia. Estado em `/app/data/.novos-eventos.json`.
-- **Cron**: a cada 5 minutos, em `cron.ts`. Disparo manual: `POST /api/cron/novos-eventos` com `{"dryRun":true}` devolve as mensagens sem enviar nem gravar.
-- **Varredura**: `listarEventosModificados()` usa `updatedMin` + `orderBy: "updated"` — só o que mudou. A janela é incremental (desde a última varredura, com 2 min de folga) e tem piso de `NOVOS_EVENTOS_JANELA_HORAS` (24h) pra cobrir o app fora do ar.
-- **Bootstrap**: na primeira execução, registra todos os eventos existentes como vistos (`listarTodosEventos()`) **sem avisar ninguém** — senão seria uma avalanche com o histórico inteiro. Também é o que impede a migração noturna (que mexe em evento antigo toda noite) de virar falso positivo.
+- **Cron**: a cada 5 minutos, em `cron.ts`. Disparo manual: `POST /api/cron/novos-eventos` com `{"dryRun":true}` devolve as mensagens sem enviar nem gravar; `{"soConvites":true}` roda só a varredura de convites.
+- **Duas varreduras, não uma**: a de **chegadas** (`listarEventosModificados()` — `updatedMin` + `orderBy: "updated"`, só o que mudou) e a de **convites pendentes** (`listarConvites()` — pergunta direto "em quais eventos eu tenho convite em aberto"). A segunda é obrigatória: a primeira **não** pega convite em aberto, porque quem adiciona o Felipe a um evento só muda o evento numa agenda, e o filtro de "já apareceu em agenda nenhuma" descarta — e, pior, no bootstrap todos os eventos viram vistos, então um convite que já estava pendente antes do monitor existir jamais seria avisado. **Não voltar a uma varredura só.**
+- **Convites pendentes**: rodam a cada 30 minutos (cron separado) e também dentro do bootstrap. A chave é o `iCalUID` da série — cada série avisa uma vez só.
+- **Duas listas de estado**: `registro` (por `iCalUID`, guarda em quais agendas o evento apareceu) e `convitesAvisados` (por `iCalUID`, as séries de convite já avisadas). São separadas de propósito: o `registro` serve pra distinguir "chegou" de "mudou de agenda" e engoliria o convite justamente quando ele é acionável.
+- **Convite respondido libera a série**: `seriesRespondidas()` devolve as séries cujas ocorrências o usuário **todas** respondeu, e elas saem de `convitesAvisados` — assim um re-convite avisa de novo. Numa série recorrente com uma ocorrência respondida e outra pendente, a série **não** é liberada (senão o aviso voltaria a cada 30 min, pra sempre).
+- **As duas varreduras são serializadas** por uma fila (`emFila()`): elas leem e escrevem o mesmo arquivo de estado, e os jobs de 5 e de 30 min caem no mesmo minuto — sem a fila uma sobrescreve a gravação da outra e o mesmo convite é avisado duas vezes.
+- **Bootstrap**: na primeira execução, registra todos os eventos existentes como vistos (`listarTodosEventos()`) **sem avisar o histórico** — senão seria uma avalanche. Mas os **convites em aberto** são avisados mesmo no bootstrap: exigem resposta, e engoli-los perde a única informação acionável da agenda.
 - **Identidade = `iCalUID`**, não o id do Google: as ocorrências de uma série recorrente têm ids diferentes a cada semana, mas o `iCalUID` é o mesmo da série. Sem isso, entrava um aviso novo toda semana.
 - **Registro**: por `iCalUID`, guarda **em quais agendas** o evento já apareceu. Isso distingue "chegou" (nunca apareceu) de "mudou de agenda" (mesmo evento, outro lugar).
 - **`organizer.self` NÃO é "o Felipe organizou"**: significa "o organizador é o dono **desta** agenda". Em agenda compartilhada, um evento de `ti@cfcontabilidade.com` vem com `self: true`. A comparação de organizador é sempre por e-mail.
 - **Convite** = participante com o e-mail do usuário e `responseStatus: "needsAction"`. Em agenda compartilhada o participante com `self` é a conta da agenda — por isso a checagem é por e-mail, nunca por `self`.
 - **E-mail do usuário**: `AUTH_USER_EMAIL`; se estiver vazio, usa o id da agenda `primary` (que é o e-mail da conta no Google) — `listarEmailDoUsuario()`.
 - **Eventos do Flow são ignorados**: marcador `flowOrigem: "flow"` em `createEvent`. Além disso, qualquer marcador de interação (`flowPillar`, `flowImportant`, `flowDelegable`, `flowDelegateName`…) também exclui o evento — cobre os criados antes do `flowOrigem` existir. O `flowOpenSince` **não** conta: a migração carimba ele em todo evento pendente, inclusive nos de fora.
+- **Evento de dia inteiro**: o Google devolve o início como data literal (`"2026-11-05"`), sem hora nem fuso. Passar por `new Date()` entende como meia-noite **UTC** — em São Paulo é 21h do dia anterior, e a mensagem anunciava o evento na data errada. `formatarDataDeDiaInteiro()` formata em UTC com meio-dia, que nunca atravessa a virada do dia.
+- **`updatedMin` tem limite**: o Google responde **410 `updatedMinTooLongAgo`** com `updatedMin` muito antigo (≈30 dias) — e isso quebra a varredura inteira, não só o aviso. `NOVOS_EVENTOS_JANELA_HORAS` é limitado a 14 dias. A varredura de convites não sofre disso porque usa `timeMin`/`timeMax` (data do evento), que aceitam janela bem maior.
+- **Falha de envio precisa ser visível**: `sendTelegramMessage()` e `sendPushNotification()` devolvem `boolean` (entregou ou não). Antes devolviam `void` e capturavam o erro internamente — o `catch` do monitor nunca disparava e o evento era marcado como visto **sem ninguém ter sido avisado**. Canal não configurado (sem VAPID, sem subscriptions, sem token) é no-op e devolve `true`: ausência de canal não é falha de envio.
+- **`cronInitialized: false` no status da migração é falso negativo**: `instrumentation.ts` e os route handlers recebem cópias separadas do módulo `src/lib/cron.ts`, então a variável de módulo não é compartilhada. O cron roda normalmente (confirmado pelo log `[FLOW CRON]` no boot).
 - **Push compartilhado**: `sendPushNotification()` foi extraído de `notifier.ts` para `src/lib/push-notifier.ts` e é reusado pelos dois.
-- **Env**: `NOVOS_EVENTOS_JANELA_HORAS`, `NOVOS_EVENTOS_AGENDAS_IGNORADAS` (padrão `feriado`), `NOVOS_EVENTOS_AVISAR_PROPRIOS` (`on` também avisa sobre eventos criados pelo próprio Felipe fora do Flow), `NOVOS_EVENTOS_ESTADO_FILE` (só dev).
+- **Env**: `NOVOS_EVENTOS_JANELA_HORAS` (limitado a 14 dias), `NOVOS_EVENTOS_CONVITES_JANELA_DIAS` (padrão 90), `NOVOS_EVENTOS_AGENDAS_IGNORADAS` (padrão `feriado`), `NOVOS_EVENTOS_AVISAR_PROPRIOS` (`on` também avisa sobre eventos criados pelo próprio Felipe fora do Flow), `NOVOS_EVENTOS_ESTADO_FILE` (só dev).
 
 ### UI
 - **Dark theme fixo**: Toda a UI usa paleta Google Material Dark (`#202124`, `#2a2b2e`, `#3c4043`, `#e8eaed`, `#9aa0a6`).
@@ -322,6 +330,39 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 ---
 
 ## 6. Última Sessão
+
+### 2026-11-04 — Convite em aberto nunca era avisado (a causa do "não chegou nada")
+
+**Sintoma:** o aviso de chegada externa não chegou ao Telegram. A detecção estava certa — a varredura classificava os convites corretamente — mas o aviso nunca saía.
+
+**Causa raiz:** a varredura de chegadas responde "o que **mudou**" na agenda. Um **convite em aberto** não passa por esse filtro: quem adiciona o Felipe a um evento só muda o evento numa agenda, e o filtro de "já apareceu em agenda nenhuma" descarta. Pior: no **bootstrap** todos os eventos são registrados como vistos, então um convite que já estava pendente antes do monitor existir jamais seria avisado. Foi exatamente o que aconteceu — 3 convites da Yasmim ficaram silenciosos (`Aniversário Miguel`, `Consulta marcada: Obstetrícia Clínica`, `Pagar conta de luz`).
+
+**O que foi feito:** uma **segunda varredura**, que pergunta direto ao Google "em quais eventos eu tenho convite em aberto" (`listarConvites()`, por `timeMin`/`timeMax` e `singleEvents: true`), avisa cada série uma vez (chave = `iCalUID`) e roda a cada 30 min + dentro do bootstrap. O histórico continua entrando em silêncio — só o convite, que exige resposta, é avisado.
+
+**Arquivos modificados:** `src/lib/novos-eventos.ts` (`selecionarConvitesPendentes()`, `seriesRespondidas()`, `formatarDataDeDiaInteiro()`) · `src/lib/novos-eventos-monitor.ts` (`monitorarConvitesPendentes()`, `convitesAvisados` no estado, fila `emFila()`, bootstrap que avisa convites) · `src/lib/google-calendar.ts` (`listarConvites()`) · `src/lib/cron.ts` (job de 30 min) · `src/lib/telegram.ts` e `src/lib/push-notifier.ts` (devolvem `boolean`) · `src/app/api/cron/novos-eventos/route.ts` (`soConvites`) · `tests/novos-eventos.test.mjs` (5 casos) · `CLAUDE.md`
+
+**Outros três bugs corrigidos no caminho:**
+1. **Data errada em evento de dia inteiro** — o Google devolve `"2026-11-05"` e `new Date()` entende como meia-noite UTC (21h do dia anterior em SP): a mensagem anunciava o evento na data errada.
+2. **Falha de envio engolida** — `sendTelegramMessage()`/`sendPushNotification()` devolviam `void` e capturavam o erro internamente, então o `catch` do monitor nunca disparava e o evento era marcado como visto **sem ninguém ter sido avisado**. Agora devolvem `boolean` e o aviso só é registrado se algum canal entregou.
+3. **`updatedMin` antigo quebra a varredura** — o Google responde 410 `updatedMinTooLongAgo` com janela ≳30 dias. `NOVOS_EVENTOS_JANELA_HORAS` agora é limitado a 14 dias.
+
+**Decisões:**
+- **Duas varreduras, não uma** — unificar seria voltar ao bug. Convite tem semântica própria (estado do RSVP), não é "chegada".
+- **`convitesAvisados` separado do `registro`** — o `registro` diz "o evento já apareceu em agenda X"; misturar os dois engoliria o convite justamente quando ele é acionável.
+- **Série com uma ocorrência respondida e outra pendente NÃO é liberada** — senão o aviso voltaria a cada 30 min, pra sempre.
+- **As duas varreduras serializadas por fila** — os jobs de 5 e de 30 min caem no mesmo minuto e sobrescreviam o mesmo arquivo de estado (o mesmo convite era avisado duas vezes).
+- **`cronInitialized: false` no status da migração é falso negativo** — `instrumentation.ts` e os route handlers recebem cópias separadas do módulo `src/lib/cron.ts`. O cron roda (confirmado no log de boot). Não "consertar" isso.
+
+**Verificação:** `npx tsc --noEmit` limpo · `npm run build` OK · `npm run test:secretaria` → **65/65** · contra a agenda real: 8 cópias com convite pendente → **3 séries distintas** com as mensagens corretas, e a 2ª execução → **0 chegadas** (dedup) · resposta a todos os convites → as 3 séries liberadas (re-convite avisaria de novo) · a varredura de convites no bootstrap devolve as 3 séries mesmo com o registro de vistos cheio.
+
+**Deploy:** commit `3fbf3b9` pushado. O **deploy em produção ficou pendente** — `source.autoDeploy: false` e o classificador bloqueou o `trigger_deploy` do EasyPanel. Produção continua no `257e97c` (confirmado pelo `commit.sha`), ou seja, **sem a correção**.
+
+**Próximos passos:**
+1. **Deploy do `3fbf3b9`** no EasyPanel (o push não dispara build).
+2. Depois do deploy, `POST /api/cron/novos-eventos` com `{"soConvites":true}` — deve devolver as 3 séries pendentes e **enviar o aviso de verdade** (o `dryRun` no ambiente local não tem `TELEGRAM_BOT_TOKEN`).
+3. Conferir o Telegram: chegam 3 avisos de convite (a Yasmim aparece como email, sem nome — o Google não manda `displayName` nesse caso).
+
+---
 
 ### 2026-11-01 — Chegadas externas: aviso de evento externo e de convite
 
