@@ -362,6 +362,13 @@ Manter as últimas 10 sessões. Sessões mais antigas podem ser condensadas em u
 2. Depois do deploy, `POST /api/cron/novos-eventos` com `{"soConvites":true}` — deve devolver as 3 séries pendentes e **enviar o aviso de verdade** (o `dryRun` no ambiente local não tem `TELEGRAM_BOT_TOKEN`).
 3. Conferir o Telegram: chegam 3 avisos de convite (a Yasmim aparece como email, sem nome — o Google não manda `displayName` nesse caso).
 
+**Fechamento (2026-11-04, tarde):** os três passos foram cumpridos.
+1. O deploy saiu — produção está no `e18365f` (`commit.sha` do serviço `sintel/full_flow`), que já carrega o `3fbf3b9`.
+2. A varredura de convites rodou em produção e avisou de verdade.
+3. **Os 3 avisos chegaram ao Telegram** — `Aniversário Miguel` (03/11 19:00), `Consulta marcada: Obstetrícia Clínica` (05/11 09:00) e `Pagar conta de luz` (25/11 10:00), todos da `yasminloopesfraaga@gmail.com` e todos na agenda Felipe Oliveira. A Yasmim aparece **só como e-mail**, como previsto — o Google não manda `displayName` nesse caso.
+
+O mesmo aviso de 08:00 trouxe a cobrança (1 pendência atrasada da Yasmim Duque) e o lembrete de proximidade (Largo da Carioca, 1h antes) — os três tipos de aviso saem no mesmo disparo, sem se misturarem.
+
 ---
 
 ### 2026-11-01 — Chegadas externas: aviso de evento externo e de convite
